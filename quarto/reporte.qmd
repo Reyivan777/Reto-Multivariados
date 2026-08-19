@@ -1,6 +1,6 @@
 ---
 title: "Reporte de la Situación Problema"
-author: "Equpo x"
+author: "Equpo 4"
 date: today
 format:
   docx:
