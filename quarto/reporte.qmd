@@ -54,14 +54,15 @@ dimensiones <- purrr::imap_dfr(bases, ~ tibble(
 
 dimensiones
 
-variables_por_año <- purrr::imap_dfr(bases, ~ tibble(
-  Año = .y,
-  Variable = names(.x)
-))
+tabla_variables <- variables_por_año |>
+  mutate(Presente = "Sí") |>
+  tidyr::pivot_wider(
+    names_from = Año,
+    values_from = Presente,
+    values_fill = "No"
+  )
 
-variables_por_año
-
-yjfg
+tabla_variables
 
 ```
 
