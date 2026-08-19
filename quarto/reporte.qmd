@@ -8,6 +8,15 @@ format:
     toc-depth: 3       # Levels in TOC
 ---
 
+# ⚠️ BORRAR TODO LO LOCAL Y COPIAR LA VERSIÓN REMOTA
+
+git merge --abort 2>nul
+git fetch origin
+git checkout trunk
+git reset --hard origin/trunk
+git clean -fd
+git status
+
 # Etapa 1. Conociendo el negocio
 
 Para esta primera etapa, empezaremos por cargar las librerías que necesitamos y establecemos algunas opciones de configuración:
