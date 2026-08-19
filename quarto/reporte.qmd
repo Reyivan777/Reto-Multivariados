@@ -8,33 +8,23 @@ format:
     toc-depth: 3       # Levels in TOC
 ---
 
-# ⚠️ BORRAR TODO LO LOCAL Y COPIAR LA VERSIÓN REMOTA
-
-git merge --abort 2>nul
-git fetch origin
-git checkout trunk
-git reset --hard origin/trunk
-git clean -fd
-git status
-
 # Etapa 1. Conociendo el negocio
 
 ## PARTE I. Conociendo el Negocio
 
 ### Socio Formador
+
 El Sistema Integral de Monitoreo Ambiental (SIMA), administrado por el Gobierno del Estado de Nuevo León, constituye la principal infraestructura de monitoreo de la calidad del aire en la entidad. A través de su red de estaciones registra concentraciones de contaminantes atmosféricos y variables meteorológicas, además de generar información que permite evaluar y comunicar las condiciones de calidad del aire. Estas actividades forman parte de una estrategia estatal orientada al control, mitigación y prevención de la contaminación atmosférica y a la mejora continua de la calidad del aire, particularmente en la Zona Metropolitana de Monterrey.
 
-
 ### Objetivo del trabajo
+
 Analizar la relación entre las condiciones meteorológicas y las concentraciones de contaminantes atmosféricos registradas por SIMA en la Zona Metropolitana de Monterrey durante el periodo 2020–2025, con el propósito de identificar las variables meteorológicas de mayor influencia y establecer las bases para desarrollar modelos predictivos de calidad del aire.
 
 ### Referencias bibliográficas
-Sobre la medición de la calidad del aire, impacto social y su importancia.
-Cerón Bretón, R. M., et al. (2020). Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico. International Journal of Environmental Research and Public Health, 17(24), 9219.
 
-Centrados en tu objetivo de trabajo: ¿qué se ha hecho sobre lo que tú quieres indagar? ¿Qué metodologías se han usado? ¿cuáles han sido sus resultados?
-Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information. Aerosol and Air Quality Research, 21, 200471.
+A)  Sobre la medición de la calidad del aire, impacto social y su importancia. Cerón Bretón, R. M., et al. (2020). Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico. International Journal of Environmental Research and Public Health, 17(24), 9219.
 
+B)  Centrados en tu objetivo de trabajo: ¿qué se ha hecho sobre lo que tú quieres indagar? ¿Qué metodologías se han usado? ¿cuáles han sido sus resultados? Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information. Aerosol and Air Quality Research, 21, 200471.
 
 ### Introducción
 
@@ -45,10 +35,6 @@ En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) registra infor
 Las condiciones meteorológicas influyen directamente en la dinámica de los contaminantes. Variables como temperatura, humedad, velocidad y dirección del viento, presión, precipitación y radiación solar pueden modificar su formación, transporte y dispersión. Estudios previos han demostrado que estas variables pueden utilizarse para desarrollar modelos predictivos de contaminantes como O₃ y PM2.5 mediante técnicas estadísticas y de aprendizaje automático.
 
 Por esta razón, el presente proyecto analizará los registros históricos de SIMA correspondientes al periodo 2020–2025 con el objetivo de estudiar la relación entre las condiciones meteorológicas y las concentraciones de contaminantes en el Área Metropolitana de Monterrey. A partir de este análisis se buscará identificar las variables meteorológicas de mayor relevancia y establecer las bases para el posterior desarrollo de modelos predictivos de calidad del aire.
-
-
-
-
 
 ## Parte 2
 
@@ -63,7 +49,9 @@ library(maps)
 
 options(scipen = 999)
 ```
+
 Ahora cargamos los datos que nos proporcionó el Socio Formador:
+
 ```{r}
 calidad_aire_2020_tbl <- read_excel(here("data", "BD 2020.xlsx")) 
 calidad_aire_2021_tbl <- read_excel(here("data", "BD 2021.xlsx")) 
@@ -132,7 +120,3 @@ calidad_aire_2025_tbl <- formatear_base(calidad_aire_2025_tbl)
 
 
 ```
-
-
-
-
