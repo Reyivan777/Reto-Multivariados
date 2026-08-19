@@ -30,7 +30,38 @@ calidad_aire_2023_tbl <- read_excel(here("data", "BD 2023.xlsx"))
 calidad_aire_2024_tbl <- read_excel(here("data", "BD 2024.xlsx")) 
 calidad_aire_2025_tbl <- read_excel(here("data", "BD 2025.xlsx")) 
 
-  glimpse()
+glimpse(calidad_aire_2020_tbl)
+glimpse(calidad_aire_2021_tbl)
+glimpse(calidad_aire_2022_tbl)
+glimpse(calidad_aire_2023_tbl)
+glimpse(calidad_aire_2024_tbl)
+glimpse(calidad_aire_2025_tbl)
+
+bases <- list(
+  "2020" = calidad_aire_2020_tbl,
+  "2021" = calidad_aire_2021_tbl,
+  "2022" = calidad_aire_2022_tbl,
+  "2023" = calidad_aire_2023_tbl,
+  "2024" = calidad_aire_2024_tbl,
+  "2025" = calidad_aire_2025_tbl
+)
+
+dimensiones <- purrr::imap_dfr(bases, ~ tibble(
+  Año = .y,
+  Registros = nrow(.x),
+  Columnas = ncol(.x)
+))
+
+dimensiones
+
+variables_por_año <- purrr::imap_dfr(bases, ~ tibble(
+  Año = .y,
+  Variable = names(.x)
+))
+
+variables_por_año
+
+
 ```
 
 
