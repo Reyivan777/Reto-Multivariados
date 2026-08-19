@@ -61,7 +61,6 @@ dimensiones <- purrr::imap_dfr(bases, ~ tibble(
   Columnas = ncol(.x)
 ))
 
-dimensiones
 
 tabla_variables <- variables_por_año |>
   mutate(Presente = "Sí") |>
@@ -71,7 +70,33 @@ tabla_variables <- variables_por_año |>
     values_fill = "No"
   )
 
+formatear_base <- function(datos) {
+  
+  datos |>
+    rename(
+      BP = PRS,
+      TEMP = TOUT,
+      WS = WSR,
+      WD = WDR
+    ) |>
+    mutate(
+      across(
+        c(CO, NO, NO2, NOX, O3, PM10, PM2.5,
+          BP, RAINF, RH, SO2, SR, TEMP, WS, WD),
+        as.numeric
+      )
+    )
+}
+
+dimensiones
 tabla_variables
+calidad_aire_2020_tbl <- formatear_base(calidad_aire_2020_tbl)
+calidad_aire_2021_tbl <- formatear_base(calidad_aire_2021_tbl)
+calidad_aire_2022_tbl <- formatear_base(calidad_aire_2022_tbl)
+calidad_aire_2023_tbl <- formatear_base(calidad_aire_2023_tbl)
+calidad_aire_2024_tbl <- formatear_base(calidad_aire_2024_tbl)
+calidad_aire_2025_tbl <- formatear_base(calidad_aire_2025_tbl)
+
 
 ```
 
