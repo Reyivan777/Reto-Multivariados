@@ -61,6 +61,7 @@ variables_por_año <- purrr::imap_dfr(bases, ~ tibble(
 
 variables_por_año
 
+yjfg
 
 ```
 
