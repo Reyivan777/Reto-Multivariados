@@ -55,8 +55,6 @@ library(purrr)
 
 
 options(scipen = 999)
-
-options(scipen = 999)
 ```
 
 Ahora cargamos los datos que nos proporcionó el Socio Formador:
@@ -160,6 +158,7 @@ glimpse(calidad_aire_2023_tbl)
 glimpse(calidad_aire_2024_tbl)
 glimpse(calidad_aire_2025_tbl)
 
+
 bases <- list(
   "2020" = calidad_aire_2020_tbl,
   "2021" = calidad_aire_2021_tbl,
@@ -168,6 +167,14 @@ bases <- list(
   "2024" = calidad_aire_2024_tbl,
   "2025" = calidad_aire_2025_tbl
 )
+
+datos_limpios <- bind_rows(bases)
+
+```
+
+En esta sección se trabaja con las bases de datos para abrirlas y poder manipularlas con mayor facilidad.
+
+```{r}
 
 dimensiones <- purrr::imap_dfr(
   bases,
@@ -430,8 +437,121 @@ duplicados
 ```
 Así verificamos que no hay valores duplicados.
 
-Los valores faltantes los vamos a dejar igual, ya que como son considerados NA, fácilmente pueden ser reemplazados en un futúro por una media o mediana si se considera necesario.
+Los valores faltantes los vamos a dejar igual, ya que como son considerados NA, fácilmente pueden ser reemplazados en un futúro por una media o mediana si se considera necesario. De la misma manera, se van a usar datos de entrenamiento y de test, por eso se necesita la mayor cantidad posible. 
+
+```{r}
+
+variables_numericas <- c(
+  "CO", "NO", "NO2", "NOX", "O3",
+  "PM10", "PM2.5", "BP", "RAINF",
+  "RH", "SO2", "SR", "TEMP", "WS", "WD"
+)
+
+detectar_outliers <- function(datos, variable) {
+  
+  datos |>
+    group_by(Estacion) |>
+    mutate(
+      Q1 = quantile(.data[[variable]], 0.25, na.rm = TRUE),
+      Q3 = quantile(.data[[variable]], 0.75, na.rm = TRUE),
+      IQR = Q3 - Q1,
+      Lim_inf = Q1 - 1.5 * IQR,
+      Lim_sup = Q3 + 1.5 * IQR,
+      Outlier = .data[[variable]] < Lim_inf |
+                .data[[variable]] > Lim_sup
+    ) |>
+    filter(Outlier == TRUE) |>
+    ungroup() |>
+    select(
+      Año,
+      Estacion,
+      `Fecha y hora`,
+      all_of(variable),
+      Q1,
+      Q3,
+      Lim_inf,
+      Lim_sup
+    )
+}
 
 
 
-##holi (push de dulce)
+tabla_outliers <- map_dfr(
+  variables_numericas,
+  function(var) {
+    
+    resultado <- detectar_outliers(datos_limpios, var)
+    
+    total_validos <- sum(!is.na(datos_limpios[[var]]))
+    total_outliers <- nrow(resultado)
+    
+    tibble(
+      Variable = var,
+      Datos_validos = total_validos,
+      Outliers = total_outliers,
+      Porcentaje = round(
+        total_outliers / total_validos * 100,
+        3
+      )
+    )
+  }
+)
+
+```
+
+Como podemos observar en nuestra tabla de valores atípicos, usando el rango intercuartílico, algunos valores llegan a ser hasta el 11.82% de los datos. Claramente esto es una cantidad significativa y relevante que no se puede eliminar de la base de datos.
+
+```{r}
+
+datos_modelo <- datos_limpios
+
+datos_escalados <- datos_limpios |>
+  mutate(
+    across(
+      c(BP, RAINF, RH, SR, TEMP, WS, WD),
+      ~ as.numeric(scale(.x))
+    )
+  )
+
+```
+
+En esta sección normalizamos ciertas variables continuas para que se aproximen en una media 0 y desviación estándar 1. Esto por si queremos hacer un PCA, KNN, SVM, etc. Si no, mantenemos los valores continuos ("datos_modelo").
+
+```{r}
+
+datos_modelo <- datos_limpios |>
+  mutate(
+    `Fecha y hora` = case_when(
+      grepl("^[0-9]+\\.?[0-9]*$", `Fecha y hora`) ~
+        as.POSIXct(
+          as.numeric(`Fecha y hora`) * 86400,
+          origin = "1899-12-30",
+          tz = "UTC"
+        ),
+      
+      TRUE ~ lubridate::parse_date_time(
+        `Fecha y hora`,
+        orders = c(
+          "dmy HM",
+          "dmy HMS",
+          "ymd HM",
+          "ymd HMS",
+          "mdy HM",
+          "mdy HMS"
+        )
+      )
+    ),
+    
+    Hora = lubridate::hour(`Fecha y hora`),
+    Dia = lubridate::day(`Fecha y hora`),
+    Mes = lubridate::month(`Fecha y hora`),
+    Dia_semana = lubridate::wday(
+      `Fecha y hora`,
+      label = TRUE
+    )
+  )
+
+
+```
+
+Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminates.
