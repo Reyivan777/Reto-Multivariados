@@ -22,9 +22,13 @@ Analizar la relación entre las condiciones meteorológicas y las concentracione
 
 ### Referencias bibliográficas
 
-A)  Sobre la medición de la calidad del aire, impacto social y su importancia. Cerón Bretón, R. M., et al. (2020). Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico. International Journal of Environmental Research and Public Health, 17(24), 9219.
+A) **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
 
-B)  Centrados en tu objetivo de trabajo: ¿qué se ha hecho sobre lo que tú quieres indagar? ¿Qué metodologías se han usado? ¿cuáles han sido sus resultados? Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information. Aerosol and Air Quality Research, 21, 200471.
+Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
+
+B) **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
+
+Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
 
 ### Introducción
 
