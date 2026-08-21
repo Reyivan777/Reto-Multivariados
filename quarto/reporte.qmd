@@ -505,6 +505,46 @@ detalle_fdr <- purrr::imap_dfr(
 
 detalle_fdr
 
+datos_limpios <- datos_limpios |>
+  mutate(
+    
+    WS = if_else(
+      Año == 2020 & WS > 75,
+      NA_real_,
+      WS
+    ),
+    
+    SR = if_else(
+      Año == 2020 & SR > 1,
+      NA_real_,
+      SR
+    ),
+    
+    BP = if_else(
+      Año == 2020 & (BP < 690 | BP > 750),
+      NA_real_,
+      BP
+    ),
+    
+    NO = if_else(
+      Año == 2021 & NO > 350,
+      NA_real_,
+      NO
+    ),
+    
+    NO2 = if_else(
+      Año == 2021 & NO2 < 0,
+      NA_real_,
+      NO2
+    ),
+    
+    SR = if_else(
+      Año == 2021 & SR > 1,
+      NA_real_,
+      SR
+    )
+  )
+
 ```
 
 Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
