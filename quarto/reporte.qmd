@@ -599,6 +599,9 @@ datos_modelo <- datos_limpios |>
 
 Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminates.
 
+### Link Github:
+https://github.com/Reyivan777/Reto-Multivariados
+
 ### Declaratoria de uso IA
 
 Opción B. Se utilizó IA de la siguiente forma:\
