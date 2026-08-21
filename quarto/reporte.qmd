@@ -128,7 +128,9 @@ leer_base <- function(archivo, año) {
         str_replace("\\s*\\([^)]*\\).*", "") |>
         str_squish()
 
-      nombres[tolower(nombres) == "fecha y hora"] <- "Fecha y hora"
+      nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
+      nombres[tolower(nombres) == "date"] <- "fecha y hora"
+
       
       nombres[toupper(nombres) == "PRS"] <- "BP"
       nombres[toupper(nombres) == "TOUT"] <- "TEMP"
@@ -480,7 +482,6 @@ duplicados <- datos_unidos |>
 
 duplicados
 
-
 ```
 
 Así verificamos que no hay valores duplicados.
@@ -489,11 +490,7 @@ Los valores faltantes los vamos a dejar igual, ya que como son considerados NA, 
 
 ```{r}
 
-variables_numericas <- c(
-  "CO", "NO", "NO2", "NOX", "O3",
-  "PM10", "PM2.5", "BP", "RAINF",
-  "RH", "SO2", "SR", "TEMP", "WS", "WD"
-)
+variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3","PM10", "PM2.5", "BP", "RAINF","RH", "SO2", "SR", "TEMP", "WS", "WD")
 
 detectar_outliers <- function(datos, variable) {
   
@@ -563,38 +560,22 @@ datos_escalados <- datos_limpios |>
 
 ```
 
-En esta sección normalizamos ciertas variables continuas para que se aproximen en una media 0 y desviación estándar 1. Esto por si queremos hacer un PCA, KNN, SVM, etc. Si no, mantenemos los valores continuos ("datos_modelo").
+En esta sección estandarizamos ciertas variables continuas para que se aproximen en una media 0 y desviación estándar 1. Esto por si queremos hacer un PCA, KNN, SVM, etc. Si no, mantenemos los valores continuos ("datos_modelo").
 
 ```{r}
 
 datos_modelo <- datos_limpios |>
   mutate(
-    `Fecha y hora` = case_when(
-      grepl("^[0-9]+\\.?[0-9]*$", `Fecha y hora`) ~
-        as.POSIXct(
-          as.numeric(`Fecha y hora`) * 86400,
-          origin = "1899-12-30",
-          tz = "UTC"
-        ),
-      
-      TRUE ~ lubridate::parse_date_time(
-        `Fecha y hora`,
-        orders = c(
-          "dmy HM",
-          "dmy HMS",
-          "ymd HM",
-          "ymd HMS",
-          "mdy HM",
-          "mdy HMS"
-        )
-      )
+    `fecha y hora` = as.POSIXct(
+      as.numeric(`fecha y hora`) * 86400,
+      origin = "1899-12-30",
+      tz = "UTC"
     ),
-    
-    Hora = lubridate::hour(`Fecha y hora`),
-    Dia = lubridate::day(`Fecha y hora`),
-    Mes = lubridate::month(`Fecha y hora`),
+    Hora = lubridate::hour(`fecha y hora`),
+    Dia = lubridate::day(`fecha y hora`),
+    Mes = lubridate::month(`fecha y hora`),
     Dia_semana = lubridate::wday(
-      `Fecha y hora`,
+      `fecha y hora`,
       label = TRUE
     )
   )
