@@ -604,7 +604,58 @@ datos_modelo <- datos_limpios |>
 
 Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminates.
 
+```{r}
+datos_modelo <- datos_modelo |>
+  mutate(
+    Estacion = as.factor(Estacion),
+    Dia_semana = as.factor(Dia_semana)
+  )
+
+levels(datos_modelo$Estacion)
+levels(datos_modelo$Dia_semana)
+```
+
+### Informe preparación de los datos
+
+La base de datos consolidada integra los 6 años de registros proporcionados por SIMA (2020-2025), sumando un total de 688,199 registros horarios distribuidos en distintas estaciones de monitoreo de la Zona Metropolitana de Monterrey. Cada año contribuyó así:\
+- 2020 - 114,102 registros\
+- 2021 - 122,629 registros\
+- 2022 - 123,383 registros\
+- 2023 - 131,370 registros\
+- 2024 - 131,741 registros\
+- 2025 - 64,974 registros (año parcial)
+
+La base contiene 18 variables por registro en la mayoría de los años. Una variable de fecha y hora, 8 variables de contaminantes atmosféricos criterio (CO, NO, NO2, NOx, O3, PM10, PM2.5, SO2), 7 variables meteorológicas (BP, RAINF, RH, SR, TEMP, WS, WD) y 2 variables identificadoras (Año, Estación).
+
+\*Algo importante a mencionar es que la base de 2025 presenta 19 columnas en vez de 18, ya que el archivo tiene una columna adicional llamada "date" junto con la columna de Fecha y hora. Esto, junto con la corrección de valores erróneos, se documentará y resolverá en la siguiente entrega.
+
+**Datos faltantes**\
+El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla "tabla_faltantes" generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y Nox.
+
+**Datos duplicados**\
+Se verificó la existencia de registros duplicados a nivel de Año, Estación y Fecha y hora con un conteo de combinaciones repetidas ("duplicados"). El resultado confirmó que, conceptualmente, no existen registros duplicados en la base. Se destaca que "conceptualmente", ya que, en 2025, no se pudo evaluar el criterio debido a que la columna de fecha (date) presenta un formato distinto al encontrado en las otras bases de datos. Esta verificación se completará en la siguiente entrega junto con la corrección de esa incosistencia estructural.
+
+**Datos atípicos (outliers)**\
+Se aplicó el método de rango intercuartílico por estación para cada uno a de las variables numéricas. Los resultados, en "tabla_outliers" muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers de esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
+
+**Variables categóricas**\
+Se identificaron "Estacion" y "Dia_semana" como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
+
+**Binning**\
+No se consideró necesario discretizar las variables de contaminantes ni meteorológicas en esta etapa, ya que el objetivo del proyecto es predecir concentraciones continuas utilizando modelos de regresión, y discretizar podría implicar una pérdida de información para este fin.
+
+**Transformación y escalamiento**\
+Se generó una versión escalada y normalizada de las variables meteorológicas continuas (datos_escalados), disponible en caso de aplicar técnicas sensibiles a la escala de datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original (datos_modelo).
+
+Por otra parte, a partir de la variable Fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
+
+Además de la unión de los datos de los 6 años, no fue necesario reestructurar la base de datos, ya que el formato largo por observación de horario y estación es correcto para las técnicas de modelado predictivo contempladas.
+
+**Otros planes a futuro**\
+Se contempla la posibilidad de agrupar de forma estacional (invierno, verano, otoño, primavera) o mensual los datos, con el objetivo de responder de manera más completa la pregunta de investigación 3 (si la relación meteorología-contaminante varía por estacionalidad). Esto, en caso de realizarse, crearía variables nuevas.
+
 ### Link Github:
+
 https://github.com/Reyivan777/Reto-Multivariados
 
 ### Declaratoria de uso IA
