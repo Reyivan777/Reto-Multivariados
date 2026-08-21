@@ -1,12 +1,14 @@
 ---
 title: "Reporte de la Situación Problema"
-author: "Equipo 4"
+author: "Equipo 4: Rey Iván de la Fuente Chávez, A01709445 | Jannette Cristina Flores Rodríguez, A01255711 | Matías Romero Mariné, A01708802 | Emilio Alonso Sánchez, A00841853 | Dulce Alejandra Sánchez López, A01412307"
 date: today
 format:
   docx:
     toc: true          # Include table of contents
     toc-depth: 3       # Levels in TOC
 ---
+
+
 
 # Etapa 1. Conociendo el negocio
 
