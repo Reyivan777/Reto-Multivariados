@@ -25,70 +25,70 @@ La contaminación atmosférica representa un problema importante de salud públi
 
 En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) registra información sobre la calidad del aire mediante una red de estaciones que miden concentraciones de contaminantes y variables meteorológicas. Estas mediciones permiten conocer las condiciones ambientales de distintas zonas y proporcionan información útil para analizar el comportamiento de la contaminación atmosférica.
 
-Las condiciones meteorológicas influyen directamente en la dinámica de los contaminantes. Variables como temperatura, humedad, velocidad y dirección del viento, presión, precipitación y radiación solar pueden modificar su formación, transporte y dispersión. Dado esto, en este proyecto ha surgido la pregunta: ¿Es posible aprovechar los registros históricos de SIMA para entender y anticipar el comportamiento de la contaminación atmosférica a partir de las variables meteorológicas? A continuación se presenta la revisión bibliográfica que sustenta esta pregunta, como también la descripción del problema, objetivos del proyecto y las fuentes de información utilizadas.
+Las condiciones meteorológicas influyen directamente en la dinámica de los contaminantes. Variables como temperatura, humedad, velocidad y dirección del viento, presión, precipitación y radiación solar pueden modificar su formación, transporte y dispersión. Dado esto, en este proyecto ha surgido la pregunta: ¿Es posible aprovechar los registros históricos de SIMA para entender y anticipar el comportamiento de la contaminación atmosférica a partir de las variables meteorológicas? A continuación se presenta la revisión bibliográfica que sustenta esta pregunta, así como la descripción del problema, los objetivos del proyecto y las fuentes de información utilizadas.
 
 ### Revisión de bibliografía
 
 **Sobre la medición de la calidad del aire, su impacto social e importancia.**\
-La contaminación atmosférica es reconocida como uno de los principales riesgos ambientales para la salud pública. En el área Metropolitana de Monterrey, Cerón Bretón (2020) encontraron asociaciones entre mayores concentraciones de contaminantes atmosféricosy un incremento en el reisgo de mortalidad diaria, efecto que se agrava con temperaturas elevadas y que resulta especialmente relevante en adultos mayores. En un nivel internacional, las Guías de Calidad del Aire 2021 de la Organización Mundial de la Salud (Hoffmann, 2021) refuerzan la relevancia. En zonas donde la contaminación ya es relativamente baja, al reducir las concentraciones de contaminanntes criterio (PM2.5, PM10, O3, NO2, SO2 y CO) se generan beneficios medibles para la salud de la población.
+La contaminación atmosférica es reconocida como uno de los principales riesgos ambientales para la salud pública. En el Área Metropolitana de Monterrey, Cerón Bretón et al. (2020) encontraron asociaciones entre mayores concentraciones de contaminantes atmosféricos y un incremento en el riesgo de mortalidad diaria, efecto que se agrava con temperaturas elevadas y que resulta especialmente relevante en adultos mayores. A nivel internacional, las Guías de Calidad del Aire 2021 de la Organización Mundial de la Salud (Hoffmann et al., 2021) refuerzan esta relevancia. En zonas donde la contaminación ya es relativamente baja, reducir las concentraciones de contaminantes criterio (PM2.5, PM10, O3, NO2, SO2 y CO) genera beneficios medibles para la salud de la población.
 
-En México, estas guías se traducen en las Normas Oficiales Mexicanas de salud ambiental (NOM-020, 021, 022, 023, y 025-SSA1). Estas establecen los límites permisibles para cada contaminante y sirven como referencia para evaluar el cumplimiento y poder diseñar políticas de mitigación de los mismos. La medición de la calidad de aire impacta a la protección a la salud, como también rendición de cuentas hacia la ciudadanía.
+En México, estas guías se traducen en las Normas Oficiales Mexicanas de salud ambiental (NOM-020, 021, 022, 023 y 025-SSA1). Estas establecen los límites permisibles para cada contaminante y sirven como referencia para evaluar el cumplimiento y diseñar políticas de mitigación. La medición de la calidad del aire contribuye a la protección de la salud y a la rendición de cuentas hacia la ciudadanía.
 
 **Centrado en el objetivo de trabajo (Modelado predictivo con variables meteorológicas)**\
-Con respecto al uso de variables meteorológicas para predecir contaminantes, Cifuentes et al. (2021) desarrollaron modelos de regresión lineal múltiple, Support Vector Regression y redes neuronales para predecir concentraciones horarias de O3 y PM2.5, encontrando que variables como la radiación solar y temperatura resultan mayormente útiles cuando no se cuenta con suficiente información directa de contamiantes. Esto ayuda a confirmar en este proyecto la viabilidad de construir modelos predictivos de calidad del aire a partir de datos meteorológicos, y provee sugerencias para la priorización de variables para el momento de modelado.
+Con respecto al uso de variables meteorológicas para predecir contaminantes, Cifuentes et al. (2021) desarrollaron modelos de regresión lineal múltiple, Support Vector Regression y redes neuronales para predecir concentraciones horarias de O3 y PM2.5, encontrando que variables como la radiación solar y la temperatura resultan especialmente útiles cuando no se cuenta con suficiente información directa de contaminantes. Esto ayuda a confirmar la viabilidad de construir modelos predictivos de calidad del aire a partir de datos meteorológicos y provee sugerencias para la priorización de variables durante el modelado.
 
 ### Descripción del problema específico
 
 \
-El Sistema Integral de Monitoreo Ambiental (SIMA) cuenta con una red de estaciones que registra de forma continua contaminantes atmosféricos, como también variables meteorológicos en la Zona Metropolitana de Monterrey. Sin embargo, esta información histórica no se ha explotado de forma sistemática para anticipar concentraciones de contaminantes a partir de las condiciones meteorológicas, lo cual limita correcta comunicación de los riesgos que conlleva una crítica calidad del aire en la población.
+El Sistema Integral de Monitoreo Ambiental (SIMA) cuenta con una red de estaciones que registra de forma continua contaminantes atmosféricos, así como variables meteorológicas en la Zona Metropolitana de Monterrey. Sin embargo, esta información histórica no se ha explotado de forma sistemática para anticipar concentraciones de contaminantes a partir de las condiciones meteorológicas, lo cual limita la correcta comunicación de los riesgos que conlleva una calidad del aire crítica para la población.
 
 A partir de esta problemática, este proyecto busca responder las siguientes preguntas de investigación:\
-- ¿Cuáles son las variabiles meteorológicas (como humedad, temperatura, dirección del viento, radiación solar, etc) que muestran mayor relación con las concentraciones de cada contaminante criterio registradas por SIMA?\
-- ¿Es posible desarrrollar modelos estadísticos y/o de aprendizaje automático que, a partir de variables meteorológicas históricas (proporcionadas), puedan predecir de manera confiable las concentraciones de estos contaminates en las estaciones de monitoreo?\
-- ¿Esta relación entre meteorología y contaminates varía según la estación del año, hora del día o estación de monitoreo específica?
+- ¿Cuáles son las variables meteorológicas (como humedad, temperatura, dirección del viento, radiación solar, etc.) que muestran mayor relación con las concentraciones de cada contaminante criterio registradas por SIMA?\
+- ¿Es posible desarrollar modelos estadísticos y/o de aprendizaje automático que, a partir de variables meteorológicas históricas proporcionadas, puedan predecir de manera confiable las concentraciones de estos contaminantes en las estaciones de monitoreo?\
+- ¿Esta relación entre meteorología y contaminantes varía según la estación del año, la hora del día o la estación de monitoreo específica?
 
 ### Objetivos de este proyecto
 
 **Objetivo general**\
-El objetivo general de este proyecto es desarrollar y evaluar modelos predictivos que permitan estimar las concentraciones de contamiantes atmosféricos criterio en la Zona Metropolitana de Monterrey a partir de variables meteorológicas registradas por SIMA en el periodo 2020-2025, con el fin de aportar herramientas que apoyen a la comunicación de riesgos de calidad del aire.
+El objetivo general de este proyecto es desarrollar y evaluar modelos predictivos que permitan estimar las concentraciones de contaminantes atmosféricos criterio en la Zona Metropolitana de Monterrey a partir de variables meteorológicas registradas por SIMA en el periodo 2020-2025, con el fin de aportar herramientas que apoyen la comunicación de riesgos de calidad del aire.
 
 **Objetivos específicos**\
-1. Identificar las variables meteorológicas con mayor relación estadísitca con respecto a las concentraciones de cada contaminante criterio registrado por SIMA.\
-2. Construir y comparar modelos estadísticos que predigan las concentraciones de contaminantes a partir de variables meteorológicas, seleccionando los contaminantes objetivio con base en la calidad y disponibilidad de datos.\
-3. Evaluar si la relación entre las variables meteorológicas y contaminantes varían según la estacionalidad temporal o la estación de monitoreo, con el fin de identificar patrones temporales y especiales de relevancia.
+1. Identificar las variables meteorológicas con mayor relación estadística con respecto a las concentraciones de cada contaminante criterio registrado por SIMA.\
+2. Construir y comparar modelos estadísticos que predigan las concentraciones de contaminantes a partir de variables meteorológicas, seleccionando los contaminantes objetivo con base en la calidad y disponibilidad de datos.\
+3. Evaluar si la relación entre las variables meteorológicas y los contaminantes varía según la estacionalidad temporal o la estación de monitoreo, con el fin de identificar patrones temporales y espaciales de relevancia.
 
 ### Justificación de los objetivos
 
-La revisión bibliográfica mencionada en un punto superior confirma que existe evidencia sólida de que las concentraciones de contaminates atmosféricos están asociadas a riesgos de salud significativos, incluso en niveles relativamente bajos (Hoffmann et al., 2021)y que esta relación se ha documentado específicamente en la Zona metropolitana de Monterrey (abreviada como "ZMM"). Con esto se lleva a justificar la relevancia social del objetivo general, ya que cualquier elemento que ayude a anticipar concentracione de contaminantes tiene un impacto en la protección de la salud pública local.
+La revisión bibliográfica mencionada anteriormente confirma que existe evidencia sólida de que las concentraciones de contaminantes atmosféricos están asociadas a riesgos de salud significativos, incluso en niveles relativamente bajos (Hoffmann et al., 2021), y que esta relación se ha documentado específicamente en la Zona Metropolitana de Monterrey (abreviada como "ZMM"). Esto justifica la relevancia social del objetivo general, ya que cualquier elemento que ayude a anticipar concentraciones de contaminantes tiene un impacto en la protección de la salud pública local.
 
-Igualmente, se ha demostrado que metodológicamente es muy viable predecir contaminantes como O3 y PM2.5 basándose de variables meteorológicas mediante técnicas estadísticas y de aprendizaje automático, especialmente en contextos donde no se cuenta con un monitoreo continuo de todos los contaminates (Cifuentes, 2021). Existe un área de oportunidad con este tipo de modelado a los datos históricos que genera SIMA porque, aparentemente, no se ha explorado si la relación meteorología-contaminante varía según estacionalidad o ubicación de las estaciones de esta zona en Monterrey.
+Igualmente, se ha demostrado que metodológicamente es viable predecir contaminantes como O3 y PM2.5 basándose en variables meteorológicas mediante técnicas estadísticas y de aprendizaje automático, especialmente en contextos donde no se cuenta con un monitoreo continuo de todos los contaminantes (Cifuentes et al., 2021). Existe un área de oportunidad para aplicar este tipo de modelado a los datos históricos que genera SIMA y explorar si la relación meteorología-contaminante varía según la estacionalidad o la ubicación de las estaciones de esta zona en Monterrey.
 
-Con este proyecto se busca contribuir aprovechando la infraestructura de datos ya existente de SIMA (de 2020 a 2025) para construir modelos predictivos adaptados a las condiciones específicas de Monterrey, aplicando la metodología con un contexto geográfico y temporal.
+Con este proyecto se busca contribuir aprovechando la infraestructura de datos ya existente de SIMA (de 2020 a 2025) para construir modelos predictivos adaptados a las condiciones específicas de Monterrey, aplicando la metodología en un contexto geográfico y temporal.
 
 ### Descripción de las fuentes de información
 
-La fuente de información utilizada en este proyecto proviene del Sistema Integral de Monitoreo Ambiental (SIMA), organismo encargado de operar la red de estaciones de monitoreo de calidad del aire en el estado de Nuevo León. SIMA aporta de manera pública bases de datos históricas que contienen registros de las distintas estaciones de monitoreo en la ZMM. Cada registro corresponde a una medición cada hora (por estación). Este registro incluye variables de contaminates atmosféricos criterio \[monóxido de carbono (CO), monóxido de nitrógeno (NO), dióxido de nitrógeno (NO2), óxidos de nitrógeno (NOx), ozono (O3), partículas menores a 10 micrómetros (PM10), partículas menores a 2.5 micrómetros (PM2.5) y dióxido de azufre (SO2), entre otros\], e igualmente contienenvariables meteorológicas, como precipitación (RAINF), humedad relativa (RH), radiación solar (SR), temperatura (TEMP), velocidad del viento (WS) y su dirección (WD), entre otras.
+La fuente de información utilizada en este proyecto proviene del Sistema Integral de Monitoreo Ambiental (SIMA), organismo encargado de operar la red de estaciones de monitoreo de calidad del aire en el estado de Nuevo León. SIMA aporta de manera pública bases de datos históricas que contienen registros de las distintas estaciones de monitoreo en la ZMM. Cada registro corresponde a una medición por hora y estación. Este registro incluye variables de contaminantes atmosféricos criterio \[monóxido de carbono (CO), monóxido de nitrógeno (NO), dióxido de nitrógeno (NO2), óxidos de nitrógeno (NOx), ozono (O3), partículas menores a 10 micrómetros (PM10), partículas menores a 2.5 micrómetros (PM2.5) y dióxido de azufre (SO2), entre otros\], e igualmente contiene variables meteorológicas, como precipitación (RAINF), humedad relativa (RH), radiación solar (SR), temperatura (TEMP), velocidad del viento (WS) y su dirección (WD), entre otras.
 
-La combinación de estas variables permite estudiar la relación entre condiciones atmosféricas y concentraciones de contaminates en el tiempo y en distintos puntos de ZMM. Como el objetivo del proyecto es uno predictivo, se eligió integrar los 6 años proporcionados en una sola base. Las variables meteorológicas se consideran como variables predictoras (independientes), mientras que los contaminantes se tratan como variables objetivo, modelando cada uno de forma independiente.
+La combinación de estas variables permite estudiar la relación entre condiciones atmosféricas y concentraciones de contaminantes en el tiempo y en distintos puntos de la ZMM. Como el objetivo del proyecto es predictivo, se eligió integrar los seis años proporcionados en una sola base. Las variables meteorológicas se consideran como variables predictoras (independientes), mientras que los contaminantes se tratan como variables objetivo, modelando cada uno de forma independiente.
 
-La selección final de los contaminantes a modelar dependerá de los datos disponibles y de su fuerza en su relación con las variables meteorológicas. Esto se desarrolla en la sección de preparación de datos, ubicada unos puntos más abajo de este mismo entregable.
+La selección final de los contaminantes a modelar dependerá de los datos disponibles y de la fuerza de su relación con las variables meteorológicas. Esto se desarrolla en la sección de preparación de datos, ubicada más adelante en este mismo entregable.
 
 ### Referencias bibliográficas
 
-A)  **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
+A) **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
 
 Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
 
 A.2) **Sobre normas y guías internacionales de calidad del aire.**\
-Hoffmann et al. (2021), en representación de sociedades médicas y de salud pública resumieron las Guías de Calidad del Aire 2021 de la OMS, llegando a la conclusión de que cualquier reducción en concentraciones de contaminantes es beneficioso para la salud poblacional, contemplando también zonas donde la contaminación inicialmente es relativamente baja. Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations.* International Journal of Public Health, 66, 1604465.
+Hoffmann et al. (2021), en representación de sociedades médicas y de salud pública, resumieron las Guías de Calidad del Aire 2021 de la OMS, llegando a la conclusión de que cualquier reducción en las concentraciones de contaminantes es beneficiosa para la salud poblacional, contemplando también zonas donde la contaminación inicialmente es relativamente baja. Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations.* International Journal of Public Health, 66, 1604465.
 
-B)  **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
+B) **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
 
 Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
 
 ## Parte 2
 
-Para esta primera etapa, empezaremos por cargar las librerías que necesitamos y establecemos algunas opciones de configuración:
+Para esta primera etapa, empezaremos por cargar las librerías que necesitamos y estableceremos algunas opciones de configuración:
 
 ```{r}
 library(tidyverse)
@@ -254,7 +254,7 @@ tabla_variables
 
 diccionario <- tibble(
   Variable = c(
-    "Fecha y hora", "CO", "NO", "NO2", "NOX", "O3",
+    "fecha y hora", "CO", "NO", "NO2", "NOX", "O3",
     "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2",
     "SR", "TEMP", "WS", "WD"
   ),
@@ -470,14 +470,14 @@ tabla_fdr
 
 ```
 
-Se utilizarán los registros de las estaciones de monitoreo desde 2020 a 2025. Esto es porque al trabajar con un modelo predictivo, se necesitarán la mayor cantidad de variables posibles. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y de esta manera se modelará cada contaminate independientemente. La selección final de las variables objetivo dependerá de la practicidad y qué tanto nos proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja como para construir y validar un modelo predictivo confiable.
+Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
 
 ```{r}
 
 datos_unidos <- bind_rows(bases)
 
 duplicados <- datos_unidos |>
-  count(Año, Estacion, `Fecha y hora`) |>
+  count(Año, Estacion, `fecha y hora`) |>
   filter(n > 1)
 
 duplicados
@@ -486,11 +486,11 @@ duplicados
 
 Así verificamos que no hay valores duplicados.
 
-Los valores faltantes los vamos a dejar igual, ya que como son considerados NA, fácilmente pueden ser reemplazados en un futuro por una media o mediana si se considera necesario. De la misma manera, se van a usar datos de entrenamiento y de test, por eso se necesita la mayor cantidad posible.
+Los valores faltantes se dejarán sin modificar por ahora. Como están representados como NA, posteriormente podrán ser tratados mediante una estrategia de imputación, como la media o la mediana, si se considera necesario. Además, se utilizarán datos de entrenamiento y prueba, por lo que conviene conservar la mayor cantidad posible de información en esta etapa.
 
 ```{r}
 
-variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3","PM10", "PM2.5", "BP", "RAINF","RH", "SO2", "SR", "TEMP", "WS", "WD")
+variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD")
 
 detectar_outliers <- function(datos, variable) {
   
@@ -510,7 +510,7 @@ detectar_outliers <- function(datos, variable) {
     select(
       Año,
       Estacion,
-      `Fecha y hora`,
+      `fecha y hora`,
       all_of(variable),
       Q1,
       Q3,
@@ -544,7 +544,7 @@ tabla_outliers <- map_dfr(
 
 ```
 
-Como podemos observar en nuestra tabla de valores atípicos, usando el rango intercuartílico, algunos valores llegan a ser hasta el 11.82% de los datos. Claramente esto es una cantidad significativa y relevante que no se puede eliminar de la base de datos.
+Como podemos observar en nuestra tabla de valores atípicos, utilizando el rango intercuartílico, algunos valores llegan a representar hasta el 11.82% de los datos. Esta es una cantidad significativa que no se puede eliminar de la base de datos sin un análisis adicional.
 
 ```{r}
 
@@ -560,7 +560,7 @@ datos_escalados <- datos_limpios |>
 
 ```
 
-En esta sección estandarizamos ciertas variables continuas para que se aproximen en una media 0 y desviación estándar 1. Esto por si queremos hacer un PCA, KNN, SVM, etc. Si no, mantenemos los valores continuos ("datos_modelo").
+En esta sección estandarizamos ciertas variables continuas para que tengan una media aproximada de 0 y una desviación estándar de 1. Esto puede ser útil si posteriormente se aplican técnicas como PCA, KNN o SVM. En caso contrario, se mantienen los valores continuos en su escala original en `datos_modelo`.
 
 ```{r}
 
@@ -583,7 +583,7 @@ datos_modelo <- datos_limpios |>
 
 ```
 
-Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminates.
+Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminantes.
 
 ```{r}
 datos_modelo <- datos_modelo |>
@@ -598,7 +598,7 @@ levels(datos_modelo$Dia_semana)
 
 ### Informe preparación de los datos
 
-La base de datos consolidada integra los 6 años de registros proporcionados por SIMA (2020-2025), sumando un total de 688,199 registros horarios distribuidos en distintas estaciones de monitoreo de la Zona Metropolitana de Monterrey. Cada año contribuyó así:\
+La base de datos consolidada integra los seis años de registros proporcionados por SIMA (2020-2025), sumando un total de 688,199 registros horarios distribuidos en distintas estaciones de monitoreo de la Zona Metropolitana de Monterrey. Cada año contribuyó así:\
 - 2020 - 114,102 registros\
 - 2021 - 122,629 registros\
 - 2022 - 123,383 registros\
@@ -606,36 +606,36 @@ La base de datos consolidada integra los 6 años de registros proporcionados por
 - 2024 - 131,741 registros\
 - 2025 - 64,974 registros (año parcial)
 
-La base contiene 18 variables por registro en la mayoría de los años. Una variable de fecha y hora, 8 variables de contaminantes atmosféricos criterio (CO, NO, NO2, NOx, O3, PM10, PM2.5, SO2), 7 variables meteorológicas (BP, RAINF, RH, SR, TEMP, WS, WD) y 2 variables identificadoras (Año, Estación).
+La base contiene 18 variables por registro en la mayoría de los años: una variable de fecha y hora, 8 variables de contaminantes atmosféricos criterio (CO, NO, NO2, NOx, O3, PM10, PM2.5, SO2), 7 variables meteorológicas (BP, RAINF, RH, SR, TEMP, WS, WD) y 2 variables identificadoras (Año, Estación).
 
-\*Algo importante a mencionar es que la base de 2025 presenta 19 columnas en vez de 18, ya que el archivo tiene una columna adicional llamada "date" junto con la columna de Fecha y hora. Esto, junto con la corrección de valores erróneos, se documentará y resolverá en la siguiente entrega.
+La inconsistencia de nombres de la variable temporal en 2025 se homogeneizó durante la carga de los datos, de modo que tanto `date` como `fecha y hora` se estandarizan bajo el nombre `fecha y hora` para su procesamiento posterior.
 
 **Datos faltantes**\
-El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla "tabla_faltantes" generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y Nox.
+El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla `tabla_faltantes` generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y NOx.
 
 **Datos duplicados**\
-Se verificó la existencia de registros duplicados a nivel de Año, Estación y Fecha y hora con un conteo de combinaciones repetidas ("duplicados"). El resultado confirmó que, conceptualmente, no existen registros duplicados en la base. Se destaca que "conceptualmente", ya que, en 2025, no se pudo evaluar el criterio debido a que la columna de fecha (date) presenta un formato distinto al encontrado en las otras bases de datos. Esta verificación se completará en la siguiente entrega junto con la corrección de esa incosistencia estructural.
+Se verificó la existencia de registros duplicados a nivel de Año, Estación y fecha y hora mediante un conteo de combinaciones repetidas (`duplicados`). El resultado confirmó que, conceptualmente, no existen registros duplicados en la base bajo este criterio.
 
 **Datos atípicos (outliers)**\
-Se aplicó el método de rango intercuartílico por estación para cada uno a de las variables numéricas. Los resultados, en "tabla_outliers" muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers de esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
+Se aplicó el método del rango intercuartílico por estación para cada una de las variables numéricas. Los resultados en `tabla_outliers` muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers en esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
 
 **Variables categóricas**\
-Se identificaron "Estacion" y "Dia_semana" como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
+Se identificaron `Estacion` y `Dia_semana` como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
 
 **Binning**\
-No se consideró necesario discretizar las variables de contaminantes ni meteorológicas en esta etapa, ya que el objetivo del proyecto es predecir concentraciones continuas utilizando modelos de regresión, y discretizar podría implicar una pérdida de información para este fin.
+No se consideró necesario discretizar las variables de contaminantes ni meteorológicas en esta etapa, ya que el objetivo del proyecto es predecir concentraciones continuas utilizando modelos de regresión y discretizar podría implicar una pérdida de información para este fin.
 
 **Transformación y escalamiento**\
-Se generó una versión escalada y normalizada de las variables meteorológicas continuas (datos_escalados), disponible en caso de aplicar técnicas sensibiles a la escala de datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original (datos_modelo).
+Se generó una versión escalada y estandarizada de las variables meteorológicas continuas (`datos_escalados`), disponible en caso de aplicar técnicas sensibles a la escala de los datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original (`datos_modelo`).
 
-Por otra parte, a partir de la variable Fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
+Por otra parte, a partir de la variable fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
 
-Además de la unión de los datos de los 6 años, no fue necesario reestructurar la base de datos, ya que el formato largo por observación de horario y estación es correcto para las técnicas de modelado predictivo contempladas.
+Además de la unión de los datos de los seis años, no fue necesario reestructurar la base de datos, ya que el formato largo por observación horaria y estación es correcto para las técnicas de modelado predictivo contempladas.
 
 **Otros planes a futuro**\
-Se contempla la posibilidad de agrupar de forma estacional (invierno, verano, otoño, primavera) o mensual los datos, con el objetivo de responder de manera más completa la pregunta de investigación 3 (si la relación meteorología-contaminante varía por estacionalidad). Esto, en caso de realizarse, crearía variables nuevas.
+Se contempla la posibilidad de agrupar los datos de forma estacional (invierno, verano, otoño, primavera) o mensual, con el objetivo de responder de manera más completa la pregunta de investigación 3 (si la relación meteorología-contaminante varía por estacionalidad). Esto, en caso de realizarse, crearía variables nuevas.
 
-### Link Github:
+### Link GitHub:
 
 https://github.com/Reyivan777/Reto-Multivariados
 
@@ -645,4 +645,4 @@ Opción B. Se utilizó IA de la siguiente forma:\
 Herramienta: Claude.\
 Uso realizado: Apoyo en la búsqueda de referencias bibliográficas complementarias, así como en la estructuración de borradores de las secciones del informe de la Parte I. Igualmente, apoyo con sintaxis del código de la Parte 2.\
 Secciones donde se utilizó: Parte I. Conociendo el Negocio y Parte II. Comprensión y Preparación de los Datos.\
-Validación realizada por los estudiantes: Hemos revisado, editado y validado el contenido generado, verificando la veracidad de las referencias y asegurar coherencia con el objetivo del proyecto. Como equipo asumimos la responsabilidad del contenido final entregado.
+Validación realizada por los estudiantes: Hemos revisado, editado y validado el contenido generado, verificando la veracidad de las referencias y asegurando la coherencia con el objetivo del proyecto. Como equipo asumimos la responsabilidad del contenido final entregado.
