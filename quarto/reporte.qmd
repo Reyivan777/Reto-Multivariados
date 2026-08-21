@@ -468,6 +468,43 @@ tabla_faltantes
 tabla_valores
 tabla_fdr
 
+detalle_fdr <- purrr::imap_dfr(
+  bases,
+  function(datos, año) {
+
+    limites_año <- limites |>
+      filter(Año == as.numeric(año))
+
+    purrr::pmap_dfr(
+      limites_año,
+      function(Año, Variable, Min, Max) {
+
+        if (!Variable %in% names(datos)) {
+          return(tibble())
+        }
+
+        datos |>
+          filter(
+            !is.na(.data[[Variable]]),
+            .data[[Variable]] < Min |
+              .data[[Variable]] > Max
+          ) |>
+          transmute(
+            Año = Año,
+            Estacion = Estacion,
+            `fecha y hora` = `fecha y hora`,
+            Variable = Variable,
+            Valor = .data[[Variable]],
+            Min_permitido = Min,
+            Max_permitido = Max
+          )
+      }
+    )
+  }
+)
+
+detalle_fdr
+
 ```
 
 Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
