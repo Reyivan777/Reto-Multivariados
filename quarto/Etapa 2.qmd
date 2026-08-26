@@ -15,101 +15,23 @@ format:
     number-sections: true
 ---
 
-# Etapa 1. Conociendo el negocio
-
-## PARTE I. Conociendo el Negocio
-
-### Presentación general del proyecto (resumen del proyecto).
-
-La contaminación atmosférica representa un problema importante de salud pública debido a los efectos que contaminantes como PM2.5, PM10, O₃, NO₂, SO₂ y CO pueden generar en la población. En zonas urbanas como el Área Metropolitana de Monterrey, su monitoreo resulta especialmente relevante debido a la actividad industrial, vehicular y a las condiciones meteorológicas que pueden favorecer la acumulación o dispersión de contaminantes.
-
-En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) registra información sobre la calidad del aire mediante una red de estaciones que miden concentraciones de contaminantes y variables meteorológicas. Estas mediciones permiten conocer las condiciones ambientales de distintas zonas y proporcionan información útil para analizar el comportamiento de la contaminación atmosférica.
-
-Las condiciones meteorológicas influyen directamente en la dinámica de los contaminantes. Variables como temperatura, humedad, velocidad y dirección del viento, presión, precipitación y radiación solar pueden modificar su formación, transporte y dispersión. Dado esto, en este proyecto ha surgido la pregunta: ¿Es posible aprovechar los registros históricos de SIMA para entender y anticipar el comportamiento de la contaminación atmosférica a partir de las variables meteorológicas? A continuación se presenta la revisión bibliográfica que sustenta esta pregunta, así como la descripción del problema, los objetivos del proyecto y las fuentes de información utilizadas.
-
-### Revisión de bibliografía
-
-**Sobre la medición de la calidad del aire, su impacto social e importancia.**\
-La contaminación atmosférica es reconocida como uno de los principales riesgos ambientales para la salud pública. En el Área Metropolitana de Monterrey, Cerón Bretón et al. (2020) encontraron asociaciones entre mayores concentraciones de contaminantes atmosféricos y un incremento en el riesgo de mortalidad diaria, efecto que se agrava con temperaturas elevadas y que resulta especialmente relevante en adultos mayores. A nivel internacional, las Guías de Calidad del Aire 2021 de la Organización Mundial de la Salud (Hoffmann et al., 2021) refuerzan esta relevancia. En zonas donde la contaminación ya es relativamente baja, reducir las concentraciones de contaminantes criterio (PM2.5, PM10, O3, NO2, SO2 y CO) genera beneficios medibles para la salud de la población.
-
-En México, estas guías se traducen en las Normas Oficiales Mexicanas de salud ambiental (NOM-020, 021, 022, 023 y 025-SSA1). Estas establecen los límites permisibles para cada contaminante y sirven como referencia para evaluar el cumplimiento y diseñar políticas de mitigación. La medición de la calidad del aire contribuye a la protección de la salud y a la rendición de cuentas hacia la ciudadanía.
-
-**Centrado en el objetivo de trabajo (Modelado predictivo con variables meteorológicas)**\
-Con respecto al uso de variables meteorológicas para predecir contaminantes, Cifuentes et al. (2021) desarrollaron modelos de regresión lineal múltiple, Support Vector Regression y redes neuronales para predecir concentraciones horarias de O3 y PM2.5, encontrando que variables como la radiación solar y la temperatura resultan especialmente útiles cuando no se cuenta con suficiente información directa de contaminantes. Esto ayuda a confirmar la viabilidad de construir modelos predictivos de calidad del aire a partir de datos meteorológicos y provee sugerencias para la priorización de variables durante el modelado.
-
-### Descripción del problema específico
-
-\
-El Sistema Integral de Monitoreo Ambiental (SIMA) cuenta con una red de estaciones que registra de forma continua contaminantes atmosféricos, así como variables meteorológicas en la Zona Metropolitana de Monterrey. Sin embargo, esta información histórica no se ha explotado de forma sistemática para anticipar concentraciones de contaminantes a partir de las condiciones meteorológicas, lo cual limita la correcta comunicación de los riesgos que conlleva una calidad del aire crítica para la población.
-
-A partir de esta problemática, este proyecto busca responder las siguientes preguntas de investigación:\
-- ¿Cuáles son las variables meteorológicas (como humedad, temperatura, dirección del viento, radiación solar, etc.) que muestran mayor relación con las concentraciones de cada contaminante criterio registradas por SIMA?\
-- ¿Es posible desarrollar modelos estadísticos y/o de aprendizaje automático que, a partir de variables meteorológicas históricas proporcionadas, puedan predecir de manera confiable las concentraciones de estos contaminantes en las estaciones de monitoreo?\
-- ¿Esta relación entre meteorología y contaminantes varía según la estación del año, la hora del día o la estación de monitoreo específica?
-
-### Objetivos de este proyecto
-
-**Objetivo general**\
-El objetivo general de este proyecto es desarrollar y evaluar modelos predictivos que permitan estimar las concentraciones de contaminantes atmosféricos criterio en la Zona Metropolitana de Monterrey a partir de variables meteorológicas registradas por SIMA en el periodo 2020-2025, con el fin de aportar herramientas que apoyen la comunicación de riesgos de calidad del aire.
-
-**Objetivos específicos**\
-1. Identificar las variables meteorológicas con mayor relación estadística con respecto a las concentraciones de cada contaminante criterio registrado por SIMA.\
-2. Construir y comparar modelos estadísticos que predigan las concentraciones de contaminantes a partir de variables meteorológicas, seleccionando los contaminantes objetivo con base en la calidad y disponibilidad de datos.\
-3. Evaluar si la relación entre las variables meteorológicas y los contaminantes varía según la estacionalidad temporal o la estación de monitoreo, con el fin de identificar patrones temporales y espaciales de relevancia.
-
-### Justificación de los objetivos
-
-La revisión bibliográfica mencionada anteriormente confirma que existe evidencia sólida de que las concentraciones de contaminantes atmosféricos están asociadas a riesgos de salud significativos, incluso en niveles relativamente bajos (Hoffmann et al., 2021), y que esta relación se ha documentado específicamente en la Zona Metropolitana de Monterrey (abreviada como "ZMM"). Esto justifica la relevancia social del objetivo general, ya que cualquier elemento que ayude a anticipar concentraciones de contaminantes tiene un impacto en la protección de la salud pública local.
-
-Igualmente, se ha demostrado que metodológicamente es viable predecir contaminantes como O3 y PM2.5 basándose en variables meteorológicas mediante técnicas estadísticas y de aprendizaje automático, especialmente en contextos donde no se cuenta con un monitoreo continuo de todos los contaminantes (Cifuentes et al., 2021). Existe un área de oportunidad para aplicar este tipo de modelado a los datos históricos que genera SIMA y explorar si la relación meteorología-contaminante varía según la estacionalidad o la ubicación de las estaciones de esta zona en Monterrey.
-
-Con este proyecto se busca contribuir aprovechando la infraestructura de datos ya existente de SIMA (de 2020 a 2025) para construir modelos predictivos adaptados a las condiciones específicas de Monterrey, aplicando la metodología en un contexto geográfico y temporal.
-
-### Descripción de las fuentes de información
-
-La fuente de información utilizada en este proyecto proviene del Sistema Integral de Monitoreo Ambiental (SIMA), organismo encargado de operar la red de estaciones de monitoreo de calidad del aire en el estado de Nuevo León. SIMA aporta de manera pública bases de datos históricas que contienen registros de las distintas estaciones de monitoreo en la ZMM. Cada registro corresponde a una medición por hora y estación. Este registro incluye variables de contaminantes atmosféricos criterio \[monóxido de carbono (CO), monóxido de nitrógeno (NO), dióxido de nitrógeno (NO2), óxidos de nitrógeno (NOx), ozono (O3), partículas menores a 10 micrómetros (PM10), partículas menores a 2.5 micrómetros (PM2.5) y dióxido de azufre (SO2), entre otros\], e igualmente contiene variables meteorológicas, como precipitación (RAINF), humedad relativa (RH), radiación solar (SR), temperatura (TEMP), velocidad del viento (WS) y su dirección (WD), entre otras.
-
-La combinación de estas variables permite estudiar la relación entre condiciones atmosféricas y concentraciones de contaminantes en el tiempo y en distintos puntos de la ZMM. Como el objetivo del proyecto es predictivo, se eligió integrar los seis años proporcionados en una sola base. Las variables meteorológicas se consideran como variables predictoras (independientes), mientras que los contaminantes se tratan como variables objetivo, modelando cada uno de forma independiente.
-
-La selección final de los contaminantes a modelar dependerá de los datos disponibles y de la fuerza de su relación con las variables meteorológicas. Esto se desarrolla en la sección de preparación de datos, ubicada más adelante en este mismo entregable.
-
-### Referencias bibliográficas
-
-A) **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
-
-Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
-
-A.2) **Sobre normas y guías internacionales de calidad del aire.**\
-Hoffmann et al. (2021), en representación de sociedades médicas y de salud pública, resumieron las Guías de Calidad del Aire 2021 de la OMS, llegando a la conclusión de que cualquier reducción en las concentraciones de contaminantes es beneficiosa para la salud poblacional, contemplando también zonas donde la contaminación inicialmente es relativamente baja. Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations.* International Journal of Public Health, 66, 1604465.
-
-B) **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
-
-Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
-
-## Parte 2
-
-Para esta primera etapa, empezaremos por cargar las librerías que necesitamos y estableceremos algunas opciones de configuración:
-
 ```{r}
+
 library(tidyverse)
 library(here)
 library(readxl)
-library(maps)
 library(stringr)
 library(readr)
 library(purrr)
 
-
 options(scipen = 999)
-```
 
-Ahora cargamos los datos que nos proporcionó el Socio Formador:
-
-```{r}
+estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
 
 leer_base <- function(archivo, año) {
   
   hojas <- excel_sheets(archivo)
+  hojas <- hojas[hojas %in% estaciones_seleccionadas]
   
   map_dfr(
     hojas,
@@ -127,10 +49,9 @@ leer_base <- function(archivo, año) {
         str_replace_all("[\r\n]", " ") |>
         str_replace("\\s*\\([^)]*\\).*", "") |>
         str_squish()
-
+      
       nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
       nombres[tolower(nombres) == "date"] <- "fecha y hora"
-
       
       nombres[toupper(nombres) == "PRS"] <- "BP"
       nombres[toupper(nombres) == "TOUT"] <- "TEMP"
@@ -168,61 +89,16 @@ leer_base <- function(archivo, año) {
   )
 }
 
-calidad_aire_2020_tbl <- leer_base(
-  here("data", "BD 2020.xlsx"),
-  2020
-)
-
-calidad_aire_2021_tbl <- leer_base(
-  here("data", "BD 2021.xlsx"),
-  2021
-)
-
-calidad_aire_2022_tbl <- leer_base(
-  here("data", "BD 2022.xlsx"),
-  2022
-)
-
-calidad_aire_2023_tbl <- leer_base(
-  here("data", "BD 2023.xlsx"),
-  2023
-)
-
-calidad_aire_2024_tbl <- leer_base(
-  here("data", "BD 2024.xlsx"),
-  2024
-)
-
-calidad_aire_2025_tbl <- leer_base(
-  here("data", "BD 2025.xlsx"),
-  2025
-)
-
-
-glimpse(calidad_aire_2020_tbl)
-glimpse(calidad_aire_2021_tbl)
-glimpse(calidad_aire_2022_tbl)
-glimpse(calidad_aire_2023_tbl)
-glimpse(calidad_aire_2024_tbl)
-glimpse(calidad_aire_2025_tbl)
-
-
 bases <- list(
-  "2020" = calidad_aire_2020_tbl,
-  "2021" = calidad_aire_2021_tbl,
-  "2022" = calidad_aire_2022_tbl,
-  "2023" = calidad_aire_2023_tbl,
-  "2024" = calidad_aire_2024_tbl,
-  "2025" = calidad_aire_2025_tbl
+  "2020" = leer_base(here("data", "BD 2020.xlsx"), 2020),
+  "2021" = leer_base(here("data", "BD 2021.xlsx"), 2021),
+  "2022" = leer_base(here("data", "BD 2022.xlsx"), 2022),
+  "2023" = leer_base(here("data", "BD 2023.xlsx"), 2023),
+  "2024" = leer_base(here("data", "BD 2024.xlsx"), 2024),
+  "2025" = leer_base(here("data", "BD 2025.xlsx"), 2025)
 )
 
-datos_limpios <- bind_rows(bases)
-
-```
-
-En esta sección se trabaja con las bases de datos para abrirlas y poder manipularlas con mayor facilidad.
-
-```{r}
+datos <- bind_rows(bases)
 
 dimensiones <- purrr::imap_dfr(
   bases,
@@ -233,496 +109,179 @@ dimensiones <- purrr::imap_dfr(
   )
 )
 
-variables_por_año <- purrr::imap_dfr(
-  bases,
-  ~ tibble(
-    Año = .y,
-    Variable = names(.x)
-  )
-)
-
-tabla_variables <- variables_por_año |>
-  mutate(Presente = "Sí") |>
-  tidyr::pivot_wider(
-    names_from = Año,
-    values_from = Presente,
-    values_fill = "No"
-  )
-
 dimensiones
-tabla_variables
 
-diccionario <- tibble(
-  Variable = c(
-    "fecha y hora", "CO", "NO", "NO2", "NOX", "O3",
-    "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2",
-    "SR", "TEMP", "WS", "WD"
-  ),
+glimpse(datos)
 
-  Descripcion = c(
-    "Fecha y hora de la medición",
-    "Monóxido de carbono (ppm)",
-    "Monóxido de nitrógeno (ppb)",
-    "Dióxido de nitrógeno (ppb)",
-    "Óxidos de nitrógeno, suma de NO + NO2 (ppb)",
-    "Ozono (ppb)",
-    "Material particulado menor a 10 micrómetros (µg/m3)",
-    "Material particulado menor a 2.5 micrómetros (µg/m3)",
-    "Presión atmosférica (mm Hg)",
-    "Precipitación (mm/Hr)",
-    "Humedad relativa (%)",
-    "Dióxido de azufre (ppb)",
-    "Radiación solar (kW/m2)",
-    "Temperatura (ºC)",
-    "Velocidad del viento (Km/hr)",
-    "Dirección del viento (º)"
-  ),
-
-  Tipo = c(
-    "Fecha-hora",
-    rep("Numérico", 15)
-  )
+variables_medicion <- c(
+  "CO", "NO", "NO2", "NOX", "O3",
+  "PM10", "PM2.5", "BP", "RAINF",
+  "RH", "SO2", "SR", "TEMP", "WS", "WD"
 )
 
-
-rangos <- tribble(
-  ~Año, ~PM10, ~PM2.5, ~O3, ~NO, ~NO2, ~NOX, ~SO2, ~CO, ~RH, ~WS, ~TEMP, ~SR, ~BP, ~WD, ~RAINF,
-  2020, "0-800", "0-205.94", "0-153", "0-500", "0-200", "0-500", "0-200", "0-20", "0-100", "0-75", "0-41", "0-1", "690-750", "0-360", "0-30",
-  2021, "0-800", "0-325", "0-175", "0-350", "0-100", "0-400", "0-300", "0-10", "0-100", "0-40", "-6.5-45", "0-1", "690-740", "0-360", "0-80",
-  2022, "0-999", "0-450", "0-160", "0-400", "0-175", "0-420", "0-200", "0-8", "0-100", "0-35", "-5-45", "0-1.25", "700-740", "0-360", "0-25",
-  2023, "0-900", "0-800", "0-175", "0-500", "0-175", "0-500", "0-250", "0-14", "0-100", "0-40", "0-45", "0-1", "690-740", "0-360", "0-70",
-  2024, "0-999", "0-999", "0-180", "0-400", "0-130", "0-500", "0-150", "0-18", "0-100", "0-38", "-4-45.5", "0-1.26", "687.5-740", "0-360", "0-50",
-  2025, "0-820", "0-350", "0-185", "0-350", "0-175", "0-400", "0-405", "0-10", "0-100", "0-40", "-4.5-45", "0-1.2", "688-740", "0-360", "0-25"
-)
-
-diccionario
-rangos
-
-tabla_faltantes <- purrr::imap_dfr(
-  bases,
-  ~ .x |>
-    summarise(
-      across(
-        everything(),
-        list(
-          Nulos = ~ sum(is.na(.)),
-          Porcentaje = ~ round(mean(is.na(.)) * 100, 2)
-        )
-      )
-    ) |>
-    pivot_longer(
-      everything(),
-      names_to = c("Variable", ".value"),
-      names_pattern = "(.*)_(Nulos|Porcentaje)"
-    ) |>
-    mutate(Año = .y)
-)
-
-tabla_valores <- purrr::imap_dfr(
-  bases,
-  ~ .x |>
-    select(where(is.numeric)) |>
-    summarise(
-      across(
-        everything(),
-        list(
-          Min = ~ ifelse(all(is.na(.)), NA, min(., na.rm = TRUE)),
-          Max = ~ ifelse(all(is.na(.)), NA, max(., na.rm = TRUE)),
-          Media = ~ ifelse(all(is.na(.)), NA, mean(., na.rm = TRUE))
-        )
-      )
-    ) |>
-    pivot_longer(
-      everything(),
-      names_to = c("Variable", ".value"),
-      names_pattern = "(.*)_(Min|Max|Media)"
-    ) |>
-    mutate(Año = .y)
-)
-
-limites <- tribble(
-  ~Año, ~Variable, ~Min, ~Max,
-  2020, "PM10", 0, 800,
-  2020, "PM2.5", 0, 205.94,
-  2020, "O3", 0, 153,
-  2020, "NO", 0, 500,
-  2020, "NO2", 0, 200,
-  2020, "NOX", 0, 500,
-  2020, "SO2", 0, 200,
-  2020, "CO", 0, 20,
-  2020, "RH", 0, 100,
-  2020, "WS", 0, 75,
-  2020, "TEMP", 0, 41,
-  2020, "SR", 0, 1,
-  2020, "BP", 690, 750,
-  2020, "WD", 0, 360,
-  2020, "RAINF", 0, 30,
-
-  2021, "PM10", 0, 800,
-  2021, "PM2.5", 0, 325,
-  2021, "O3", 0, 175,
-  2021, "NO", 0, 350,
-  2021, "NO2", 0, 100,
-  2021, "NOX", 0, 400,
-  2021, "SO2", 0, 300,
-  2021, "CO", 0, 10,
-  2021, "RH", 0, 100,
-  2021, "WS", 0, 40,
-  2021, "TEMP", -6.5, 45,
-  2021, "SR", 0, 1,
-  2021, "BP", 690, 740,
-  2021, "WD", 0, 360,
-  2021, "RAINF", 0, 80,
-
-  2022, "PM10", 0, 999,
-  2022, "PM2.5", 0, 450,
-  2022, "O3", 0, 160,
-  2022, "NO", 0, 400,
-  2022, "NO2", 0, 175,
-  2022, "NOX", 0, 420,
-  2022, "SO2", 0, 200,
-  2022, "CO", 0, 8,
-  2022, "RH", 0, 100,
-  2022, "WS", 0, 35,
-  2022, "TEMP", -5, 45,
-  2022, "SR", 0, 1.25,
-  2022, "BP", 700, 740,
-  2022, "WD", 0, 360,
-  2022, "RAINF", 0, 25,
-
-  2023, "PM10", 0, 900,
-  2023, "PM2.5", 0, 800,
-  2023, "O3", 0, 175,
-  2023, "NO", 0, 500,
-  2023, "NO2", 0, 175,
-  2023, "NOX", 0, 500,
-  2023, "SO2", 0, 250,
-  2023, "CO", 0, 14,
-  2023, "RH", 0, 100,
-  2023, "WS", 0, 40,
-  2023, "TEMP", 0, 45,
-  2023, "SR", 0, 1,
-  2023, "BP", 690, 740,
-  2023, "WD", 0, 360,
-  2023, "RAINF", 0, 70,
-
-  2024, "PM10", 0, 999,
-  2024, "PM2.5", 0, 999,
-  2024, "O3", 0, 180,
-  2024, "NO", 0, 400,
-  2024, "NO2", 0, 130,
-  2024, "NOX", 0, 500,
-  2024, "SO2", 0, 150,
-  2024, "CO", 0, 18,
-  2024, "RH", 0, 100,
-  2024, "WS", 0, 38,
-  2024, "TEMP", -4, 45.5,
-  2024, "SR", 0, 1.26,
-  2024, "BP", 687.5, 740,
-  2024, "WD", 0, 360,
-  2024, "RAINF", 0, 50,
-
-  2025, "PM10", 0, 820,
-  2025, "PM2.5", 0, 350,
-  2025, "O3", 0, 185,
-  2025, "NO", 0, 350,
-  2025, "NO2", 0, 175,
-  2025, "NOX", 0, 400,
-  2025, "SO2", 0, 405,
-  2025, "CO", 0, 10,
-  2025, "RH", 0, 100,
-  2025, "WS", 0, 40,
-  2025, "TEMP", -4.5, 45,
-  2025, "SR", 0, 1.2,
-  2025, "BP", 688, 740,
-  2025, "WD", 0, 360,
-  2025, "RAINF", 0, 25
-)
-
-tabla_fdr <- purrr::imap_dfr(
-  bases,
-  function(datos, año) {
-
-    limites_año <- limites |>
-      filter(Año == as.numeric(año))
-
-    purrr::pmap_dfr(
-      limites_año,
-      function(Año, Variable, Min, Max) {
-
-        x <- datos[[Variable]]
-
-        tibble(
-          Año = Año,
-          Variable = Variable,
-          Min_permitido = Min,
-          Max_permitido = Max,
-          Fuera_de_rango = sum(x < Min | x > Max, na.rm = TRUE)
-        )
-      }
-    )
-  }
-)
-
-tabla_faltantes
-tabla_valores
-tabla_fdr
-
-detalle_fdr <- purrr::imap_dfr(
-  bases,
-  function(datos, año) {
-
-    limites_año <- limites |>
-      filter(Año == as.numeric(año))
-
-    purrr::pmap_dfr(
-      limites_año,
-      function(Año, Variable, Min, Max) {
-
-        if (!Variable %in% names(datos)) {
-          return(tibble())
-        }
-
-        datos |>
-          filter(
-            !is.na(.data[[Variable]]),
-            .data[[Variable]] < Min |
-              .data[[Variable]] > Max
-          ) |>
-          transmute(
-            Año = Año,
-            Estacion = Estacion,
-            `fecha y hora` = `fecha y hora`,
-            Variable = Variable,
-            Valor = .data[[Variable]],
-            Min_permitido = Min,
-            Max_permitido = Max
-          )
-      }
-    )
-  }
-)
-
-detalle_fdr
-
-datos_limpios <- datos_limpios |>
+datos <- datos |>
   mutate(
-    
-    WS = if_else(
-      Año == 2020 & WS > 75,
-      NA_real_,
-      WS
-    ),
-    
-    SR = if_else(
-      Año == 2020 & SR > 1,
-      NA_real_,
-      SR
-    ),
-    
-    BP = if_else(
-      Año == 2020 & (BP < 690 | BP > 750),
-      NA_real_,
-      BP
-    ),
-    
-    NO = if_else(
-      Año == 2021 & NO > 350,
-      NA_real_,
-      NO
-    ),
-    
-    NO2 = if_else(
-      Año == 2021 & NO2 < 0,
-      NA_real_,
-      NO2
-    ),
-    
-    SR = if_else(
-      Año == 2021 & SR > 1,
-      NA_real_,
-      SR
+    across(
+      c(RH, SR, RAINF, TEMP),
+      ~ na_if(.x, -9999)
     )
   )
 
+## Corrigiendo valores erróneos 
 
 ```
-
-
-
-Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
-
 ```{r}
 
-datos_unidos <- bind_rows(bases)
+tabla_descriptiva <- datos |>
+  select(any_of(variables_medicion)) |>
+  summarise(
+    across(
+      everything(),
+      list(
+        Min = ~ min(.x, na.rm = TRUE),
+        Q1 = ~ quantile(.x, 0.25, na.rm = TRUE),
+        Media = ~ mean(.x, na.rm = TRUE),
+        Mediana = ~ median(.x, na.rm = TRUE),
+        DE = ~ sd(.x, na.rm = TRUE),
+        Q3 = ~ quantile(.x, 0.75, na.rm = TRUE),
+        Max = ~ max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = c("Variable", ".value"),
+    names_pattern = "(.*)_(Min|Q1|Media|Mediana|DE|Q3|Max)"
+  )
 
-duplicados <- datos_unidos |>
+
+tabla_descriptiva
+
+
+tabla_faltantes <- datos |>
+  select(any_of(variables_medicion)) |>
+  summarise(
+    across(
+      everything(),
+      list(
+        Nulos = ~ sum(is.na(.x)),
+        Porcentaje = ~ round(mean(is.na(.x)) * 100, 2)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = c("Variable", ".value"),
+    names_pattern = "(.*)_(Nulos|Porcentaje)"
+  )
+
+tabla_faltantes
+
+
+duplicados_fecha <- datos |>
   count(Año, Estacion, `fecha y hora`) |>
   filter(n > 1)
 
-duplicados
+duplicados_fecha
 
-```
 
-Así verificamos que no hay valores duplicados.
+datos_largos <- datos |>
+  select(any_of(variables_medicion)) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "Variable",
+    values_to = "Valor"
+  )
 
-Los valores faltantes se dejarán sin modificar por ahora. Como están representados como NA, posteriormente podrán ser tratados mediante una estrategia de imputación, como la media o la mediana, si se considera necesario. Además, se utilizarán datos de entrenamiento y prueba, por lo que conviene conservar la mayor cantidad posible de información en esta etapa.
+library(scales)
 
-```{r}
+for (variable in variables_medicion) {
 
-variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD")
-
-detectar_outliers <- function(datos, variable) {
-  
-  datos |>
-    group_by(Estacion) |>
-    mutate(
-      Q1 = quantile(.data[[variable]], 0.25, na.rm = TRUE),
-      Q3 = quantile(.data[[variable]], 0.75, na.rm = TRUE),
-      IQR = Q3 - Q1,
-      Lim_inf = Q1 - 1.5 * IQR,
-      Lim_sup = Q3 + 1.5 * IQR,
-      Outlier = .data[[variable]] < Lim_inf |
-                .data[[variable]] > Lim_sup
-    ) |>
-    filter(Outlier == TRUE) |>
-    ungroup() |>
-    select(
-      Año,
-      Estacion,
-      `fecha y hora`,
-      all_of(variable),
-      Q1,
-      Q3,
-      Lim_inf,
-      Lim_sup
+  grafica <- datos |>
+    filter(!is.na(.data[[variable]])) |>
+    ggplot(aes(x = .data[[variable]])) +
+    geom_histogram(bins = 30) +
+    scale_x_continuous(
+      trans = scales::pseudo_log_trans()
+    ) +
+    labs(
+      title = paste("Distribución de", variable),
+      x = variable,
+      y = "Frecuencia"
     )
+
+  print(grafica)
 }
 
 
 
-tabla_outliers <- map_dfr(
-  variables_numericas,
-  function(var) {
-    
-    resultado <- detectar_outliers(datos_limpios, var)
-    
-    total_validos <- sum(!is.na(datos_limpios[[var]]))
-    total_outliers <- nrow(resultado)
-    
-    tibble(
-      Variable = var,
-      Datos_validos = total_validos,
-      Outliers = total_outliers,
-      Porcentaje = round(
-        total_outliers / total_validos * 100,
-        3
-      )
+for (variable in variables_medicion) {
+
+  datos_var <- datos |>
+    filter(!is.na(.data[[variable]]))
+
+  grafica_completa <- ggplot(datos_var, aes(y = .data[[variable]])) +
+    geom_boxplot() +
+    labs(
+      title = paste("Boxplot completo de", variable),
+      x = NULL,
+      y = variable
     )
-  }
+
+  print(grafica_completa)
+
+  limite_superior <- quantile(datos_var[[variable]], 0.99, na.rm = TRUE)
+
+  grafica_zoom <- ggplot(datos_var, aes(y = .data[[variable]])) +
+    geom_boxplot() +
+    coord_cartesian(
+      ylim = c(
+        min(datos_var[[variable]], na.rm = TRUE),
+        limite_superior
+      )
+    ) +
+    labs(
+      title = paste("Boxplot de", variable, "- zoom al 99%"),
+      x = NULL,
+      y = variable
+    )
+
+  print(grafica_zoom)
+}
+
+
+```
+
+```{r}
+
+contaminantes <- c(
+  "CO", "NO", "NO2", "NOX",
+  "O3", "PM10", "PM2.5", "SO2"
 )
 
-```
+meteorologicas <- c(
+  "BP", "RAINF", "RH",
+  "SR", "TEMP", "WS", "WD"
+)
 
-Como podemos observar en nuestra tabla de valores atípicos, utilizando el rango intercuartílico, algunos valores llegan a representar hasta el 11.82% de los datos. Esta es una cantidad significativa que no se puede eliminar de la base de datos sin un análisis adicional.
+datos_cor <- datos |>
+  select(all_of(c(contaminantes, meteorologicas)))
 
-```{r}
+matriz_cor <- cor(
+  datos_cor,
+  use = "pairwise.complete.obs",
+  method = "pearson"
+)
 
-datos_modelo <- datos_limpios
+round(matriz_cor, 3)
 
-datos_escalados <- datos_limpios |>
-  mutate(
-    across(
-      c(BP, RAINF, RH, SR, TEMP, WS, WD),
-      ~ as.numeric(scale(.x))
-    )
-  )
+cor_cont_met <- matriz_cor[
+  contaminantes,
+  meteorologicas
+]
 
-```
-
-En esta sección estandarizamos ciertas variables continuas para que tengan una media aproximada de 0 y una desviación estándar de 1. Esto puede ser útil si posteriormente se aplican técnicas como PCA, KNN o SVM. En caso contrario, se mantienen los valores continuos en su escala original en `datos_modelo`.
-
-```{r}
-
-datos_modelo <- datos_limpios |>
-  mutate(
-    `fecha y hora` = as.POSIXct(
-      as.numeric(`fecha y hora`) * 86400,
-      origin = "1899-12-30",
-      tz = "UTC"
-    ),
-    Hora = lubridate::hour(`fecha y hora`),
-    Dia = lubridate::day(`fecha y hora`),
-    Mes = lubridate::month(`fecha y hora`),
-    Dia_semana = lubridate::wday(
-      `fecha y hora`,
-      label = TRUE
-    )
-  )
-
+round(cor_cont_met, 3)
 
 ```
-
-Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminantes.
-
-```{r}
-datos_modelo <- datos_modelo |>
-  mutate(
-    Estacion = as.factor(Estacion),
-    Dia_semana = as.factor(Dia_semana)
-  )
-
-levels(datos_modelo$Estacion)
-levels(datos_modelo$Dia_semana)
-```
-
-### Informe preparación de los datos
-
-La base de datos consolidada integra los seis años de registros proporcionados por SIMA (2020-2025), sumando un total de 688,199 registros horarios distribuidos en distintas estaciones de monitoreo de la Zona Metropolitana de Monterrey. Cada año contribuyó así:\
-- 2020 - 114,102 registros\
-- 2021 - 122,629 registros\
-- 2022 - 123,383 registros\
-- 2023 - 131,370 registros\
-- 2024 - 131,741 registros\
-- 2025 - 64,974 registros (año parcial)
-
-La base contiene 18 variables por registro en la mayoría de los años: una variable de fecha y hora, 8 variables de contaminantes atmosféricos criterio (CO, NO, NO2, NOx, O3, PM10, PM2.5, SO2), 7 variables meteorológicas (BP, RAINF, RH, SR, TEMP, WS, WD) y 2 variables identificadoras (Año, Estación).
-
-La inconsistencia de nombres de la variable temporal en 2025 se homogeneizó durante la carga de los datos, de modo que tanto `date` como `fecha y hora` se estandarizan bajo el nombre `fecha y hora` para su procesamiento posterior.
-
-**Datos faltantes**\
-El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla `tabla_faltantes` generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y NOx.
-
-**Datos duplicados**\
-Se verificó que no hay duplicados.
-
-**Datos atípicos (outliers)**\
-Se aplicó el método del rango intercuartílico por estación para cada una de las variables numéricas. Los resultados en `tabla_outliers` muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers en esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
-
-**Variables categóricas**\
-Se identificaron `Estacion` y `Dia_semana` como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
-
-**Binning**\
-No se consideró necesario discretizar las variables de contaminantes ni meteorológicas en esta etapa, ya que el objetivo del proyecto es predecir concentraciones continuas utilizando modelos de regresión y discretizar podría implicar una pérdida de información para este fin.
-
-**Transformación y escalamiento**\
-Se generó una versión escalada y estandarizada de las variables meteorológicas continuas (`datos_escalados`), disponible en caso de aplicar técnicas sensibles a la escala de los datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original (`datos_modelo`).
-
-Por otra parte, a partir de la variable fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
-
-Además de la unión de los datos de los seis años, no fue necesario reestructurar la base de datos, ya que el formato largo por observación horaria y estación es correcto para las técnicas de modelado predictivo contempladas.
-
-**Otros planes a futuro**\
-Se contempla la posibilidad de agrupar los datos de forma estacional (invierno, verano, otoño, primavera) o mensual, con el objetivo de responder de manera más completa la pregunta de investigación 3 (si la relación meteorología-contaminante varía por estacionalidad). Esto, en caso de realizarse, crearía variables nuevas.
-
-### Link GitHub:
-
-https://github.com/Reyivan777/Reto-Multivariados
-
-### Declaratoria de uso IA
-
-Opción B. Se utilizó IA de la siguiente forma:\
-Herramienta: Claude.\
-Uso realizado: Apoyo en la búsqueda de referencias bibliográficas complementarias, así como en la estructuración de borradores de las secciones del informe de la Parte I. Igualmente, apoyo con sintaxis del código de la Parte 2.\
-Secciones donde se utilizó: Parte I. Conociendo el Negocio y Parte II. Comprensión y Preparación de los Datos.\
-Validación realizada por los estudiantes: Hemos revisado, editado y validado el contenido generado, verificando la veracidad de las referencias y asegurando la coherencia con el objetivo del proyecto. Como equipo asumimos la responsabilidad del contenido final entregado.
