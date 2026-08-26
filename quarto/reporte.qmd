@@ -73,19 +73,6 @@ La combinación de estas variables permite estudiar la relación entre condicion
 
 La selección final de los contaminantes a modelar dependerá de los datos disponibles y de la fuerza de su relación con las variables meteorológicas. Esto se desarrolla en la sección de preparación de datos, ubicada más adelante en este mismo entregable.
 
-### Referencias bibliográficas
-
-A)  **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
-
-Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
-
-A.2) **Sobre normas y guías internacionales de calidad del aire.**\
-Hoffmann et al. (2021), en representación de sociedades médicas y de salud pública, resumieron las Guías de Calidad del Aire 2021 de la OMS, llegando a la conclusión de que cualquier reducción en las concentraciones de contaminantes es beneficiosa para la salud poblacional, contemplando también zonas donde la contaminación inicialmente es relativamente baja. Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations.* International Journal of Public Health, 66, 1604465.
-
-B)  **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
-
-Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
-
 ## Parte 2
 
 Para esta primera etapa, empezaremos por cargar las librerías que necesitamos y estableceremos algunas opciones de configuración:
@@ -985,3 +972,11 @@ Herramienta: Claude.\
 Uso realizado: Apoyo en la búsqueda de referencias bibliográficas complementarias, así como en la estructuración de borradores de las secciones del informe de la Parte I. Igualmente, apoyo con sintaxis del código de la Parte 2.\
 Secciones donde se utilizó: Parte I. Conociendo el Negocio y Parte II. Comprensión y Preparación de los Datos.\
 Validación realizada por los estudiantes: Hemos revisado, editado y validado el contenido generado, verificando la veracidad de las referencias y asegurando la coherencia con el objetivo del proyecto. Como equipo asumimos la responsabilidad del contenido final entregado.
+
+# Referencias bibliográficas
+
+Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
+
+Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
+
+Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations*. International Journal of Public Health, 66, 1604465.
