@@ -21,7 +21,7 @@ format:
 
 ### Presentación general del proyecto (resumen del proyecto).
 
-La contaminación atmosférica representa un problema importante de salud pública debido a los efectos que contaminantes como PM2.5, PM10, O₃, NO₂, SO₂ y CO pueden generar en la población. En zonas urbanas como el Área Metropolitana de Monterrey, su monitoreo resulta especialmente relevante debido a la actividad industrial, vehicular y a las condiciones meteorológicas que pueden favorecer la acumulación o dispersión de contaminantes.
+La contaminación atmosférica representa un problema importante de salud pública debido a los efectos que contaminantes como PM2.5, PM10, O₃, NO₂, SO₂ y CO pueden generar en la población. En zonas urbanas como el Área Metropolitana de Monterrey, su monitoreo resulta especialmente relevante debido a la actividad industrial, vehicular y a las condiciones meteorológicas que pueden favorecer la acumulación o dispersión de contaminantes..
 
 En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) registra información sobre la calidad del aire mediante una red de estaciones que miden concentraciones de contaminantes y variables meteorológicas. Estas mediciones permiten conocer las condiciones ambientales de distintas zonas y proporcionan información útil para analizar el comportamiento de la contaminación atmosférica.
 
