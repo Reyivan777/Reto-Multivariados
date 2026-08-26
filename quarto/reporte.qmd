@@ -545,7 +545,10 @@ datos_limpios <- datos_limpios |>
     )
   )
 
+
 ```
+
+
 
 Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
 
@@ -691,7 +694,7 @@ La inconsistencia de nombres de la variable temporal en 2025 se homogeneizó dur
 El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla `tabla_faltantes` generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y NOx.
 
 **Datos duplicados**\
-Se verificó la existencia de registros duplicados a nivel de Año, Estación y fecha y hora mediante un conteo de combinaciones repetidas (`duplicados`). El resultado confirmó que, conceptualmente, no existen registros duplicados en la base bajo este criterio.
+Se verificó que no hay duplicados.
 
 **Datos atípicos (outliers)**\
 Se aplicó el método del rango intercuartílico por estación para cada una de las variables numéricas. Los resultados en `tabla_outliers` muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers en esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
