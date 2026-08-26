@@ -21,7 +21,7 @@ format:
 
 ### Presentación general del proyecto (resumen del proyecto).
 
-La contaminación atmosférica representa un problema importante de salud pública debido a los efectos que contaminantes como PM2.5, PM10, O₃, NO₂, SO₂ y CO pueden generar en la población. En zonas urbanas como el Área Metropolitana de Monterrey, su monitoreo resulta especialmente relevante debido a la actividad industrial, vehicular y a las condiciones meteorológicas que pueden favorecer la acumulación o dispersión de contaminantes..
+La contaminación atmosférica representa un problema importante de salud pública debido a los efectos que contaminantes como PM2.5, PM10, O₃, NO₂, SO₂ y CO pueden generar en la población. En zonas urbanas como el Área Metropolitana de Monterrey, su monitoreo resulta especialmente relevante debido a la actividad industrial, vehicular y a las condiciones meteorológicas que pueden favorecer la acumulación o dispersión de contaminantes.
 
 En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) registra información sobre la calidad del aire mediante una red de estaciones que miden concentraciones de contaminantes y variables meteorológicas. Estas mediciones permiten conocer las condiciones ambientales de distintas zonas y proporcionan información útil para analizar el comportamiento de la contaminación atmosférica.
 
@@ -75,14 +75,14 @@ La selección final de los contaminantes a modelar dependerá de los datos dispo
 
 ### Referencias bibliográficas
 
-A) **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
+A)  **Sobre la medición de la calidad del aire, impacto social y su importancia.** Cerón Bretón et al. (2020) analizaron en el Área Metropolitana de Monterrey la relación entre contaminantes atmosféricos, temperatura y mortalidad. El estudio encontró asociaciones entre mayores concentraciones de contaminantes y un incremento en el riesgo de mortalidad, especialmente en adultos mayores, lo que resalta la importancia del monitoreo de la calidad del aire.
 
 Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
 
 A.2) **Sobre normas y guías internacionales de calidad del aire.**\
 Hoffmann et al. (2021), en representación de sociedades médicas y de salud pública, resumieron las Guías de Calidad del Aire 2021 de la OMS, llegando a la conclusión de que cualquier reducción en las concentraciones de contaminantes es beneficiosa para la salud poblacional, contemplando también zonas donde la contaminación inicialmente es relativamente baja. Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations.* International Journal of Public Health, 66, 1604465.
 
-B) **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
+B)  **Centrado en el objetivo del proyecto.** Cifuentes et al. (2021) utilizaron variables meteorológicas para predecir concentraciones horarias de O₃ y PM2.5 mediante regresión lineal múltiple, Support Vector Regression y redes neuronales. Sus resultados mostraron que variables como la radiación solar y la temperatura pueden ser útiles para construir modelos predictivos de calidad del aire.
 
 Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
 
@@ -547,8 +547,6 @@ datos_limpios <- datos_limpios |>
 
 
 ```
-
-
 
 Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
 
