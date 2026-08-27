@@ -86,113 +86,59 @@ library(stringr)
 library(readr)
 library(purrr)
 
-
 options(scipen = 999)
 ```
 
 Ahora cargamos los datos que nos proporcionó el Socio Formador:
 
 ```{r}
-
 leer_base <- function(archivo, año) {
-  
   hojas <- excel_sheets(archivo)
-  
-  map_dfr(
-    hojas,
-    function(hoja) {
-      
-      datos <- read_excel(
-        archivo,
-        sheet = hoja,
-        col_types = "text"
+  map_dfr(hojas, function(hoja) {
+    datos <- read_excel(archivo, sheet = hoja, col_types = "text")
+    nombres <- names(datos)
+    nombres <- nombres |>
+      str_replace_all("[\r\n]", " ") |>
+      str_replace("\\s*\\([^)]*\\).*", "") |>
+      str_squish()
+
+    nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
+    nombres[tolower(nombres) == "date"] <- "fecha y hora"
+    nombres[toupper(nombres) == "PRS"] <- "BP"
+    nombres[toupper(nombres) == "TOUT"] <- "TEMP"
+    nombres[toupper(nombres) == "WSR"] <- "WS"
+    nombres[toupper(nombres) == "WDR"] <- "WD"
+    nombres[toupper(nombres) == "CO"] <- "CO"
+    nombres[toupper(nombres) == "NO"] <- "NO"
+    nombres[toupper(nombres) == "NO2"] <- "NO2"
+    nombres[toupper(nombres) == "NOX"] <- "NOX"
+    nombres[toupper(nombres) == "O3"] <- "O3"
+    nombres[toupper(nombres) == "PM10"] <- "PM10"
+    nombres[toupper(nombres) == "PM2.5"] <- "PM2.5"
+    nombres[toupper(nombres) == "RAINF"] <- "RAINF"
+    nombres[toupper(nombres) == "RH"] <- "RH"
+    nombres[toupper(nombres) == "SO2"] <- "SO2"
+    nombres[toupper(nombres) == "SR"] <- "SR"
+    names(datos) <- nombres
+
+    datos |>
+      mutate(
+        across(any_of(c(
+          "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5",
+          "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
+        )), ~ suppressWarnings(parse_number(as.character(.x)))),
+        Año = año,
+        Estacion = hoja
       )
-      
-      nombres <- names(datos)
-      
-      nombres <- nombres |>
-        str_replace_all("[\r\n]", " ") |>
-        str_replace("\\s*\\([^)]*\\).*", "") |>
-        str_squish()
-
-      nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
-      nombres[tolower(nombres) == "date"] <- "fecha y hora"
-
-      
-      nombres[toupper(nombres) == "PRS"] <- "BP"
-      nombres[toupper(nombres) == "TOUT"] <- "TEMP"
-      nombres[toupper(nombres) == "WSR"] <- "WS"
-      nombres[toupper(nombres) == "WDR"] <- "WD"
-      
-      nombres[toupper(nombres) == "CO"] <- "CO"
-      nombres[toupper(nombres) == "NO"] <- "NO"
-      nombres[toupper(nombres) == "NO2"] <- "NO2"
-      nombres[toupper(nombres) == "NOX"] <- "NOX"
-      nombres[toupper(nombres) == "O3"] <- "O3"
-      nombres[toupper(nombres) == "PM10"] <- "PM10"
-      nombres[toupper(nombres) == "PM2.5"] <- "PM2.5"
-      nombres[toupper(nombres) == "RAINF"] <- "RAINF"
-      nombres[toupper(nombres) == "RH"] <- "RH"
-      nombres[toupper(nombres) == "SO2"] <- "SO2"
-      nombres[toupper(nombres) == "SR"] <- "SR"
-      
-      names(datos) <- nombres
-      
-      datos |>
-        mutate(
-          across(
-            any_of(c(
-              "CO", "NO", "NO2", "NOX", "O3",
-              "PM10", "PM2.5", "BP", "RAINF",
-              "RH", "SO2", "SR", "TEMP", "WS", "WD"
-            )),
-            ~ suppressWarnings(parse_number(as.character(.x)))
-          ),
-          Año = año,
-          Estacion = hoja
-        )
-    }
-  )
+  })
 }
 
-calidad_aire_2020_tbl <- leer_base(
-  here("data", "BD 2020.xlsx"),
-  2020
-)
-
-calidad_aire_2021_tbl <- leer_base(
-  here("data", "BD 2021.xlsx"),
-  2021
-)
-
-calidad_aire_2022_tbl <- leer_base(
-  here("data", "BD 2022.xlsx"),
-  2022
-)
-
-calidad_aire_2023_tbl <- leer_base(
-  here("data", "BD 2023.xlsx"),
-  2023
-)
-
-calidad_aire_2024_tbl <- leer_base(
-  here("data", "BD 2024.xlsx"),
-  2024
-)
-
-calidad_aire_2025_tbl <- leer_base(
-  here("data", "BD 2025.xlsx"),
-  2025
-)
-
-
-glimpse(calidad_aire_2020_tbl)
-glimpse(calidad_aire_2021_tbl)
-glimpse(calidad_aire_2022_tbl)
-glimpse(calidad_aire_2023_tbl)
-glimpse(calidad_aire_2024_tbl)
-glimpse(calidad_aire_2025_tbl)
-
+calidad_aire_2020_tbl <- leer_base(here("data", "BD 2020.xlsx"), 2020)
+calidad_aire_2021_tbl <- leer_base(here("data", "BD 2021.xlsx"), 2021)
+calidad_aire_2022_tbl <- leer_base(here("data", "BD 2022.xlsx"), 2022)
+calidad_aire_2023_tbl <- leer_base(here("data", "BD 2023.xlsx"), 2023)
+calidad_aire_2024_tbl <- leer_base(here("data", "BD 2024.xlsx"), 2024)
+calidad_aire_2025_tbl <- leer_base(here("data", "BD 2025.xlsx"), 2025)
 
 bases <- list(
   "2020" = calidad_aire_2020_tbl,
@@ -204,37 +150,24 @@ bases <- list(
 )
 
 datos_limpios <- bind_rows(bases)
-
 ```
 
 En esta sección se trabaja con las bases de datos para abrirlas y poder manipularlas con mayor facilidad.
 
 ```{r}
-
 dimensiones <- purrr::imap_dfr(
   bases,
-  ~ tibble(
-    Año = .y,
-    Registros = nrow(.x),
-    Columnas = ncol(.x)
-  )
+  ~ tibble(Año = .y, Registros = nrow(.x), Columnas = ncol(.x))
 )
 
 variables_por_año <- purrr::imap_dfr(
   bases,
-  ~ tibble(
-    Año = .y,
-    Variable = names(.x)
-  )
+  ~ tibble(Año = .y, Variable = names(.x))
 )
 
 tabla_variables <- variables_por_año |>
   mutate(Presente = "Sí") |>
-  tidyr::pivot_wider(
-    names_from = Año,
-    values_from = Presente,
-    values_fill = "No"
-  )
+  tidyr::pivot_wider(names_from = Año, values_from = Presente, values_fill = "No")
 
 dimensiones
 tabla_variables
@@ -245,7 +178,6 @@ diccionario <- tibble(
     "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2",
     "SR", "TEMP", "WS", "WD"
   ),
-
   Descripcion = c(
     "Fecha y hora de la medición",
     "Monóxido de carbono (ppm)",
@@ -264,13 +196,8 @@ diccionario <- tibble(
     "Velocidad del viento (Km/hr)",
     "Dirección del viento (º)"
   ),
-
-  Tipo = c(
-    "Fecha-hora",
-    rep("Numérico", 15)
-  )
+  Tipo = c("Fecha-hora", rep("Numérico", 15))
 )
-
 
 rangos <- tribble(
   ~Año, ~PM10, ~PM2.5, ~O3, ~NO, ~NO2, ~NOX, ~SO2, ~CO, ~RH, ~WS, ~TEMP, ~SR, ~BP, ~WD, ~RAINF,
@@ -288,15 +215,10 @@ rangos
 tabla_faltantes <- purrr::imap_dfr(
   bases,
   ~ .x |>
-    summarise(
-      across(
-        everything(),
-        list(
-          Nulos = ~ sum(is.na(.)),
-          Porcentaje = ~ round(mean(is.na(.)) * 100, 2)
-        )
-      )
-    ) |>
+    summarise(across(everything(), list(
+      Nulos = ~ sum(is.na(.)),
+      Porcentaje = ~ round(mean(is.na(.)) * 100, 2)
+    ))) |>
     pivot_longer(
       everything(),
       names_to = c("Variable", ".value"),
@@ -309,16 +231,11 @@ tabla_valores <- purrr::imap_dfr(
   bases,
   ~ .x |>
     select(where(is.numeric)) |>
-    summarise(
-      across(
-        everything(),
-        list(
-          Min = ~ ifelse(all(is.na(.)), NA, min(., na.rm = TRUE)),
-          Max = ~ ifelse(all(is.na(.)), NA, max(., na.rm = TRUE)),
-          Media = ~ ifelse(all(is.na(.)), NA, mean(., na.rm = TRUE))
-        )
-      )
-    ) |>
+    summarise(across(everything(), list(
+      Min = ~ ifelse(all(is.na(.)), NA, min(., na.rm = TRUE)),
+      Max = ~ ifelse(all(is.na(.)), NA, max(., na.rm = TRUE)),
+      Media = ~ ifelse(all(is.na(.)), NA, mean(., na.rm = TRUE))
+    ))) |>
     pivot_longer(
       everything(),
       names_to = c("Variable", ".value"),
@@ -329,125 +246,52 @@ tabla_valores <- purrr::imap_dfr(
 
 limites <- tribble(
   ~Año, ~Variable, ~Min, ~Max,
-  2020, "PM10", 0, 800,
-  2020, "PM2.5", 0, 205.94,
-  2020, "O3", 0, 153,
-  2020, "NO", 0, 500,
-  2020, "NO2", 0, 200,
-  2020, "NOX", 0, 500,
-  2020, "SO2", 0, 200,
-  2020, "CO", 0, 20,
-  2020, "RH", 0, 100,
-  2020, "WS", 0, 75,
-  2020, "TEMP", 0, 41,
-  2020, "SR", 0, 1,
-  2020, "BP", 690, 750,
-  2020, "WD", 0, 360,
-  2020, "RAINF", 0, 30,
-
-  2021, "PM10", 0, 800,
-  2021, "PM2.5", 0, 325,
-  2021, "O3", 0, 175,
-  2021, "NO", 0, 350,
-  2021, "NO2", 0, 100,
-  2021, "NOX", 0, 400,
-  2021, "SO2", 0, 300,
-  2021, "CO", 0, 10,
-  2021, "RH", 0, 100,
-  2021, "WS", 0, 40,
-  2021, "TEMP", -6.5, 45,
-  2021, "SR", 0, 1,
-  2021, "BP", 690, 740,
-  2021, "WD", 0, 360,
-  2021, "RAINF", 0, 80,
-
-  2022, "PM10", 0, 999,
-  2022, "PM2.5", 0, 450,
-  2022, "O3", 0, 160,
-  2022, "NO", 0, 400,
-  2022, "NO2", 0, 175,
-  2022, "NOX", 0, 420,
-  2022, "SO2", 0, 200,
-  2022, "CO", 0, 8,
-  2022, "RH", 0, 100,
-  2022, "WS", 0, 35,
-  2022, "TEMP", -5, 45,
-  2022, "SR", 0, 1.25,
-  2022, "BP", 700, 740,
-  2022, "WD", 0, 360,
-  2022, "RAINF", 0, 25,
-
-  2023, "PM10", 0, 900,
-  2023, "PM2.5", 0, 800,
-  2023, "O3", 0, 175,
-  2023, "NO", 0, 500,
-  2023, "NO2", 0, 175,
-  2023, "NOX", 0, 500,
-  2023, "SO2", 0, 250,
-  2023, "CO", 0, 14,
-  2023, "RH", 0, 100,
-  2023, "WS", 0, 40,
-  2023, "TEMP", 0, 45,
-  2023, "SR", 0, 1,
-  2023, "BP", 690, 740,
-  2023, "WD", 0, 360,
-  2023, "RAINF", 0, 70,
-
-  2024, "PM10", 0, 999,
-  2024, "PM2.5", 0, 999,
-  2024, "O3", 0, 180,
-  2024, "NO", 0, 400,
-  2024, "NO2", 0, 130,
-  2024, "NOX", 0, 500,
-  2024, "SO2", 0, 150,
-  2024, "CO", 0, 18,
-  2024, "RH", 0, 100,
-  2024, "WS", 0, 38,
-  2024, "TEMP", -4, 45.5,
-  2024, "SR", 0, 1.26,
-  2024, "BP", 687.5, 740,
-  2024, "WD", 0, 360,
-  2024, "RAINF", 0, 50,
-
-  2025, "PM10", 0, 820,
-  2025, "PM2.5", 0, 350,
-  2025, "O3", 0, 185,
-  2025, "NO", 0, 350,
-  2025, "NO2", 0, 175,
-  2025, "NOX", 0, 400,
-  2025, "SO2", 0, 405,
-  2025, "CO", 0, 10,
-  2025, "RH", 0, 100,
-  2025, "WS", 0, 40,
-  2025, "TEMP", -4.5, 45,
-  2025, "SR", 0, 1.2,
-  2025, "BP", 688, 740,
-  2025, "WD", 0, 360,
-  2025, "RAINF", 0, 25
+  2020, "PM10", 0, 800, 2020, "PM2.5", 0, 205.94, 2020, "O3", 0, 153,
+  2020, "NO", 0, 500, 2020, "NO2", 0, 200, 2020, "NOX", 0, 500,
+  2020, "SO2", 0, 200, 2020, "CO", 0, 20, 2020, "RH", 0, 100,
+  2020, "WS", 0, 75, 2020, "TEMP", 0, 41, 2020, "SR", 0, 1,
+  2020, "BP", 690, 750, 2020, "WD", 0, 360, 2020, "RAINF", 0, 30,
+  2021, "PM10", 0, 800, 2021, "PM2.5", 0, 325, 2021, "O3", 0, 175,
+  2021, "NO", 0, 350, 2021, "NO2", 0, 100, 2021, "NOX", 0, 400,
+  2021, "SO2", 0, 300, 2021, "CO", 0, 10, 2021, "RH", 0, 100,
+  2021, "WS", 0, 40, 2021, "TEMP", -6.5, 45, 2021, "SR", 0, 1,
+  2021, "BP", 690, 740, 2021, "WD", 0, 360, 2021, "RAINF", 0, 80,
+  2022, "PM10", 0, 999, 2022, "PM2.5", 0, 450, 2022, "O3", 0, 160,
+  2022, "NO", 0, 400, 2022, "NO2", 0, 175, 2022, "NOX", 0, 420,
+  2022, "SO2", 0, 200, 2022, "CO", 0, 8, 2022, "RH", 0, 100,
+  2022, "WS", 0, 35, 2022, "TEMP", -5, 45, 2022, "SR", 0, 1.25,
+  2022, "BP", 700, 740, 2022, "WD", 0, 360, 2022, "RAINF", 0, 25,
+  2023, "PM10", 0, 900, 2023, "PM2.5", 0, 800, 2023, "O3", 0, 175,
+  2023, "NO", 0, 500, 2023, "NO2", 0, 175, 2023, "NOX", 0, 500,
+  2023, "SO2", 0, 250, 2023, "CO", 0, 14, 2023, "RH", 0, 100,
+  2023, "WS", 0, 40, 2023, "TEMP", 0, 45, 2023, "SR", 0, 1,
+  2023, "BP", 690, 740, 2023, "WD", 0, 360, 2023, "RAINF", 0, 70,
+  2024, "PM10", 0, 999, 2024, "PM2.5", 0, 999, 2024, "O3", 0, 180,
+  2024, "NO", 0, 400, 2024, "NO2", 0, 130, 2024, "NOX", 0, 500,
+  2024, "SO2", 0, 150, 2024, "CO", 0, 18, 2024, "RH", 0, 100,
+  2024, "WS", 0, 38, 2024, "TEMP", -4, 45.5, 2024, "SR", 0, 1.26,
+  2024, "BP", 687.5, 740, 2024, "WD", 0, 360, 2024, "RAINF", 0, 50,
+  2025, "PM10", 0, 820, 2025, "PM2.5", 0, 350, 2025, "O3", 0, 185,
+  2025, "NO", 0, 350, 2025, "NO2", 0, 175, 2025, "NOX", 0, 400,
+  2025, "SO2", 0, 405, 2025, "CO", 0, 10, 2025, "RH", 0, 100,
+  2025, "WS", 0, 40, 2025, "TEMP", -4.5, 45, 2025, "SR", 0, 1.2,
+  2025, "BP", 688, 740, 2025, "WD", 0, 360, 2025, "RAINF", 0, 25
 )
 
 tabla_fdr <- purrr::imap_dfr(
   bases,
   function(datos, año) {
-
-    limites_año <- limites |>
-      filter(Año == as.numeric(año))
-
-    purrr::pmap_dfr(
-      limites_año,
-      function(Año, Variable, Min, Max) {
-
-        x <- datos[[Variable]]
-
-        tibble(
-          Año = Año,
-          Variable = Variable,
-          Min_permitido = Min,
-          Max_permitido = Max,
-          Fuera_de_rango = sum(x < Min | x > Max, na.rm = TRUE)
-        )
-      }
-    )
+    limites_año <- limites |> filter(Año == as.numeric(año))
+    purrr::pmap_dfr(limites_año, function(Año, Variable, Min, Max) {
+      x <- datos[[Variable]]
+      tibble(
+        Año = Año,
+        Variable = Variable,
+        Min_permitido = Min,
+        Max_permitido = Max,
+        Fuera_de_rango = sum(x < Min | x > Max, na.rm = TRUE)
+      )
+    })
   }
 )
 
@@ -458,35 +302,24 @@ tabla_fdr
 detalle_fdr <- purrr::imap_dfr(
   bases,
   function(datos, año) {
-
-    limites_año <- limites |>
-      filter(Año == as.numeric(año))
-
-    purrr::pmap_dfr(
-      limites_año,
-      function(Año, Variable, Min, Max) {
-
-        if (!Variable %in% names(datos)) {
-          return(tibble())
-        }
-
-        datos |>
-          filter(
-            !is.na(.data[[Variable]]),
-            .data[[Variable]] < Min |
-              .data[[Variable]] > Max
-          ) |>
-          transmute(
-            Año = Año,
-            Estacion = Estacion,
-            `fecha y hora` = `fecha y hora`,
-            Variable = Variable,
-            Valor = .data[[Variable]],
-            Min_permitido = Min,
-            Max_permitido = Max
-          )
-      }
-    )
+    limites_año <- limites |> filter(Año == as.numeric(año))
+    purrr::pmap_dfr(limites_año, function(Año, Variable, Min, Max) {
+      if (!Variable %in% names(datos)) return(tibble())
+      datos |>
+        filter(
+          !is.na(.data[[Variable]]),
+          .data[[Variable]] < Min | .data[[Variable]] > Max
+        ) |>
+        transmute(
+          Año = Año,
+          Estacion = Estacion,
+          `fecha y hora` = `fecha y hora`,
+          Variable = Variable,
+          Valor = .data[[Variable]],
+          Min_permitido = Min,
+          Max_permitido = Max
+        )
+    })
   }
 )
 
@@ -494,51 +327,18 @@ detalle_fdr
 
 datos_limpios <- datos_limpios |>
   mutate(
-    
-    WS = if_else(
-      Año == 2020 & WS > 75,
-      NA_real_,
-      WS
-    ),
-    
-    SR = if_else(
-      Año == 2020 & SR > 1,
-      NA_real_,
-      SR
-    ),
-    
-    BP = if_else(
-      Año == 2020 & (BP < 690 | BP > 750),
-      NA_real_,
-      BP
-    ),
-    
-    NO = if_else(
-      Año == 2021 & NO > 350,
-      NA_real_,
-      NO
-    ),
-    
-    NO2 = if_else(
-      Año == 2021 & NO2 < 0,
-      NA_real_,
-      NO2
-    ),
-    
-    SR = if_else(
-      Año == 2021 & SR > 1,
-      NA_real_,
-      SR
-    )
+    WS = if_else(Año == 2020 & WS > 75, NA_real_, WS),
+    SR = if_else(Año == 2020 & SR > 1, NA_real_, SR),
+    BP = if_else(Año == 2020 & (BP < 690 | BP > 750), NA_real_, BP),
+    NO = if_else(Año == 2021 & NO > 350, NA_real_, NO),
+    NO2 = if_else(Año == 2021 & NO2 < 0, NA_real_, NO2),
+    SR = if_else(Año == 2021 & SR > 1, NA_real_, SR)
   )
-
-
 ```
 
 Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
 
 ```{r}
-
 datos_unidos <- bind_rows(bases)
 
 duplicados <- datos_unidos |>
@@ -546,7 +346,6 @@ duplicados <- datos_unidos |>
   filter(n > 1)
 
 duplicados
-
 ```
 
 Así verificamos que no hay valores duplicados.
@@ -554,11 +353,9 @@ Así verificamos que no hay valores duplicados.
 Los valores faltantes se dejarán sin modificar por ahora. Como están representados como NA, posteriormente podrán ser tratados mediante una estrategia de imputación, como la media o la mediana, si se considera necesario. Además, se utilizarán datos de entrenamiento y prueba, por lo que conviene conservar la mayor cantidad posible de información en esta etapa.
 
 ```{r}
-
 variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD")
 
 detectar_outliers <- function(datos, variable) {
-  
   datos |>
     group_by(Estacion) |>
     mutate(
@@ -567,68 +364,41 @@ detectar_outliers <- function(datos, variable) {
       IQR = Q3 - Q1,
       Lim_inf = Q1 - 1.5 * IQR,
       Lim_sup = Q3 + 1.5 * IQR,
-      Outlier = .data[[variable]] < Lim_inf |
-                .data[[variable]] > Lim_sup
+      Outlier = .data[[variable]] < Lim_inf | .data[[variable]] > Lim_sup
     ) |>
     filter(Outlier == TRUE) |>
     ungroup() |>
-    select(
-      Año,
-      Estacion,
-      `fecha y hora`,
-      all_of(variable),
-      Q1,
-      Q3,
-      Lim_inf,
-      Lim_sup
-    )
+    select(Año, Estacion, `fecha y hora`, all_of(variable), Q1, Q3, Lim_inf, Lim_sup)
 }
-
-
 
 tabla_outliers <- map_dfr(
   variables_numericas,
   function(var) {
-    
     resultado <- detectar_outliers(datos_limpios, var)
-    
     total_validos <- sum(!is.na(datos_limpios[[var]]))
     total_outliers <- nrow(resultado)
-    
     tibble(
       Variable = var,
       Datos_validos = total_validos,
       Outliers = total_outliers,
-      Porcentaje = round(
-        total_outliers / total_validos * 100,
-        3
-      )
+      Porcentaje = round(total_outliers / total_validos * 100, 3)
     )
   }
 )
-
 ```
 
 Como podemos observar en nuestra tabla de valores atípicos, utilizando el rango intercuartílico, algunos valores llegan a representar hasta el 11.82% de los datos. Esta es una cantidad significativa que no se puede eliminar de la base de datos sin un análisis adicional.
 
 ```{r}
-
 datos_modelo <- datos_limpios
 
 datos_escalados <- datos_limpios |>
-  mutate(
-    across(
-      c(BP, RAINF, RH, SR, TEMP, WS, WD),
-      ~ as.numeric(scale(.x))
-    )
-  )
-
+  mutate(across(c(BP, RAINF, RH, SR, TEMP, WS, WD), ~ as.numeric(scale(.x))))
 ```
 
 En esta sección estandarizamos ciertas variables continuas para que tengan una media aproximada de 0 y una desviación estándar de 1. Esto puede ser útil si posteriormente se aplican técnicas como PCA, KNN o SVM. En caso contrario, se mantienen los valores continuos en su escala original en `datos_modelo`.
 
 ```{r}
-
 datos_modelo <- datos_limpios |>
   mutate(
     `fecha y hora` = as.POSIXct(
@@ -639,13 +409,8 @@ datos_modelo <- datos_limpios |>
     Hora = lubridate::hour(`fecha y hora`),
     Dia = lubridate::day(`fecha y hora`),
     Mes = lubridate::month(`fecha y hora`),
-    Dia_semana = lubridate::wday(
-      `fecha y hora`,
-      label = TRUE
-    )
+    Dia_semana = lubridate::wday(`fecha y hora`, label = TRUE)
   )
-
-
 ```
 
 Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminantes.
@@ -707,21 +472,19 @@ Se contempla la posibilidad de agrupar los datos de forma estacional (invierno, 
 ### 1.1 Objetivo del análisis
 En esta segunda etapa, el análisis se enfocará en describir y explorar las variables disponibles antes de realizar el modelado. Se estudiarán sus principales características estadísticas, distribuciones, variabilidad, valores atípicos y diferencias entre estaciones de monitoreo. Además, se analizarán las relaciones preliminares entre las variables meteorológicas y las concentraciones de contaminantes, con el propósito de identificar cuáles variables presentan mayor relevancia para la construcción posterior de los modelos predictivos.
 
-
 ### 1.2 Variables de interés
 
 Las variables utilizadas en el análisis se pueden clasificar en tres grupos principales:
 
-| Grupo                                 | Variables                                              | Descripción                                                                                                                                                                                                                                      |
-| ------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Variables meteorológicas**          | `BP`, `RAINF`, `RH`, `SR`, `TEMP`, `WS`, `WD`          | Presión atmosférica, precipitación, humedad relativa, radiación solar, temperatura, velocidad del viento y dirección del viento. Estas variables se consideran principalmente como variables predictoras.                                        |
-| **Contaminantes atmosféricos**        | `CO`, `NO`, `NO2`, `NOX`, `O3`, `PM10`, `PM2.5`, `SO2` | Mediciones de contaminantes registradas por las estaciones de SIMA. Estas variables se consideran como posibles variables objetivo para los modelos predictivos.                                                                                 |
-| **Variables temporales y espaciales** | `Estacion`, `Año`, `fecha y hora`                      | Variables que permiten identificar dónde y cuándo fue realizada cada medición. No se consideran directamente como variables meteorológicas predictoras, pero son fundamentales para estudiar diferencias entre estaciones y patrones temporales. |
+| Grupo | Variables | Descripción |
+| --- | --- | --- |
+| **Variables meteorológicas** | `BP`, `RAINF`, `RH`, `SR`, `TEMP`, `WS`, `WD` | Presión atmosférica, precipitación, humedad relativa, radiación solar, temperatura, velocidad del viento y dirección del viento. Estas variables se consideran principalmente como variables predictoras. |
+| **Contaminantes atmosféricos** | `CO`, `NO`, `NO2`, `NOX`, `O3`, `PM10`, `PM2.5`, `SO2` | Mediciones de contaminantes registradas por las estaciones de SIMA. Estas variables se consideran como posibles variables objetivo para los modelos predictivos. |
+| **Variables temporales y espaciales** | `Estacion`, `Año`, `fecha y hora` | Variables que permiten identificar dónde y cuándo fue realizada cada medición. No se consideran directamente como variables meteorológicas predictoras, pero son fundamentales para estudiar diferencias entre estaciones y patrones temporales. |
 
 Las variables meteorológicas serán utilizadas principalmente para estudiar su relación con las concentraciones de contaminantes y determinar cuáles pueden ser útiles para el modelado predictivo. Las variables de contaminantes funcionarán como posibles variables objetivo, aunque su selección definitiva dependerá de la disponibilidad de datos y de los resultados obtenidos durante el análisis exploratorio.
 
 Por otro lado, `Estacion`, `Año` y `fecha y hora` permiten conservar el contexto espacial y temporal de cada observación. La estación de monitoreo tendrá especial relevancia en esta etapa, ya que permitirá comparar el comportamiento de las variables entre los distintos puntos de medición de SIMA, mientras que las variables temporales permitirán identificar cambios y patrones a lo largo del periodo 2020-2025.
-
 
 ### 1.3 Dimensión y estructura del conjunto de datos
 ### 1.4 Estadística descriptiva de variables cuantitativas
@@ -730,73 +493,50 @@ Por otro lado, `Estacion`, `Año` y `fecha y hora` permiten conservar el context
 ### 1.7 Análisis de correlación
 ### 1.8 Calidad de los datos posterior a la limpieza
 
-
-
-
-
-
 ```{r}
 estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
 
 leer_base <- function(archivo, año) {
-  
   hojas <- excel_sheets(archivo)
   hojas <- hojas[hojas %in% estaciones_seleccionadas]
-  
-  map_dfr(
-    hojas,
-    function(hoja) {
-      
-      datos <- read_excel(
-        archivo,
-        sheet = hoja,
-        col_types = "text"
+
+  map_dfr(hojas, function(hoja) {
+    datos <- read_excel(archivo, sheet = hoja, col_types = "text")
+    nombres <- names(datos)
+    nombres <- nombres |>
+      str_replace_all("[\r\n]", " ") |>
+      str_replace("\\s*\\([^)]*\\).*", "") |>
+      str_squish()
+
+    nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
+    nombres[tolower(nombres) == "date"] <- "fecha y hora"
+    nombres[toupper(nombres) == "PRS"] <- "BP"
+    nombres[toupper(nombres) == "TOUT"] <- "TEMP"
+    nombres[toupper(nombres) == "WSR"] <- "WS"
+    nombres[toupper(nombres) == "WDR"] <- "WD"
+    nombres[toupper(nombres) == "CO"] <- "CO"
+    nombres[toupper(nombres) == "NO"] <- "NO"
+    nombres[toupper(nombres) == "NO2"] <- "NO2"
+    nombres[toupper(nombres) == "NOX"] <- "NOX"
+    nombres[toupper(nombres) == "O3"] <- "O3"
+    nombres[toupper(nombres) == "PM10"] <- "PM10"
+    nombres[toupper(nombres) == "PM2.5"] <- "PM2.5"
+    nombres[toupper(nombres) == "RAINF"] <- "RAINF"
+    nombres[toupper(nombres) == "RH"] <- "RH"
+    nombres[toupper(nombres) == "SO2"] <- "SO2"
+    nombres[toupper(nombres) == "SR"] <- "SR"
+    names(datos) <- nombres
+
+    datos |>
+      mutate(
+        across(any_of(c(
+          "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5",
+          "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
+        )), ~ suppressWarnings(parse_number(as.character(.x)))),
+        Año = año,
+        Estacion = hoja
       )
-      
-      nombres <- names(datos)
-      
-      nombres <- nombres |>
-        str_replace_all("[\r\n]", " ") |>
-        str_replace("\\s*\\([^)]*\\).*", "") |>
-        str_squish()
-      
-      nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
-      nombres[tolower(nombres) == "date"] <- "fecha y hora"
-      
-      nombres[toupper(nombres) == "PRS"] <- "BP"
-      nombres[toupper(nombres) == "TOUT"] <- "TEMP"
-      nombres[toupper(nombres) == "WSR"] <- "WS"
-      nombres[toupper(nombres) == "WDR"] <- "WD"
-      
-      nombres[toupper(nombres) == "CO"] <- "CO"
-      nombres[toupper(nombres) == "NO"] <- "NO"
-      nombres[toupper(nombres) == "NO2"] <- "NO2"
-      nombres[toupper(nombres) == "NOX"] <- "NOX"
-      nombres[toupper(nombres) == "O3"] <- "O3"
-      nombres[toupper(nombres) == "PM10"] <- "PM10"
-      nombres[toupper(nombres) == "PM2.5"] <- "PM2.5"
-      nombres[toupper(nombres) == "RAINF"] <- "RAINF"
-      nombres[toupper(nombres) == "RH"] <- "RH"
-      nombres[toupper(nombres) == "SO2"] <- "SO2"
-      nombres[toupper(nombres) == "SR"] <- "SR"
-      
-      names(datos) <- nombres
-      
-      datos |>
-        mutate(
-          across(
-            any_of(c(
-              "CO", "NO", "NO2", "NOX", "O3",
-              "PM10", "PM2.5", "BP", "RAINF",
-              "RH", "SO2", "SR", "TEMP", "WS", "WD"
-            )),
-            ~ suppressWarnings(parse_number(as.character(.x)))
-          ),
-          Año = año,
-          Estacion = hoja
-        )
-    }
-  )
+  })
 }
 
 bases <- list(
@@ -812,33 +552,19 @@ datos <- bind_rows(bases)
 
 dimensiones <- purrr::imap_dfr(
   bases,
-  ~ tibble(
-    Año = .y,
-    Registros = nrow(.x),
-    Columnas = ncol(.x)
-  )
+  ~ tibble(Año = .y, Registros = nrow(.x), Columnas = ncol(.x))
 )
 
 dimensiones
-
 glimpse(datos)
 
 variables_medicion <- c(
-  "CO", "NO", "NO2", "NOX", "O3",
-  "PM10", "PM2.5", "BP", "RAINF",
-  "RH", "SO2", "SR", "TEMP", "WS", "WD"
+  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP",
+  "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
 )
 
 datos <- datos |>
-  mutate(
-    across(
-      c(RH, SR, RAINF, TEMP),
-      ~ na_if(.x, -9999)
-    )
-  )
-
-## Corrigiendo valores erróneos 
-
+  mutate(across(c(RH, SR, RAINF, TEMP), ~ na_if(.x, -9999)))
 ```
 
 ```{r}
@@ -868,8 +594,9 @@ tabla_descriptiva <- datos |>
   pivot_longer(
     everything(),
     names_to = c("Variable", ".value"),
-    names_pattern = "(.*)_(Min|Q1|Media|Mediana|DE|Q3|Max)"
+    names_pattern = "(.*)_(Min|Q1|Mediana|Media|DE|Q3|Max)"
   )
+
 tabla_descriptiva
 
 # Tabla de valores faltantes
@@ -890,44 +617,34 @@ tabla_faltantes <- datos |>
     names_to = c("Variable", ".value"),
     names_pattern = "(.*)_(Nulos|Porcentaje)"
   )
+
 tabla_faltantes
 
 # Duplicados por fecha
 duplicados_fecha <- datos |>
   count(Año, Estacion, `fecha y hora`) |>
   filter(n > 1)
+
 duplicados_fecha
 
 # Datos en formato largo (para histogramas y boxplots)
 datos_largos <- datos |>
   select(any_of(variables_medicion)) |>
-  pivot_longer(
-    cols = everything(),
-    names_to = "Variable",
-    values_to = "Valor"
-  )
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Valor")
 
 # Cuadrícula de histogramas
 ggplot(datos_largos, aes(x = Valor)) +
   geom_histogram(bins = 30) +
   scale_x_continuous(trans = scales::pseudo_log_trans()) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Distribución de variables de medición",
-    x = NULL,
-    y = "Frecuencia"
-  ) +
+  labs(title = "Distribución de variables de medición", x = NULL, y = "Frecuencia") +
   theme_minimal(base_size = 9)
 
 # Cuadrícula de boxplots completos
 ggplot(datos_largos, aes(x = Variable, y = Valor)) +
   geom_boxplot() +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Boxplots completos por variable",
-    x = NULL,
-    y = NULL
-  ) +
+  labs(title = "Boxplots completos por variable", x = NULL, y = NULL) +
   theme_minimal(base_size = 9) +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
@@ -947,26 +664,14 @@ ggplot(datos_largos_zoom, aes(x = Variable, y = Valor)) +
   geom_blank(aes(y = y_min)) +
   geom_blank(aes(y = y_max)) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Boxplots por variable - zoom al 99%",
-    x = NULL,
-    y = NULL
-  ) +
+  labs(title = "Boxplots por variable - zoom al 99%", x = NULL, y = NULL) +
   theme_minimal(base_size = 9) +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 ```
 
 ```{r}
-
-contaminantes <- c(
-  "CO", "NO", "NO2", "NOX",
-  "O3", "PM10", "PM2.5", "SO2"
-)
-
-meteorologicas <- c(
-  "BP", "RAINF", "RH",
-  "SR", "TEMP", "WS", "WD"
-)
+contaminantes <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2")
+meteorologicas <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD")
 
 datos_cor <- datos |>
   select(all_of(c(contaminantes, meteorologicas)))
@@ -979,11 +684,7 @@ matriz_cor <- cor(
 
 round(matriz_cor, 3)
 
-cor_cont_met <- matriz_cor[
-  contaminantes,
-  meteorologicas
-]
-
+cor_cont_met <- matriz_cor[contaminantes, meteorologicas]
 round(cor_cont_met, 3)
 ```
 
