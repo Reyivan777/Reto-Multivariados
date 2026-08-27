@@ -530,6 +530,8 @@ Cada fila del conjunto representa una medición asociada a una estación de moni
 
 ### 1.4 Estadística descriptiva de variables cuantitativas
 
+Para obtener una primera descripción del comportamiento de las variables cuantitativas, se calcularon medidas de tendencia central y dispersión sobre los registros de las cuatro estaciones seleccionadas. Estas medidas permiten identificar valores representativos, variabilidad y diferencias de escala entre las variables antes de estudiar sus distribuciones y relaciones.
+
 ```{r}
 #| label: etapa2-estadistica-descriptiva
 variables_medicion <- c(
@@ -537,19 +539,29 @@ variables_medicion <- c(
   "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
 )
 
+moda <- function(x) {
+  x <- x[!is.na(x)]
+  if (length(x) == 0) return(NA_real_)
+  valores <- unique(x)
+  valores[which.max(tabulate(match(x, valores)))]
+}
+
 tabla_descriptiva <- datos_etapa2 |>
   select(any_of(variables_medicion)) |>
   summarise(
     across(
       everything(),
       list(
-        Min = ~ min(.x, na.rm = TRUE),
-        Q1 = ~ quantile(.x, 0.25, na.rm = TRUE),
         Media = ~ mean(.x, na.rm = TRUE),
         Mediana = ~ median(.x, na.rm = TRUE),
+        Moda = ~ moda(.x),
+        Min = ~ min(.x, na.rm = TRUE),
+        Max = ~ max(.x, na.rm = TRUE),
+        Rango = ~ max(.x, na.rm = TRUE) - min(.x, na.rm = TRUE),
+        Varianza = ~ var(.x, na.rm = TRUE),
         DE = ~ sd(.x, na.rm = TRUE),
-        Q3 = ~ quantile(.x, 0.75, na.rm = TRUE),
-        Max = ~ max(.x, na.rm = TRUE)
+        Q1 = ~ quantile(.x, 0.25, na.rm = TRUE),
+        Q3 = ~ quantile(.x, 0.75, na.rm = TRUE)
       ),
       .names = "{.col}_{.fn}"
     )
@@ -557,11 +569,20 @@ tabla_descriptiva <- datos_etapa2 |>
   pivot_longer(
     everything(),
     names_to = c("Variable", ".value"),
-    names_pattern = "(.*)_(Min|Q1|Mediana|Media|DE|Q3|Max)"
-  )
+    names_pattern = "(.*)_(Media|Mediana|Moda|Min|Max|Rango|Varianza|DE|Q1|Q3)"
+  ) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
 
-tabla_descriptiva
+knitr::kable(
+  tabla_descriptiva,
+  digits = 2,
+  caption = "Estadística descriptiva de las variables cuantitativas"
+)
 ```
+
+La media, mediana y moda describen la tendencia central de las mediciones, mientras que el rango, la varianza y la desviación estándar permiten evaluar su dispersión. Los cuartiles Q1 y Q3 se conservan porque servirán como referencia para el análisis de distribución y valores atípicos de la siguiente sección.
+
+Debido a que varias de las variables analizadas son continuas, la moda debe interpretarse con cautela: representa el valor observado con mayor frecuencia y puede depender de la precisión con la que se registran las mediciones.
 
 ### 1.5 Distribución de las variables
 
