@@ -700,6 +700,41 @@ Además de la unión de los datos de los seis años, no fue necesario reestructu
 **Otros planes a futuro**\
 Se contempla la posibilidad de agrupar los datos de forma estacional (invierno, verano, otoño, primavera) o mensual, con el objetivo de responder de manera más completa la pregunta de investigación 3 (si la relación meteorología-contaminante varía por estacionalidad). Esto, en caso de realizarse, crearía variables nuevas.
 
+# Etapa 2. Comprensión y preparación de los datos
+
+## 1. Comprensión descriptiva de los datos
+
+### 1.1 Objetivo del análisis
+En esta segunda etapa, el análisis se enfocará en describir y explorar las variables disponibles antes de realizar el modelado. Se estudiarán sus principales características estadísticas, distribuciones, variabilidad, valores atípicos y diferencias entre estaciones de monitoreo. Además, se analizarán las relaciones preliminares entre las variables meteorológicas y las concentraciones de contaminantes, con el propósito de identificar cuáles variables presentan mayor relevancia para la construcción posterior de los modelos predictivos.
+
+
+### 1.2 Variables de interés
+
+Las variables utilizadas en el análisis se pueden clasificar en tres grupos principales:
+
+| Grupo                                 | Variables                                              | Descripción                                                                                                                                                                                                                                      |
+| ------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Variables meteorológicas**          | `BP`, `RAINF`, `RH`, `SR`, `TEMP`, `WS`, `WD`          | Presión atmosférica, precipitación, humedad relativa, radiación solar, temperatura, velocidad del viento y dirección del viento. Estas variables se consideran principalmente como variables predictoras.                                        |
+| **Contaminantes atmosféricos**        | `CO`, `NO`, `NO2`, `NOX`, `O3`, `PM10`, `PM2.5`, `SO2` | Mediciones de contaminantes registradas por las estaciones de SIMA. Estas variables se consideran como posibles variables objetivo para los modelos predictivos.                                                                                 |
+| **Variables temporales y espaciales** | `Estacion`, `Año`, `fecha y hora`                      | Variables que permiten identificar dónde y cuándo fue realizada cada medición. No se consideran directamente como variables meteorológicas predictoras, pero son fundamentales para estudiar diferencias entre estaciones y patrones temporales. |
+
+Las variables meteorológicas serán utilizadas principalmente para estudiar su relación con las concentraciones de contaminantes y determinar cuáles pueden ser útiles para el modelado predictivo. Las variables de contaminantes funcionarán como posibles variables objetivo, aunque su selección definitiva dependerá de la disponibilidad de datos y de los resultados obtenidos durante el análisis exploratorio.
+
+Por otro lado, `Estacion`, `Año` y `fecha y hora` permiten conservar el contexto espacial y temporal de cada observación. La estación de monitoreo tendrá especial relevancia en esta etapa, ya que permitirá comparar el comportamiento de las variables entre los distintos puntos de medición de SIMA, mientras que las variables temporales permitirán identificar cambios y patrones a lo largo del periodo 2020-2025.
+
+
+### 1.3 Dimensión y estructura del conjunto de datos
+### 1.4 Estadística descriptiva de variables cuantitativas
+### 1.5 Distribución de las variables
+### 1.6 Análisis por estación de monitoreo
+### 1.7 Análisis de correlación
+### 1.8 Calidad de los datos posterior a la limpieza
+
+
+
+
+
+
 ```{r}
 estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
 
@@ -921,8 +956,6 @@ ggplot(datos_largos_zoom, aes(x = Variable, y = Valor)) +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 ```
 
-
-
 ```{r}
 
 contaminantes <- c(
@@ -954,11 +987,12 @@ cor_cont_met <- matriz_cor[
 round(cor_cont_met, 3)
 ```
 
-### Link GitHub:
+# Declaratoria y referencias
+## Link GitHub:
 
 https://github.com/Reyivan777/Reto-Multivariados
 
-### Declaratoria de uso IA
+## Declaratoria de uso IA
 
 Opción B. Se utilizó IA de la siguiente forma:\
 Herramienta: Claude.\
@@ -966,7 +1000,7 @@ Uso realizado: Apoyo en la búsqueda de referencias bibliográficas complementar
 Secciones donde se utilizó: Parte I. Conociendo el Negocio y Parte II. Comprensión y Preparación de los Datos.\
 Validación realizada por los estudiantes: Hemos revisado, editado y validado el contenido generado, verificando la veracidad de las referencias y asegurando la coherencia con el objetivo del proyecto. Como equipo asumimos la responsabilidad del contenido final entregado.
 
-# Referencias bibliográficas
+## Referencias bibliográficas
 
 Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
 
