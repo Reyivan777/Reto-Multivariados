@@ -73,11 +73,14 @@ La combinación de estas variables permite estudiar la relación entre condicion
 
 La selección final de los contaminantes a modelar dependerá de los datos disponibles y de la fuerza de su relación con las variables meteorológicas. Esto se desarrolla en la sección de preparación de datos, ubicada más adelante en este mismo entregable.
 
-## Parte 2
+## PARTE II. Comprensión y preparación de los datos
 
-Para esta primera etapa, empezaremos por cargar las librerías que necesitamos y estableceremos algunas opciones de configuración:
+### 1. Carga y homologación de los datos
+
+Primero se cargan las librerías necesarias y se integran las bases de 2020 a 2025. Durante la lectura se homologan los nombres de las variables para que todos los años tengan una estructura consistente antes de realizar la revisión de calidad.
 
 ```{r}
+#| label: carga-homologacion-datos
 library(tidyverse)
 library(here)
 library(readxl)
@@ -87,11 +90,7 @@ library(readr)
 library(purrr)
 
 options(scipen = 999)
-```
 
-Ahora cargamos los datos que nos proporcionó el Socio Formador:
-
-```{r}
 leer_base <- function(archivo, año) {
   hojas <- excel_sheets(archivo)
   map_dfr(hojas, function(hoja) {
@@ -152,9 +151,14 @@ bases <- list(
 datos_limpios <- bind_rows(bases)
 ```
 
-En esta sección se trabaja con las bases de datos para abrirlas y poder manipularlas con mayor facilidad.
+El objeto `datos_limpios` concentra los registros de los seis años y será la base sobre la que se aplicarán las decisiones de limpieza y preparación de esta etapa.
+
+### 2. Exploración inicial de estructura y calidad
+
+Antes de modificar los datos se revisan las dimensiones de cada año, la disponibilidad de variables, sus descripciones, los valores faltantes y los rangos esperados. Esta revisión permite detectar inconsistencias y definir qué observaciones requieren corrección.
 
 ```{r}
+#| label: exploracion-estructura-inicial
 dimensiones <- purrr::imap_dfr(
   bases,
   ~ tibble(Año = .y, Registros = nrow(.x), Columnas = ncol(.x))
@@ -211,7 +215,10 @@ rangos <- tribble(
 
 diccionario
 rangos
+```
 
+```{r}
+#| label: revision-calidad-inicial
 tabla_faltantes <- purrr::imap_dfr(
   bases,
   ~ .x |>
@@ -298,7 +305,14 @@ tabla_fdr <- purrr::imap_dfr(
 tabla_faltantes
 tabla_valores
 tabla_fdr
+```
 
+### 3. Limpieza de los datos
+
+A partir de los límites revisados se identifican los registros fuera de rango y se corrigen los casos detectados previamente. Los valores `-9999` utilizados como banderas de ausencia en algunas variables meteorológicas también se convierten a `NA`, de modo que la Etapa 2 reciba directamente la versión ya depurada del conjunto.
+
+```{r}
+#| label: limpieza-datos
 detalle_fdr <- purrr::imap_dfr(
   bases,
   function(datos, año) {
@@ -327,6 +341,7 @@ detalle_fdr
 
 datos_limpios <- datos_limpios |>
   mutate(
+    across(c(RH, SR, RAINF, TEMP), ~ na_if(.x, -9999)),
     WS = if_else(Año == 2020 & WS > 75, NA_real_, WS),
     SR = if_else(Año == 2020 & SR > 1, NA_real_, SR),
     BP = if_else(Año == 2020 & (BP < 690 | BP > 750), NA_real_, BP),
@@ -336,23 +351,20 @@ datos_limpios <- datos_limpios |>
   )
 ```
 
-Se utilizarán los registros de las estaciones de monitoreo desde 2020 hasta 2025. Esto se debe a que, al trabajar con un modelo predictivo, se necesitará la mayor cantidad de datos posible. Las variables meteorológicas de presión barométrica, precipitación, humedad relativa, radiación solar, temperatura, velocidad y dirección del viento se utilizarán como variables independientes, ya que el objetivo es estudiar su relación con la contaminación atmosférica. Las variables de contaminantes serán consideradas como variables objetivo y, de esta manera, se modelará cada contaminante independientemente. La selección final de las variables objetivo dependerá de su utilidad y de qué tanto proporcionen un resultado relevante, excluyendo aquellas que contengan demasiados valores faltantes o una correlación muy baja para construir y validar un modelo predictivo confiable.
+### 4. Preparación para el análisis y modelado
+
+Se conservarán los registros de 2020 a 2025 porque el objetivo predictivo requiere una cantidad amplia de observaciones. Las variables meteorológicas se consideran variables independientes y los contaminantes posibles variables objetivo. La selección final de contaminantes dependerá de la disponibilidad de información y de la relación que presenten con las variables meteorológicas.
+
+También se verifica que no existan registros duplicados y se revisan los valores atípicos por estación mediante el rango intercuartílico. Los datos faltantes se conservan como `NA` para decidir posteriormente si requieren imputación según el modelo seleccionado.
 
 ```{r}
-datos_unidos <- bind_rows(bases)
-
-duplicados <- datos_unidos |>
+#| label: duplicados-y-outliers
+duplicados <- datos_limpios |>
   count(Año, Estacion, `fecha y hora`) |>
   filter(n > 1)
 
 duplicados
-```
 
-Así verificamos que no hay valores duplicados.
-
-Los valores faltantes se dejarán sin modificar por ahora. Como están representados como NA, posteriormente podrán ser tratados mediante una estrategia de imputación, como la media o la mediana, si se considera necesario. Además, se utilizarán datos de entrenamiento y prueba, por lo que conviene conservar la mayor cantidad posible de información en esta etapa.
-
-```{r}
 variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD")
 
 detectar_outliers <- function(datos, variable) {
@@ -385,20 +397,21 @@ tabla_outliers <- map_dfr(
     )
   }
 )
+
+tabla_outliers
 ```
 
 Como podemos observar en nuestra tabla de valores atípicos, utilizando el rango intercuartílico, algunos valores llegan a representar hasta el 11.82% de los datos. Esta es una cantidad significativa que no se puede eliminar de la base de datos sin un análisis adicional.
 
-```{r}
-datos_modelo <- datos_limpios
+### 5. Transformaciones y atributos derivados
 
+Se prepara una versión escalada de las variables meteorológicas para técnicas sensibles a la escala y, por separado, una versión de modelado que incorpora atributos temporales derivados de la fecha y hora. De esta forma se preserva `datos_limpios` como la versión base depurada que utilizará la siguiente etapa.
+
+```{r}
+#| label: transformaciones-modelado
 datos_escalados <- datos_limpios |>
   mutate(across(c(BP, RAINF, RH, SR, TEMP, WS, WD), ~ as.numeric(scale(.x))))
-```
 
-En esta sección estandarizamos ciertas variables continuas para que tengan una media aproximada de 0 y una desviación estándar de 1. Esto puede ser útil si posteriormente se aplican técnicas como PCA, KNN o SVM. En caso contrario, se mantienen los valores continuos en su escala original en `datos_modelo`.
-
-```{r}
 datos_modelo <- datos_limpios |>
   mutate(
     `fecha y hora` = as.POSIXct(
@@ -409,15 +422,7 @@ datos_modelo <- datos_limpios |>
     Hora = lubridate::hour(`fecha y hora`),
     Dia = lubridate::day(`fecha y hora`),
     Mes = lubridate::month(`fecha y hora`),
-    Dia_semana = lubridate::wday(`fecha y hora`, label = TRUE)
-  )
-```
-
-Se construyeron atributos de tiempo para poder encontrar patrones estacionales en los contaminantes.
-
-```{r}
-datos_modelo <- datos_modelo |>
-  mutate(
+    Dia_semana = lubridate::wday(`fecha y hora`, label = TRUE),
     Estacion = as.factor(Estacion),
     Dia_semana = as.factor(Dia_semana)
   )
@@ -444,21 +449,21 @@ La inconsistencia de nombres de la variable temporal en 2025 se homogeneizó dur
 El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla `tabla_faltantes` generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y NOx.
 
 **Datos duplicados**\
-Se verificó que no hay duplicados.
+Se verificó que no hay valores duplicados.
 
 **Datos atípicos (outliers)**\
 Se aplicó el método del rango intercuartílico por estación para cada una de las variables numéricas. Los resultados en `tabla_outliers` muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers en esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
 
 **Variables categóricas**\
-Se identificaron `Estacion` y `Dia_semana` como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
+Se identificaron `Estacion` y `Dia_semana` como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor en `datos_modelo`. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
 
 **Binning**\
 No se consideró necesario discretizar las variables de contaminantes ni meteorológicas en esta etapa, ya que el objetivo del proyecto es predecir concentraciones continuas utilizando modelos de regresión y discretizar podría implicar una pérdida de información para este fin.
 
 **Transformación y escalamiento**\
-Se generó una versión escalada y estandarizada de las variables meteorológicas continuas (`datos_escalados`), disponible en caso de aplicar técnicas sensibles a la escala de los datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original (`datos_modelo`).
+Se generó una versión escalada y estandarizada de las variables meteorológicas continuas (`datos_escalados`), disponible en caso de aplicar técnicas sensibles a la escala de los datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original.
 
-Por otra parte, a partir de la variable fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
+Por otra parte, a partir de la variable fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana en `datos_modelo`, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
 
 Además de la unión de los datos de los seis años, no fue necesario reestructurar la base de datos, ya que el formato largo por observación horaria y estación es correcto para las técnicas de modelado predictivo contempladas.
 
@@ -470,6 +475,7 @@ Se contempla la posibilidad de agrupar los datos de forma estacional (invierno, 
 ## 1. Comprensión descriptiva de los datos
 
 ### 1.1 Objetivo del análisis
+
 En esta segunda etapa, el análisis se enfocará en describir y explorar las variables disponibles antes de realizar el modelado. Se estudiarán sus principales características estadísticas, distribuciones, variabilidad, valores atípicos y diferencias entre estaciones de monitoreo. Además, se analizarán las relaciones preliminares entre las variables meteorológicas y las concentraciones de contaminantes, con el propósito de identificar cuáles variables presentan mayor relevancia para la construcción posterior de los modelos predictivos.
 
 ### 1.2 Variables de interés
@@ -488,86 +494,26 @@ Por otro lado, `Estacion`, `Año` y `fecha y hora` permiten conservar el context
 
 ### 1.3 Dimensión y estructura del conjunto de datos
 
-Para esta etapa se seleccionaron las estaciones `NTE`, `NTE2`, `NO` y `NE`, concentradas en el sector norte del Área Metropolitana de Monterrey y con especial interés en San Nicolás de los Garza y sus zonas colindantes. La estación `NE` se ubica en San Nicolás de los Garza y `NTE2` corresponde a la zona UANL-San Nicolás, mientras que `NTE` y `NO` aportan mediciones cercanas desde General Escobedo y Monterrey. Esta selección permite conservar un contexto espacial relevante sin utilizar simultáneamente toda la red de SIMA, lo que reduciría la manejabilidad del conjunto de datos y aumentaría la complejidad del modelado posterior.
+La Etapa 2 parte directamente de `datos_limpios`, el conjunto consolidado y depurado en la etapa anterior. A partir de este objeto se seleccionaron las estaciones `NTE`, `NTE2`, `NO` y `NE`, concentradas en el sector norte del Área Metropolitana de Monterrey y con especial interés en San Nicolás de los Garza y sus zonas colindantes. Esta selección permite conservar un contexto espacial relevante sin utilizar simultáneamente toda la red de SIMA, lo que reduciría la manejabilidad del conjunto de datos y aumentaría la complejidad del modelado posterior.
 
 ```{r}
+#| label: etapa2-seleccion-y-dimensiones
 estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
 
-leer_base <- function(archivo, año) {
-  hojas <- excel_sheets(archivo)
-  hojas <- hojas[hojas %in% estaciones_seleccionadas]
+datos_etapa2 <- datos_limpios |>
+  filter(Estacion %in% estaciones_seleccionadas)
 
-  map_dfr(hojas, function(hoja) {
-    datos <- read_excel(archivo, sheet = hoja, col_types = "text")
-    nombres <- names(datos)
-    nombres <- nombres |>
-      str_replace_all("[\r\n]", " ") |>
-      str_replace("\\s*\\([^)]*\\).*", "") |>
-      str_squish()
+dimensiones_etapa2 <- datos_etapa2 |>
+  count(Año, name = "Registros") |>
+  mutate(Columnas = ncol(datos_etapa2))
 
-    nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
-    nombres[tolower(nombres) == "date"] <- "fecha y hora"
-    nombres[toupper(nombres) == "PRS"] <- "BP"
-    nombres[toupper(nombres) == "TOUT"] <- "TEMP"
-    nombres[toupper(nombres) == "WSR"] <- "WS"
-    nombres[toupper(nombres) == "WDR"] <- "WD"
-    nombres[toupper(nombres) == "CO"] <- "CO"
-    nombres[toupper(nombres) == "NO"] <- "NO"
-    nombres[toupper(nombres) == "NO2"] <- "NO2"
-    nombres[toupper(nombres) == "NOX"] <- "NOX"
-    nombres[toupper(nombres) == "O3"] <- "O3"
-    nombres[toupper(nombres) == "PM10"] <- "PM10"
-    nombres[toupper(nombres) == "PM2.5"] <- "PM2.5"
-    nombres[toupper(nombres) == "RAINF"] <- "RAINF"
-    nombres[toupper(nombres) == "RH"] <- "RH"
-    nombres[toupper(nombres) == "SO2"] <- "SO2"
-    nombres[toupper(nombres) == "SR"] <- "SR"
-    names(datos) <- nombres
-
-    datos |>
-      mutate(
-        across(any_of(c(
-          "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5",
-          "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
-        )), ~ suppressWarnings(parse_number(as.character(.x)))),
-        Año = año,
-        Estacion = hoja
-      )
-  })
-}
-
-bases <- list(
-  "2020" = leer_base(here("data", "BD 2020.xlsx"), 2020),
-  "2021" = leer_base(here("data", "BD 2021.xlsx"), 2021),
-  "2022" = leer_base(here("data", "BD 2022.xlsx"), 2022),
-  "2023" = leer_base(here("data", "BD 2023.xlsx"), 2023),
-  "2024" = leer_base(here("data", "BD 2024.xlsx"), 2024),
-  "2025" = leer_base(here("data", "BD 2025.xlsx"), 2025)
-)
-
-datos <- bind_rows(bases)
-
-dimensiones <- purrr::imap_dfr(
-  bases,
-  ~ tibble(Año = .y, Registros = nrow(.x), Columnas = ncol(.x))
-)
-
-variables_medicion <- c(
-  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP",
-  "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
-)
-
-datos <- datos |>
-  mutate(across(c(RH, SR, RAINF, TEMP), ~ na_if(.x, -9999)))
-
-# Tabla de dimensiones por año y total
-dimensiones_reporte <- dimensiones |>
+dimensiones_reporte <- dimensiones_etapa2 |>
   mutate(Año = as.character(Año)) |>
   bind_rows(
     tibble(
       Año = "Total",
-      Registros = sum(dimensiones$Registros),
-      Columnas = ncol(datos)
+      Registros = nrow(datos_etapa2),
+      Columnas = ncol(datos_etapa2)
     )
   )
 
@@ -577,25 +523,21 @@ knitr::kable(
   caption = "Dimensión del conjunto de datos utilizado en la Etapa 2"
 )
 
-glimpse(datos)
+glimpse(datos_etapa2)
 ```
 
 Cada fila del conjunto representa una medición asociada a una estación de monitoreo y a un momento específico. Las columnas reúnen los contaminantes atmosféricos, las variables meteorológicas y los identificadores temporales y espaciales descritos anteriormente. La integración de los seis años permite analizar la evolución de las mediciones entre 2020 y 2025 y comparar el comportamiento de las cuatro estaciones seleccionadas.
 
 ### 1.4 Estadística descriptiva de variables cuantitativas
-### 1.5 Distribución de las variables
-### 1.6 Análisis por estación de monitoreo
-### 1.7 Análisis de correlación
-### 1.8 Calidad de los datos posterior a la limpieza
 
 ```{r}
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(scales)
+#| label: etapa2-estadistica-descriptiva
+variables_medicion <- c(
+  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP",
+  "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
+)
 
-# Tabla descriptiva
-tabla_descriptiva <- datos |>
+tabla_descriptiva <- datos_etapa2 |>
   select(any_of(variables_medicion)) |>
   summarise(
     across(
@@ -619,37 +561,13 @@ tabla_descriptiva <- datos |>
   )
 
 tabla_descriptiva
+```
 
-# Tabla de valores faltantes
-tabla_faltantes <- datos |>
-  select(any_of(variables_medicion)) |>
-  summarise(
-    across(
-      everything(),
-      list(
-        Nulos = ~ sum(is.na(.x)),
-        Porcentaje = ~ round(mean(is.na(.x)) * 100, 2)
-      ),
-      .names = "{.col}_{.fn}"
-    )
-  ) |>
-  pivot_longer(
-    everything(),
-    names_to = c("Variable", ".value"),
-    names_pattern = "(.*)_(Nulos|Porcentaje)"
-  )
+### 1.5 Distribución de las variables
 
-tabla_faltantes
-
-# Duplicados por fecha
-duplicados_fecha <- datos |>
-  count(Año, Estacion, `fecha y hora`) |>
-  filter(n > 1)
-
-duplicados_fecha
-
-# Datos en formato largo (para histogramas y boxplots)
-datos_largos <- datos |>
+```{r}
+#| label: etapa2-distribuciones
+datos_largos <- datos_etapa2 |>
   select(any_of(variables_medicion)) |>
   pivot_longer(cols = everything(), names_to = "Variable", values_to = "Valor")
 
@@ -690,11 +608,16 @@ ggplot(datos_largos_zoom, aes(x = Variable, y = Valor)) +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 ```
 
+### 1.6 Análisis por estación de monitoreo
+
+### 1.7 Análisis de correlación
+
 ```{r}
+#| label: etapa2-correlaciones
 contaminantes <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2")
 meteorologicas <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD")
 
-datos_cor <- datos |>
+datos_cor <- datos_etapa2 |>
   select(all_of(c(contaminantes, meteorologicas)))
 
 matriz_cor <- cor(
@@ -707,6 +630,36 @@ round(matriz_cor, 3)
 
 cor_cont_met <- matriz_cor[contaminantes, meteorologicas]
 round(cor_cont_met, 3)
+```
+
+### 1.8 Calidad de los datos posterior a la limpieza
+
+```{r}
+#| label: etapa2-calidad-posterior
+tabla_faltantes_etapa2 <- datos_etapa2 |>
+  select(any_of(variables_medicion)) |>
+  summarise(
+    across(
+      everything(),
+      list(
+        Nulos = ~ sum(is.na(.x)),
+        Porcentaje = ~ round(mean(is.na(.x)) * 100, 2)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = c("Variable", ".value"),
+    names_pattern = "(.*)_(Nulos|Porcentaje)"
+  )
+
+duplicados_fecha_etapa2 <- datos_etapa2 |>
+  count(Año, Estacion, `fecha y hora`) |>
+  filter(n > 1)
+
+tabla_faltantes_etapa2
+duplicados_fecha_etapa2
 ```
 
 # Declaratoria y referencias
