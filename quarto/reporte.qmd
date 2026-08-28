@@ -832,7 +832,7 @@ ggplot(datos_estacion_contaminantes, aes(x = Estacion, y = Valor)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Esta visualización permite identificar si las concentraciones típicas y la dispersión de cada contaminante cambian entre `NTE`, `NTE2`, `NO` y `NE`. Diferencias claras entre las cajas indicarían que el comportamiento de la contaminación no es homogéneo entre los puntos de monitoreo.
+La comparación entre estaciones muestra diferencias espaciales claras en varios contaminantes. La estación `NTE2` presenta las mayores concentraciones típicas de los compuestos nitrogenados, con medianas de 10.00 para `NO`, 20.20 para `NO2` y 32.50 para `NOX`, considerablemente superiores a las observadas en las otras estaciones. `PM10` también presenta su mayor mediana en `NTE2` (57.00), mientras que la estación `NO` registra la menor (41.00). En contraste, `O3` alcanza su mayor mediana en `NO` (26.00) y la menor en `NTE2` (20.00). Para `PM2.5` y `SO2` las diferencias entre estaciones son menos pronunciadas.
 
 #### Comparación de variables meteorológicas por estación
 
@@ -859,9 +859,9 @@ ggplot(datos_estacion_meteorologicas, aes(x = Estacion, y = Valor)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-La comparación meteorológica permite revisar si las estaciones están expuestas a condiciones distintas de presión, precipitación, humedad, radiación solar, temperatura y velocidad del viento. En el caso de `WD`, el boxplot se utiliza únicamente como descripción exploratoria, ya que la dirección del viento es una variable circular y requiere un tratamiento especial para análisis más formales.
+Las condiciones meteorológicas también presentan diferencias entre ubicaciones. `NE` registra la mayor humedad relativa, con una mediana de 65 %, así como la mayor presión atmosférica (718.80) y velocidad del viento (8.20 km/h). La temperatura presenta un comportamiento más homogéneo, con medianas cercanas a 24 °C en las cuatro estaciones. La precipitación se concentra alrededor de cero en todos los puntos de monitoreo, mientras que la radiación solar muestra valores promedio mayores en `NO` y menores en `NTE`. La dirección del viento se interpreta únicamente de forma exploratoria en esta sección debido a su naturaleza circular.
 
-En conjunto, esta sección permitirá determinar qué tan importante es conservar la estación de monitoreo como componente espacial del análisis. Si se observan diferencias consistentes entre estaciones, será necesario considerar esta heterogeneidad al estudiar las relaciones entre meteorología y contaminantes y durante la construcción posterior de los modelos predictivos.
+En conjunto, los resultados indican que las estaciones no presentan un comportamiento completamente homogéneo. Las diferencias son particularmente importantes para los óxidos de nitrógeno y, en menor medida, para variables como `PM10`, `O3`, humedad, presión y velocidad del viento. Por esta razón, la estación de monitoreo debe conservarse como un componente espacial relevante durante los análisis y modelos posteriores, ya que ignorar la ubicación podría ocultar diferencias sistemáticas entre los puntos de medición.
 
 ### 1.7 Análisis de correlación
 
@@ -1026,9 +1026,13 @@ ggplot(
   )
 ```
 
-La comparación por estación permite revisar si las asociaciones generales se mantienen en los cuatro puntos de monitoreo o si cambian según la ubicación. Una relación con signo y magnitud similares entre estaciones sugeriría un patrón relativamente estable, mientras que diferencias importantes indicarían que la estación debe considerarse explícitamente durante el modelado.
+La comparación por estación muestra que varias de las asociaciones identificadas en el análisis general se mantienen en los cuatro puntos de monitoreo. El ozono (`O3`) presenta de manera consistente una relación negativa con la humedad relativa (`RH`) y relaciones positivas con la temperatura (`TEMP`), la velocidad del viento (`WS`) y, en general, la radiación solar (`SR`). Aunque la magnitud de las correlaciones cambia entre `NTE`, `NTE2`, `NO` y `NE`, el signo de estas asociaciones se conserva en gran parte de los casos, lo que sugiere un patrón relativamente estable para el ozono.
 
-En conjunto, el análisis de correlación muestra que la meteorología no se relaciona de la misma manera con todos los contaminantes. `O3` presenta las asociaciones más claras con las variables meteorológicas analizadas, mientras que `NO`, `NO2` y `NOX` destacan principalmente por sus relaciones negativas con la velocidad del viento y la temperatura. Estos resultados proporcionan una primera guía para la selección de variables predictoras, pero deberán complementarse posteriormente con los modelos multivariados y con la evaluación de su desempeño predictivo.
+Los contaminantes nitrogenados (`NO`, `NO2` y `NOX`) también muestran un comportamiento relativamente consistente entre estaciones. Sus asociaciones con la velocidad del viento (`WS`) son principalmente negativas y se observan relaciones negativas adicionales con la temperatura (`TEMP`). En contraste, las correlaciones de `CO`, `SO2`, `PM10` y `PM2.5` son generalmente de menor magnitud y presentan mayores variaciones entre los puntos de monitoreo.
+
+Las componentes de dirección del viento (`WD_sin` y `WD_cos`) muestran una mayor variabilidad entre estaciones. Esto indica que la relación entre la dirección del viento y las concentraciones puede depender de la ubicación del punto de monitoreo, ya que una misma dirección puede representar condiciones de transporte distintas según la estación. En conjunto, existen patrones meteorológicos comunes entre las cuatro estaciones, particularmente para `O3` y los óxidos de nitrógeno, pero también se observan diferencias espaciales que justifican conservar `Estacion` como una variable relevante durante el modelado.
+
+En conjunto, el análisis de correlación indica que las variables meteorológicas no tienen la misma relación con todos los contaminantes. `O3` presenta las asociaciones más claras con la meteorología, especialmente con `RH`, `TEMP`, `WS` y `SR`, mientras que `NO`, `NO2` y `NOX` destacan por sus asociaciones negativas con la velocidad del viento y la temperatura. La presencia de patrones similares entre estaciones proporciona evidencia de relaciones generales, pero las diferencias observadas indican que el componente espacial también debe considerarse en los modelos posteriores. Estas asociaciones servirán como una primera guía para seleccionar variables predictoras, sin interpretarlas como relaciones causales.
 
 ### 1.8 Calidad de los datos posterior a la limpieza
 
