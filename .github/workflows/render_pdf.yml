@@ -5,6 +5,8 @@ on:
     branches: [trunk]
     paths:
       - "quarto/reporte.qmd"
+      - "quarto/entrega_etapa_2.qmd"
+      - "data/datos_etapa2_limpios.csv"
       - "renv.lock"
       - ".Rprofile"
       - "renv/**"
@@ -41,25 +43,35 @@ jobs:
         with:
           tinytex: true
 
-      - name: Renderizar PDF
+      - name: Renderizar PDFs
         run: |
           quarto render quarto/reporte.qmd --to pdf
+          quarto render quarto/entrega_etapa_2.qmd --to pdf
           test -s docs/quarto/reporte.pdf
-          echo "PDF generado en docs/quarto/reporte.pdf"
+          test -s docs/quarto/entrega_etapa_2.pdf
+          echo "PDFs generados correctamente"
 
       - name: Revisar páginas
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils
+          echo "Reporte completo:"
           pdfinfo docs/quarto/reporte.pdf | grep '^Pages:'
+          echo "Entrega Etapa 2:"
+          PAGES=$(pdfinfo docs/quarto/entrega_etapa_2.pdf | awk '/^Pages:/ {print $2}')
+          echo "Pages: $PAGES"
+          if [ "$PAGES" -gt 5 ]; then
+            echo "ERROR: entrega_etapa_2.pdf excede el máximo de 5 páginas."
+            exit 1
+          fi
 
-      - name: Guardar PDF
+      - name: Guardar PDFs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/quarto/reporte.pdf
+          git add docs/quarto/reporte.pdf docs/quarto/entrega_etapa_2.pdf
           if ! git diff --cached --quiet; then
-            git commit -m "Actualiza PDF"
+            git commit -m "Actualiza PDFs"
             git push
           fi
 
