@@ -764,6 +764,105 @@ En conjunto, los histogramas y boxplots muestran que las variables no presentan 
 
 ### 1.6 Análisis por estación de monitoreo
 
+Una vez descrito el comportamiento general de las variables, se compararon las estaciones `NTE`, `NTE2`, `NO` y `NE` para identificar posibles diferencias espaciales en las concentraciones de contaminantes y en las condiciones meteorológicas. Esta comparación permite evaluar si las cuatro estaciones presentan comportamientos similares o si la ubicación del punto de monitoreo debe considerarse explícitamente en los análisis posteriores.
+
+#### Estadística descriptiva por estación
+
+Para resumir las diferencias entre estaciones se calcularon la media, mediana y desviación estándar de cada variable de medición. La media y mediana permiten comparar los niveles centrales registrados en cada estación, mientras que la desviación estándar muestra las diferencias en variabilidad.
+
+```{r}
+#| label: etapa2-estadistica-por-estacion
+tabla_estacion <- datos_etapa2 |>
+  group_by(Estacion) |>
+  summarise(
+    across(
+      all_of(variables_medicion),
+      list(
+        Media = ~ if (all(is.na(.x))) NA_real_ else mean(.x, na.rm = TRUE),
+        Mediana = ~ if (all(is.na(.x))) NA_real_ else median(.x, na.rm = TRUE),
+        DE = ~ if (all(is.na(.x))) NA_real_ else sd(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    ),
+    .groups = "drop"
+  ) |>
+  pivot_longer(
+    cols = -Estacion,
+    names_to = c("Variable", ".value"),
+    names_pattern = "^(.*)_(Media|Mediana|DE)$"
+  ) |>
+  mutate(
+    Estacion = factor(Estacion, levels = estaciones_seleccionadas),
+    Variable = factor(Variable, levels = variables_medicion),
+    across(c(Media, Mediana, DE), ~ round(.x, 2))
+  ) |>
+  arrange(Variable, Estacion)
+
+knitr::kable(
+  tabla_estacion,
+  digits = 2,
+  caption = "Media, mediana y desviación estándar por variable y estación"
+)
+```
+
+La tabla permite detectar qué variables presentan mayores diferencias en sus valores centrales o en su dispersión entre estaciones. Estas diferencias se complementan visualmente con diagramas de caja, ya que los boxplots permiten comparar simultáneamente la mediana, el rango intercuartílico y los valores extremos de cada estación.
+
+#### Comparación de contaminantes por estación
+
+```{r}
+#| label: etapa2-contaminantes-por-estacion
+datos_estacion_contaminantes <- datos_etapa2 |>
+  select(Estacion, all_of(contaminantes)) |>
+  pivot_longer(
+    cols = -Estacion,
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  mutate(Estacion = factor(Estacion, levels = estaciones_seleccionadas))
+
+ggplot(datos_estacion_contaminantes, aes(x = Estacion, y = Valor)) +
+  geom_boxplot(na.rm = TRUE, outlier.alpha = 0.25) +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(
+    title = "Distribución de contaminantes por estación de monitoreo",
+    x = "Estación",
+    y = "Concentración"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Esta visualización permite identificar si las concentraciones típicas y la dispersión de cada contaminante cambian entre `NTE`, `NTE2`, `NO` y `NE`. Diferencias claras entre las cajas indicarían que el comportamiento de la contaminación no es homogéneo entre los puntos de monitoreo.
+
+#### Comparación de variables meteorológicas por estación
+
+```{r}
+#| label: etapa2-meteorologicas-por-estacion
+datos_estacion_meteorologicas <- datos_etapa2 |>
+  select(Estacion, all_of(meteorologicas)) |>
+  pivot_longer(
+    cols = -Estacion,
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  mutate(Estacion = factor(Estacion, levels = estaciones_seleccionadas))
+
+ggplot(datos_estacion_meteorologicas, aes(x = Estacion, y = Valor)) +
+  geom_boxplot(na.rm = TRUE, outlier.alpha = 0.25) +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(
+    title = "Distribución de variables meteorológicas por estación",
+    x = "Estación",
+    y = "Valor"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+La comparación meteorológica permite revisar si las estaciones están expuestas a condiciones distintas de presión, precipitación, humedad, radiación solar, temperatura y velocidad del viento. En el caso de `WD`, el boxplot se utiliza únicamente como descripción exploratoria, ya que la dirección del viento es una variable circular y requiere un tratamiento especial para análisis más formales.
+
+En conjunto, esta sección permitirá determinar qué tan importante es conservar la estación de monitoreo como componente espacial del análisis. Si se observan diferencias consistentes entre estaciones, será necesario considerar esta heterogeneidad al estudiar las relaciones entre meteorología y contaminantes y durante la construcción posterior de los modelos predictivos.
+
 ### 1.7 Análisis de correlación
 
 ```{r}
