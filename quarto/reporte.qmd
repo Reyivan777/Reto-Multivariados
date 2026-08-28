@@ -374,7 +374,6 @@ for (i in seq_len(nrow(limites))) {
 }
 ```
 
-
 ```{r}
 tabla_fdr_post <- purrr::pmap_dfr(
   limites,
@@ -637,48 +636,100 @@ La verificación posterior a la limpieza no detectó observaciones fuera de los 
 
 ### 1.5 Distribución de las variables
 
+Para complementar las medidas descriptivas obtenidas anteriormente, se analizó la distribución de las variables mediante histogramas y diagramas de caja. Los histogramas permiten observar la forma, concentración y asimetría de las mediciones, mientras que los boxplots facilitan la identificación de su dispersión y de posibles valores atípicos.
+
+#### Distribución de los contaminantes atmosféricos
+
 ```{r}
-#| label: etapa2-distribuciones
-datos_largos <- datos_etapa2 |>
-  select(any_of(variables_medicion)) |>
-  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Valor")
+#| label: etapa2-histogramas-contaminantes
+contaminantes <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2")
+meteorologicas <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD")
 
-# Cuadrícula de histogramas
-ggplot(datos_largos, aes(x = Valor)) +
-  geom_histogram(bins = 30) +
-  scale_x_continuous(trans = scales::pseudo_log_trans()) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(title = "Distribución de variables de medición", x = NULL, y = "Frecuencia") +
-  theme_minimal(base_size = 9)
-
-# Cuadrícula de boxplots completos
-ggplot(datos_largos, aes(x = Variable, y = Valor)) +
-  geom_boxplot() +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(title = "Boxplots completos por variable", x = NULL, y = NULL) +
-  theme_minimal(base_size = 9) +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
-
-# Cuadrícula de boxplots con zoom al 99%
-limites_zoom <- datos_largos |>
-  group_by(Variable) |>
-  summarise(
-    y_min = min(Valor, na.rm = TRUE),
-    y_max = quantile(Valor, 0.99, na.rm = TRUE)
+datos_contaminantes <- datos_etapa2 |>
+  select(all_of(contaminantes)) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "Variable",
+    values_to = "Valor"
   )
 
-datos_largos_zoom <- datos_largos |>
-  left_join(limites_zoom, by = "Variable")
-
-ggplot(datos_largos_zoom, aes(x = Variable, y = Valor)) +
-  geom_boxplot() +
-  geom_blank(aes(y = y_min)) +
-  geom_blank(aes(y = y_max)) +
+ggplot(datos_contaminantes, aes(x = Valor)) +
+  geom_histogram(bins = 30) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(title = "Boxplots por variable - zoom al 99%", x = NULL, y = NULL) +
-  theme_minimal(base_size = 9) +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  labs(
+    title = "Distribución de los contaminantes atmosféricos",
+    x = "Concentración",
+    y = "Frecuencia"
+  ) +
+  theme_minimal(base_size = 10)
 ```
+
+Los histogramas permiten comprobar visualmente si las diferencias entre media y mediana identificadas en la sección anterior corresponden a distribuciones asimétricas y si existen colas formadas por concentraciones elevadas.
+
+#### Distribución de las variables meteorológicas
+
+```{r}
+#| label: etapa2-histogramas-meteorologicas
+datos_meteorologicos <- datos_etapa2 |>
+  select(all_of(meteorologicas)) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "Variable",
+    values_to = "Valor"
+  )
+
+ggplot(datos_meteorologicos, aes(x = Valor)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(
+    title = "Distribución de las variables meteorológicas",
+    x = "Valor",
+    y = "Frecuencia"
+  ) +
+  theme_minimal(base_size = 10)
+```
+
+En este grupo interesa observar especialmente la concentración de `RAINF` alrededor de cero, el comportamiento de `SR` a lo largo de periodos con y sin radiación, y la forma de las distribuciones de `TEMP`, `RH`, `BP` y `WS`. La dirección del viento (`WD`) se mantiene como un caso particular por su naturaleza circular.
+
+#### Dispersión y posibles valores atípicos
+
+```{r}
+#| label: etapa2-boxplots-contaminantes
+ggplot(datos_contaminantes, aes(x = Variable, y = Valor)) +
+  geom_boxplot() +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(
+    title = "Dispersión de los contaminantes atmosféricos",
+    x = NULL,
+    y = "Concentración"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+```
+
+```{r}
+#| label: etapa2-boxplots-meteorologicas
+ggplot(datos_meteorologicos, aes(x = Variable, y = Valor)) +
+  geom_boxplot() +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(
+    title = "Dispersión de las variables meteorológicas",
+    x = NULL,
+    y = "Valor"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+```
+
+Los valores identificados como atípicos mediante los boxplots no deben interpretarse automáticamente como errores. La limpieza previa eliminó las observaciones fuera de los rangos establecidos para cada variable y año, por lo que los valores extremos restantes pueden representar mediciones reales poco frecuentes y se conservan para los análisis posteriores.
+
+Si los valores extremos dificultan la lectura de alguno de los diagramas de caja, se podrá utilizar posteriormente una visualización ampliada hasta el percentil 99. Este ajuste sería únicamente visual y no implicaría eliminar observaciones del conjunto de datos.
 
 ### 1.6 Análisis por estación de monitoreo
 
