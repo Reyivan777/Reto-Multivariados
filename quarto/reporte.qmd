@@ -627,11 +627,13 @@ knitr::kable(
 )
 ```
 
+La media, mediana y moda describen la tendencia central de las mediciones, mientras que el rango, la varianza y la desviación estándar permiten evaluar su dispersión. Los cuartiles Q1 y Q3 se conservaron como referencia para el análisis posterior de distribución y valores atípicos. Debido a que varias de las variables son continuas, la moda debe interpretarse con cautela, ya que corresponde al valor observado con mayor frecuencia y depende de la precisión con la que se registran las mediciones.
 
+En los contaminantes atmosféricos se observa, en general, una media superior a la mediana. Esta diferencia es especialmente clara en `NO` (media de 13.56 frente a una mediana de 5.10), `NOX` (30.82 frente a 19.40), `PM10` (59.17 frente a 50.00) y `PM2.5` (20.03 frente a 17.00). Esto sugiere la presencia de distribuciones con asimetría hacia valores altos, donde mediciones elevadas desplazan el promedio por encima del valor central. Esta característica se verificará visualmente mediante histogramas y boxplots en la siguiente sección.
 
-La media, mediana y moda describen la tendencia central de las mediciones, mientras que el rango, la varianza y la desviación estándar permiten evaluar su dispersión. Los cuartiles Q1 y Q3 se conservan porque servirán como referencia para el análisis de distribución y valores atípicos de la siguiente sección.
+En las variables meteorológicas se presentan comportamientos distintos. La presión atmosférica (`BP`) muestra una media de 714.95 y una mediana de 714.60, indicando una concentración relativamente estable alrededor de sus valores centrales. La precipitación (`RAINF`) presenta una media de 0.01 y tanto mediana como moda iguales a cero, por lo que la mayoría de los registros horarios corresponden a periodos sin precipitación. De forma similar, la radiación solar (`SR`) presenta mediana y moda de cero, asociadas a los periodos del día sin radiación solar. La temperatura (`TEMP`) registra una media de 23.45 °C y una mediana de 24.13 °C, mientras que la humedad relativa (`RH`) presenta una media de 55.92 % y una mediana de 58.00 %.
 
-Debido a que varias de las variables analizadas son continuas, la moda debe interpretarse con cautela: representa el valor observado con mayor frecuencia y puede depender de la precisión con la que se registran las mediciones.
+La verificación posterior a la limpieza no detectó observaciones fuera de los límites definidos para cada variable y año, por lo que estas estadísticas se calcularon sobre el conjunto depurado. Los valores extremos que permanecen dentro de los rangos permitidos no se consideran automáticamente errores, ya que pueden corresponder a observaciones reales y serán evaluados como posibles valores atípicos en el análisis de distribución. Finalmente, la dirección del viento (`WD`) requiere una interpretación especial por tratarse de una variable circular: valores cercanos a 0° y 360° representan direcciones similares, por lo que su media aritmética no debe interpretarse de la misma manera que la del resto de las variables cuantitativas.
 
 ### 1.5 Distribución de las variables
 
