@@ -68,6 +68,32 @@ tabla_estaciones <- datos |>
   ) |>
   mutate(across(where(is.numeric), ~ round(.x, 2)))
 
+frecuencia_estaciones <- datos |>
+  count(Estacion, name = "Registros") |>
+  mutate(Porcentaje = round(Registros / sum(Registros) * 100, 2))
+
+variables_resumen <- c("NO", "NOX", "O3", "PM10", "PM2.5", "SO2", "RH", "TEMP", "WS")
+
+tabla_descriptiva <- datos |>
+  select(all_of(variables_resumen)) |>
+  summarise(
+    across(
+      everything(),
+      list(
+        Media = ~ mean(.x, na.rm = TRUE),
+        Mediana = ~ median(.x, na.rm = TRUE),
+        DE = ~ sd(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = c("Variable", ".value"),
+    names_pattern = "^(.*)_(Media|Mediana|DE)$"
+  ) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
 datos_cor <- datos |>
   mutate(
     WD_sin = sin(WD * pi / 180),
@@ -118,13 +144,37 @@ La base limpia utilizada contiene **`r format(nrow(datos), big.mark = ",")` regi
 | Meteorológicas | BP, RAINF, RH, SR, TEMP, WS, WD | Principales variables predictoras. |
 | Temporales/espaciales | Estacion, Año, fecha y hora | Conservan el contexto espacial y temporal. |
 
-La dirección del viento (`WD`) requiere un tratamiento especial porque es circular: 0° y 360° representan prácticamente la misma dirección. Para las correlaciones se transformó en componentes seno y coseno. Las variables temporales y `Estacion` se conservarán porque permitirán evaluar si las relaciones cambian según ubicación, hora o estacionalidad.
+Los contaminantes y las variables meteorológicas son cuantitativos continuos, excepto `WD`, que es una variable circular entre 0° y 360°. Para las correlaciones, la dirección del viento se transformó en componentes seno y coseno porque 0° y 360° representan prácticamente la misma dirección. `Estacion` es categórica nominal, `Año` es temporal discreta y `fecha y hora` identifica el momento de cada observación. Estas variables temporales y espaciales se conservarán para evaluar si las relaciones cambian según ubicación, hora o estacionalidad.
+
+La distribución de registros entre las cuatro estaciones es suficientemente equilibrada para compararlas sin que una sola ubicación domine el análisis:
+
+```{r}
+#| label: frecuencia-estaciones-entrega
+knitr::kable(
+  frecuencia_estaciones,
+  col.names = c("Estación", "Registros", "% del total"),
+  caption = "Distribución de registros por estación.",
+  digits = 2
+)
+```
 
 # 3. Resultados descriptivos principales
 
-Los contaminantes no presentan distribuciones homogéneas. En el análisis completo, `NO`, `NOX`, `PM10`, `PM2.5` y `SO2` muestran asimetría hacia valores altos. Por ejemplo, `NO` presentó una media de 13.56 frente a una mediana de 5.10; `NOX`, 30.82 frente a 19.40; `PM10`, 59.17 frente a 50.00; y `PM2.5`, 20.03 frente a 17.00. Esto indica que la mayoría de las observaciones se concentra en niveles bajos o intermedios, pero existen episodios elevados que desplazan la media.
+Los contaminantes no presentan distribuciones homogéneas. `NO`, `NOX`, `PM10`, `PM2.5` y `SO2` muestran asimetría hacia valores altos. Por ejemplo, `NO` presenta una media claramente mayor que su mediana, al igual que `NOX`, `PM10` y `PM2.5`. Esto indica que la mayoría de las observaciones se concentra en niveles bajos o intermedios, pero existen episodios elevados que desplazan el promedio.
 
-Las variables meteorológicas presentan comportamientos distintos: la presión atmosférica es relativamente estable; la precipitación se concentra principalmente en cero; la radiación solar también registra numerosos ceros durante horas nocturnas; y la velocidad del viento presenta mayor asimetría. Los valores extremos que permanecen después de la limpieza no se eliminaron automáticamente, porque pueden corresponder a episodios reales. El análisis mediante rango intercuartílico detectó hasta aproximadamente **11.82 % de valores atípicos** en la variable con mayor proporción, por lo que eliminarlos de forma general podría representar una pérdida importante de información.
+```{r}
+#| label: descriptiva-entrega
+knitr::kable(
+  tabla_descriptiva,
+  col.names = c("Variable", "Media", "Mediana", "Desv. estándar"),
+  caption = "Medidas descriptivas de variables representativas.",
+  digits = 2
+)
+```
+
+Las variables meteorológicas presentan comportamientos distintos: la presión atmosférica es relativamente estable; la precipitación se concentra principalmente en cero; la radiación solar también registra numerosos ceros durante horas nocturnas; y la velocidad del viento presenta mayor asimetría. La temperatura tiene una distribución más concentrada que varios contaminantes. Estas diferencias de forma y escala serán relevantes al seleccionar y preparar los modelos.
+
+Los valores extremos que permanecen después de la limpieza no se eliminaron automáticamente, porque pueden corresponder a episodios reales. El análisis mediante rango intercuartílico realizado en el documento de trabajo detectó hasta aproximadamente **11.82 % de valores atípicos** en la variable con mayor proporción. Eliminarlos de forma general podría reducir artificialmente la variabilidad y hacer que los modelos ignoren episodios de contaminación poco frecuentes pero ambientalmente relevantes.
 
 ## 3.1 Diferencias entre estaciones
 
@@ -142,7 +192,7 @@ knitr::kable(
 
 # 4. Calidad y preparación de los datos
 
-Durante la preparación se homologaron los nombres de las variables de 2020 a 2025, se convirtieron las banderas `-9999` a `NA` y se reemplazaron por `NA` los valores que estaban fuera de los rangos operativos definidos para cada variable y año. La verificación posterior confirmó **0 observaciones fuera de rango y 0 combinaciones año-estación-fecha duplicadas**. También se comprobó que las categorías de `Estacion` fueran únicamente `NE`, `NO`, `NTE` y `NTE2`.
+Durante la preparación se homologaron los nombres de las variables de 2020 a 2025, se convirtieron las banderas `-9999` a `NA` y se reemplazaron por `NA` los valores que estaban fuera de los rangos operativos definidos para cada variable y año. La verificación posterior confirmó **0 observaciones fuera de rango y 0 combinaciones año-estación-fecha duplicadas**. También se comprobó que las categorías de `Estacion` fueran únicamente `NE`, `NO`, `NTE` y `NTE2`, sin errores de escritura pendientes.
 
 El principal problema de calidad que permanece son los valores faltantes. Las mayores proporciones generales se concentran en `SO2`, `O3`, `NO2` y `NOX`, mientras que variables como `SR` y `PM10` presentan mayor disponibilidad. Además, existen diferencias por estación; por ejemplo, el análisis completo encontró porcentajes especialmente altos de ausencia para `RH` en `NTE` y `PM2.5` en `NO`.
 
@@ -157,6 +207,8 @@ knitr::kable(
 ```
 
 No se eliminaron filas completas por tener un dato faltante. El tratamiento definitivo dependerá del contaminante objetivo y del modelo seleccionado. Asimismo, se conservaron los valores extremos válidos y se generaron atributos temporales como hora, día, mes y día de la semana en la versión preparada para modelado. Las variables meteorológicas también cuentan con una versión estandarizada para métodos sensibles a la escala.
+
+Debe considerarse además que **2025 corresponde a un año parcial**, por lo que las comparaciones temporales entre años no deben interpretarse únicamente a partir del número de registros. En las siguientes etapas será necesario controlar este aspecto al estudiar estacionalidad o realizar divisiones de entrenamiento y prueba.
 
 # 5. Asociación entre meteorología y contaminantes
 
@@ -198,6 +250,8 @@ El análisis por estación realizado en `reporte.qmd` indica que varias de estas
 La Etapa 2 permitió consolidar un conjunto de datos limpio y comprender sus principales características antes del modelado. Se identificaron distribuciones asimétricas y valores extremos válidos, diferencias entre estaciones y una disponibilidad desigual de información. Los datos faltantes constituyen el principal aspecto pendiente de tratamiento.
 
 Los resultados preliminares muestran que `O3` tiene una relación especialmente clara con `RH`, `TEMP`, `WS` y `SR`, mientras que `NO`, `NO2` y `NOX` presentan asociaciones relevantes con velocidad del viento y temperatura. El siguiente paso será seleccionar los contaminantes objetivo combinando **disponibilidad de datos, relevancia ambiental y relación meteorológica**, definir el tratamiento de valores faltantes y comparar modelos predictivos. También se evaluará si incorporar hora, mes, estacionalidad y estación de monitoreo mejora el desempeño.
+
+A partir de esta exploración surgen tres preguntas para las siguientes etapas: **¿las asociaciones meteorológicas se mantienen estables a lo largo del año?, ¿un modelo general puede representar adecuadamente las cuatro estaciones o se requieren modelos específicos?, y ¿qué tratamiento de datos faltantes conserva mejor la información sin introducir sesgo?** Estas preguntas orientarán la construcción y evaluación de los modelos.
 
 # 7. Repositorio, base limpia y uso de IA
 
