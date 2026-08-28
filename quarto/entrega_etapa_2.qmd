@@ -1,0 +1,208 @@
+---
+title: "Etapa 2. Comprensión y preparación de los datos"
+author:
+  - "Equipo 4"
+  - "Rey Iván de la Fuente Chávez, A01709445"
+  - "Jannette Cristina Flores Rodríguez, A01255711"
+  - "Matías Romero Mariné, A01708802"
+  - "Emilio Alonso Sánchez, A00841853"
+  - "Dulce Alejandra Sánchez López, A01412307"
+date: today
+format:
+  pdf:
+    documentclass: article
+    papersize: letter
+    fontsize: 10pt
+    geometry:
+      - margin=1.3cm
+    toc: false
+    number-sections: true
+    fig-pos: H
+    fig-width: 6.8
+    fig-height: 3.2
+linestretch: 0.92
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup-entrega
+library(tidyverse)
+library(here)
+library(knitr)
+
+options(scipen = 999)
+
+datos <- read_csv(
+  here("data", "datos_etapa2_limpios.csv"),
+  show_col_types = FALSE
+)
+
+contaminantes <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2")
+meteorologicas <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD")
+
+faltantes <- datos |>
+  summarise(
+    across(
+      all_of(c(contaminantes, meteorologicas)),
+      ~ round(mean(is.na(.x)) * 100, 2)
+    )
+  ) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "Porcentaje") |>
+  arrange(desc(Porcentaje))
+
+tabla_estaciones <- datos |>
+  group_by(Estacion) |>
+  summarise(
+    Registros = n(),
+    PM10 = median(PM10, na.rm = TRUE),
+    O3 = median(O3, na.rm = TRUE),
+    NO2 = median(NO2, na.rm = TRUE),
+    RH = median(RH, na.rm = TRUE),
+    WS = median(WS, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
+datos_cor <- datos |>
+  mutate(
+    WD_sin = sin(WD * pi / 180),
+    WD_cos = cos(WD * pi / 180)
+  )
+
+meteorologicas_cor <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD_sin", "WD_cos")
+
+matriz_cor <- cor(
+  datos_cor |>
+    select(all_of(c(contaminantes, meteorologicas_cor))),
+  use = "pairwise.complete.obs",
+  method = "spearman"
+)
+
+correlaciones <- as.data.frame(
+  as.table(matriz_cor[contaminantes, meteorologicas_cor])
+) |>
+  as_tibble() |>
+  rename(
+    Contaminante = Var1,
+    Meteorologica = Var2,
+    Correlacion = Freq
+  )
+
+correlaciones_principales <- correlaciones |>
+  filter(!is.na(Correlacion)) |>
+  mutate(Magnitud = abs(Correlacion)) |>
+  arrange(desc(Magnitud)) |>
+  slice_head(n = 6) |>
+  select(Contaminante, Meteorologica, Correlacion) |>
+  mutate(Correlacion = round(Correlacion, 3))
+```
+
+# 1. Objetivo del análisis
+
+El objetivo general del proyecto se mantiene: **desarrollar y evaluar modelos predictivos que permitan estimar las concentraciones de contaminantes atmosféricos criterio en la Zona Metropolitana de Monterrey a partir de variables meteorológicas registradas por SIMA entre 2020 y 2025**. En esta etapa el propósito específico es comprender y preparar los datos antes del modelado, identificando su estructura, calidad, distribución, diferencias entre estaciones y asociaciones preliminares entre meteorología y contaminantes.
+
+# 2. Técnicas estadísticas utilizadas
+
+Se utilizaron medidas de tendencia central y dispersión para caracterizar las variables cuantitativas; histogramas y diagramas de caja para estudiar forma, asimetría y valores atípicos; tablas de frecuencia y comparaciones descriptivas por estación para estudiar el componente espacial; y correlaciones de **Spearman** para evaluar asociaciones monotónicas entre contaminantes y variables meteorológicas. Se eligió Spearman debido a la asimetría y presencia de valores extremos en varias variables. La selección de estas técnicas también es consistente con el antecedente de Cifuentes et al. (2021), donde se emplean variables meteorológicas para la predicción de contaminantes atmosféricos.
+
+# 3. Datos y variables de interés
+
+La base limpia utilizada contiene **`r format(nrow(datos), big.mark = ",")` registros y `r ncol(datos)` columnas** correspondientes a las estaciones `NTE`, `NTE2`, `NO` y `NE`. Cada fila representa una medición horaria asociada a una estación. Las cuatro estaciones aportan cantidades similares de registros, por lo que no existe un desbalance importante en el número total de observaciones.
+
+| Grupo | Variables | Función en el análisis |
+|---|---|---|
+| Contaminantes | CO, NO, NO2, NOX, O3, PM10, PM2.5, SO2 | Posibles variables objetivo de los modelos predictivos. |
+| Meteorológicas | BP, RAINF, RH, SR, TEMP, WS, WD | Posibles variables predictoras. |
+| Temporales/espaciales | Estacion, Año, fecha y hora | Conservan el contexto espacial y temporal de cada medición. |
+
+La estación de monitoreo se conserva como variable fundamental porque las concentraciones y condiciones meteorológicas no son homogéneas entre ubicaciones. La siguiente tabla resume algunas medianas que muestran estas diferencias.
+
+```{r}
+#| label: tabla-estaciones-entrega
+knitr::kable(
+  tabla_estaciones,
+  col.names = c("Estación", "Registros", "PM10", "O3", "NO2", "RH", "WS"),
+  caption = "Resumen descriptivo por estación (medianas, excepto registros).",
+  digits = 2
+)
+```
+
+`NTE2` presenta concentraciones típicas mayores de compuestos nitrogenados y también una mediana elevada de PM10, mientras que `NO` presenta una mediana mayor de O3. En meteorología, `NE` destaca por valores mayores de humedad relativa, presión y velocidad del viento. Estas diferencias justifican mantener `Estacion` durante el modelado.
+
+# 4. Principales resultados de comprensión y calidad
+
+Durante la limpieza se homologaron los nombres de variables de 2020 a 2025, se convirtieron las banderas `-9999` a `NA` y se sustituyeron por `NA` los valores que estaban fuera de los rangos operativos definidos para cada variable y año. La verificación posterior confirmó **0 observaciones fuera de rango y 0 combinaciones año-estación-fecha duplicadas**. Los valores atípicos que permanecen dentro de los rangos válidos se conservaron, ya que pueden representar episodios reales de contaminación y no necesariamente errores de captura.
+
+El principal problema de calidad que permanece son los valores faltantes. Las variables con mayor ausencia son `SO2`, `O3`, `NO2` y `NOX`, mientras que `SR` y `PM10` presentan una disponibilidad considerablemente mayor. Su tratamiento se decidirá durante el modelado según el contaminante objetivo y la técnica seleccionada, evitando eliminar registros completos de forma innecesaria.
+
+```{r}
+#| label: faltantes-entrega
+knitr::kable(
+  faltantes |> slice_head(n = 6),
+  col.names = c("Variable", "% de valores faltantes"),
+  caption = "Variables con mayor proporción de valores faltantes.",
+  digits = 2
+)
+```
+
+## 4.1 Asociación entre meteorología y contaminantes
+
+El análisis de correlación muestra que `O3` presenta las asociaciones meteorológicas de mayor magnitud: una relación negativa con la humedad relativa y relaciones positivas con temperatura, velocidad del viento y radiación solar. Los compuestos nitrogenados (`NO`, `NO2` y `NOX`) muestran asociaciones negativas principalmente con la velocidad del viento y la temperatura. Estas relaciones son una guía para seleccionar predictores, pero no implican causalidad.
+
+```{r}
+#| label: heatmap-entrega
+#| fig-cap: "Correlaciones de Spearman entre contaminantes y variables meteorológicas."
+ggplot(
+  correlaciones,
+  aes(x = Meteorologica, y = Contaminante, fill = Correlacion)
+) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlacion, 2)), size = 2.4) +
+  scale_fill_gradient2(midpoint = 0, limits = c(-1, 1), name = "Spearman") +
+  labs(x = "Variable meteorológica", y = "Contaminante") +
+  theme_minimal(base_size = 8) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+#| label: correlaciones-principales-entrega
+knitr::kable(
+  correlaciones_principales,
+  col.names = c("Contaminante", "Meteorológica", "Spearman"),
+  caption = "Seis asociaciones de mayor magnitud absoluta.",
+  digits = 3
+)
+```
+
+# 5. Conclusiones y siguientes pasos
+
+La Etapa 2 permitió consolidar un conjunto depurado para cuatro estaciones de monitoreo y caracterizar sus principales propiedades estadísticas. Se identificaron distribuciones asimétricas y valores extremos en varios contaminantes, pero estos se conservaron cuando estaban dentro de los rangos válidos. También se comprobaron diferencias espaciales entre estaciones, por lo que `Estacion` debe mantenerse como componente relevante en los modelos posteriores.
+
+Las asociaciones preliminares indican que `O3` es particularmente sensible a variables como `RH`, `TEMP`, `WS` y `SR`, mientras que los óxidos de nitrógeno muestran relaciones importantes con la velocidad del viento y la temperatura. El siguiente paso será seleccionar los contaminantes objetivo combinando **disponibilidad de datos y relación meteorológica**, definir el tratamiento de valores faltantes y construir y comparar modelos predictivos. También será necesario evaluar si las relaciones cambian por estación, hora o estacionalidad.
+
+# 6. Documentos de trabajo y base limpia
+
+- Repositorio del proyecto: <https://github.com/Reyivan777/Reto-Multivariados>
+- Documento de trabajo completo: <https://github.com/Reyivan777/Reto-Multivariados/blob/trunk/quarto/reporte.qmd>
+- Base limpia de la Etapa 2: <https://github.com/Reyivan777/Reto-Multivariados/blob/trunk/data/datos_etapa2_limpios.csv>
+
+# 7. Declaratoria de uso de IA
+
+**Opción B. Se utilizó IA.**  
+**Herramientas:** Claude y ChatGPT (OpenAI).  
+**Uso realizado:** apoyo en búsqueda y organización de referencias, estructuración y revisión de borradores, apoyo con sintaxis de R y configuración de la automatización de GitHub para generar los documentos.  
+**Secciones donde se utilizó:** comprensión del negocio, comprensión y preparación de los datos, revisión de código y organización del reporte.  
+**Validación realizada por los estudiantes:** el equipo revisó, editó y verificó el contenido y los resultados obtenidos, y asume la responsabilidad del contenido final entregado.
+
+\footnotesize
+
+# Referencias
+
+Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Pollution on Daily Mortality and Their Modification by Increased Temperatures Associated with a Climatic Change Scenario in Northern Mexico*. International Journal of Environmental Research and Public Health, 17(24), 9219.
+
+Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
+
+Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations*. International Journal of Public Health, 66, 1604465.
