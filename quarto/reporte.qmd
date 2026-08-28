@@ -460,13 +460,34 @@ Se prepara una versión escalada de las variables meteorológicas para técnicas
 datos_escalados <- datos_limpios |>
   mutate(across(c(BP, RAINF, RH, SR, TEMP, WS, WD), ~ as.numeric(scale(.x))))
 
+convertir_fecha_hora <- function(x) {
+  x_chr <- as.character(x)
+  x_num <- suppressWarnings(as.numeric(x_chr))
+
+  fecha_excel <- as.POSIXct(
+    x_num * 86400,
+    origin = "1899-12-30",
+    tz = "UTC"
+  )
+
+  fecha_texto <- suppressWarnings(
+    lubridate::parse_date_time(
+      x_chr,
+      orders = c(
+        "Ymd HMS", "Ymd HM",
+        "dmY HMS", "dmY HM",
+        "mdY HMS", "mdY HM"
+      ),
+      tz = "UTC"
+    )
+  )
+
+  dplyr::coalesce(fecha_excel, fecha_texto)
+}
+
 datos_modelo <- datos_limpios |>
   mutate(
-    `fecha y hora` = as.POSIXct(
-      as.numeric(`fecha y hora`) * 86400,
-      origin = "1899-12-30",
-      tz = "UTC"
-    ),
+    `fecha y hora` = convertir_fecha_hora(`fecha y hora`),
     Hora = lubridate::hour(`fecha y hora`),
     Dia = lubridate::day(`fecha y hora`),
     Mes = lubridate::month(`fecha y hora`),
