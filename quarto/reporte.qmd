@@ -1032,14 +1032,21 @@ En conjunto, el análisis de correlación muestra que la meteorología no se rel
 
 ### 1.8 Calidad de los datos posterior a la limpieza
 
+Como cierre de la comprensión descriptiva, se realizó una verificación final de la calidad del subconjunto utilizado en la Etapa 2. El objetivo es identificar qué problemas permanecen después de la limpieza y qué aspectos deberán considerarse antes de seleccionar las variables y construir los modelos predictivos.
+
+#### Valores faltantes
+
+Primero se cuantificó la disponibilidad general de información para cada variable, considerando el número de observaciones válidas, los valores faltantes y su porcentaje respecto al total de registros seleccionados.
+
 ```{r}
-#| label: etapa2-calidad-posterior
+#| label: etapa2-faltantes-generales
 tabla_faltantes_etapa2 <- datos_etapa2 |>
-  select(any_of(variables_medicion)) |>
+  select(all_of(variables_medicion)) |>
   summarise(
     across(
       everything(),
       list(
+        Datos_validos = ~ sum(!is.na(.x)),
         Nulos = ~ sum(is.na(.x)),
         Porcentaje = ~ round(mean(is.na(.x)) * 100, 2)
       ),
@@ -1049,16 +1056,137 @@ tabla_faltantes_etapa2 <- datos_etapa2 |>
   pivot_longer(
     everything(),
     names_to = c("Variable", ".value"),
-    names_pattern = "(.*)_(Nulos|Porcentaje)"
+    names_pattern = "^(.*)_(Datos_validos|Nulos|Porcentaje)$"
+  ) |>
+  mutate(Variable = factor(Variable, levels = variables_medicion)) |>
+  arrange(Variable)
+
+knitr::kable(
+  tabla_faltantes_etapa2,
+  caption = "Disponibilidad de datos por variable en la Etapa 2"
+)
+```
+
+Los valores faltantes no se eliminan de forma generalizada en esta etapa. Su tratamiento dependerá del contaminante que se seleccione como variable objetivo y de los requerimientos del modelo utilizado. Por ello, la disponibilidad de información será uno de los criterios para definir cuáles contaminantes y variables predictoras pueden utilizarse de manera confiable.
+
+#### Valores faltantes por estación
+
+El porcentaje global puede ocultar problemas específicos de una estación. Por esta razón, también se calculó el porcentaje de valores faltantes de cada variable de manera independiente para `NTE`, `NTE2`, `NO` y `NE`.
+
+```{r}
+#| label: etapa2-faltantes-por-estacion
+tabla_faltantes_estacion <- datos_etapa2 |>
+  group_by(Estacion) |>
+  summarise(
+    across(
+      all_of(variables_medicion),
+      ~ round(mean(is.na(.x)) * 100, 2)
+    ),
+    .groups = "drop"
+  ) |>
+  pivot_longer(
+    cols = -Estacion,
+    names_to = "Variable",
+    values_to = "Porcentaje_faltante"
+  ) |>
+  mutate(
+    Estacion = factor(Estacion, levels = estaciones_seleccionadas),
+    Variable = factor(Variable, levels = variables_medicion)
+  ) |>
+  arrange(Variable, Estacion)
+
+tabla_faltantes_estacion_reporte <- tabla_faltantes_estacion |>
+  pivot_wider(
+    names_from = Estacion,
+    values_from = Porcentaje_faltante
   )
+
+knitr::kable(
+  tabla_faltantes_estacion_reporte,
+  caption = "Porcentaje de valores faltantes por variable y estación"
+)
+```
+
+Esta comparación permite identificar si la falta de información se distribuye de forma similar entre estaciones o si ciertas combinaciones de variable y punto de monitoreo presentan una disponibilidad considerablemente menor. Estas diferencias deberán considerarse durante la selección del conjunto de entrenamiento.
+
+#### Verificación final de rangos y duplicados
+
+La limpieza de la etapa anterior convirtió en `NA` los valores que se encontraban fuera de los límites establecidos para cada variable y año. Para verificar que el subconjunto utilizado en esta etapa conserva esa condición, se repitió la comprobación sobre `datos_etapa2`. También se revisaron posibles registros duplicados definidos por una misma combinación de año, estación y fecha-hora.
+
+```{r}
+#| label: etapa2-verificacion-calidad
+tabla_fdr_etapa2 <- purrr::pmap_dfr(
+  limites,
+  function(Año, Variable, Min, Max) {
+    x <- datos_etapa2[[Variable]]
+    seleccion <- datos_etapa2$Año == Año
+
+    tibble(
+      Año = Año,
+      Variable = Variable,
+      Fuera_de_rango = sum(
+        x[seleccion] < Min | x[seleccion] > Max,
+        na.rm = TRUE
+      )
+    )
+  }
+)
 
 duplicados_fecha_etapa2 <- datos_etapa2 |>
   count(Año, Estacion, `fecha y hora`) |>
   filter(n > 1)
 
-tabla_faltantes_etapa2
-duplicados_fecha_etapa2
+resumen_calidad_etapa2 <- tibble(
+  Verificacion = c(
+    "Observaciones fuera de rango",
+    "Combinaciones año-estación-fecha duplicadas"
+  ),
+  Resultado = c(
+    sum(tabla_fdr_etapa2$Fuera_de_rango),
+    nrow(duplicados_fecha_etapa2)
+  )
+)
+
+knitr::kable(
+  resumen_calidad_etapa2,
+  caption = "Verificación final de rangos y duplicados"
+)
 ```
+
+Después del proceso de limpieza no permanecen mediciones fuera de los rangos definidos para cada variable y año, y la revisión de la combinación año-estación-fecha permite confirmar la ausencia de registros duplicados en el subconjunto seleccionado. Los valores extremos que permanecen dentro de los rangos válidos se conservan, ya que pueden representar observaciones reales y no errores de captura.
+
+#### Frecuencia de registros por estación
+
+Finalmente, se revisó la distribución de registros de la variable categórica `Estacion`. Al tratarse de una variable nominal, su descripción se realiza mediante frecuencias y porcentajes; una medida ordinal como la mediana no resulta aplicable.
+
+```{r}
+#| label: etapa2-frecuencia-estaciones
+tabla_frecuencia_estacion <- datos_etapa2 |>
+  count(Estacion, name = "Registros") |>
+  mutate(
+    Porcentaje = round(Registros / sum(Registros) * 100, 2),
+    Estacion = factor(Estacion, levels = estaciones_seleccionadas)
+  ) |>
+  arrange(Estacion)
+
+knitr::kable(
+  tabla_frecuencia_estacion,
+  caption = "Frecuencia de registros por estación de monitoreo"
+)
+
+ggplot(tabla_frecuencia_estacion, aes(x = Estacion, y = Registros)) +
+  geom_col() +
+  labs(
+    title = "Cantidad de registros por estación de monitoreo",
+    x = "Estación",
+    y = "Número de registros"
+  ) +
+  theme_minimal(base_size = 10)
+```
+
+La frecuencia de registros permite evaluar si las cuatro estaciones aportan cantidades de información comparables o si existe alguna estación con una representación considerablemente menor. Esta diferencia, en caso de ser importante, deberá considerarse al comparar estaciones y durante la partición de los datos para los modelos.
+
+En general, el conjunto seleccionado se encuentra depurado respecto a valores inválidos y duplicados. El principal aspecto de calidad que permanece es la presencia de datos faltantes, cuya magnitud puede variar entre variables y estaciones. Por esta razón, la disponibilidad de observaciones deberá considerarse junto con las relaciones encontradas en el análisis de correlación antes de seleccionar definitivamente los contaminantes y las variables predictoras. La estrategia para tratar los valores faltantes se definirá posteriormente de acuerdo con las necesidades del modelo seleccionado, evitando eliminar información de manera innecesaria.
 
 # Declaratoria y referencias
 ## Link GitHub:
