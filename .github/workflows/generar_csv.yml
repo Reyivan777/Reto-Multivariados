@@ -29,7 +29,7 @@ jobs:
 
       - name: Generar base limpia
         run: |
-          Rscript --vanilla - <<'RSCRIPT'
+          Rscript - <<'RSCRIPT'
           library(readxl)
           library(dplyr)
           library(tidyr)
