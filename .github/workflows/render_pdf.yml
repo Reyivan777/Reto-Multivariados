@@ -41,8 +41,34 @@ jobs:
         with:
           tinytex: true
 
-      - name: Renderizar PDF
-        run: quarto render quarto/reporte.qmd --to pdf
+      - name: Renderizar y localizar PDF
+        run: |
+          # Elimina una copia anterior para no confundirla con el PDF recién generado.
+          rm -f "$GITHUB_WORKSPACE/docs/reporte.pdf"
+
+          quarto render quarto/reporte.qmd --to pdf
+
+          # Quarto puede resolver output-dir de forma distinta al renderizar un archivo
+          # desde una subcarpeta. Localizamos el PDF real y lo normalizamos en docs/.
+          PDF_PATH=$(find "$GITHUB_WORKSPACE" -type f -name 'reporte.pdf' -print -quit)
+
+          if [ -z "$PDF_PATH" ]; then
+            echo "ERROR: No se encontró reporte.pdf después del render."
+            echo "PDF encontrados en el workspace:"
+            find "$GITHUB_WORKSPACE" -type f -name '*.pdf' -print
+            exit 1
+          fi
+
+          echo "PDF generado en: $PDF_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/docs"
+          TARGET="$GITHUB_WORKSPACE/docs/reporte.pdf"
+
+          if [ "$(realpath "$PDF_PATH")" != "$(realpath -m "$TARGET")" ]; then
+            cp "$PDF_PATH" "$TARGET"
+          fi
+
+          test -s "$TARGET"
+          echo "PDF normalizado en: $TARGET"
 
       - name: Revisar páginas
         run: |
