@@ -58,3 +58,5 @@ jobs:
             git commit -m "Actualiza PDF"
             git push
           fi
+
+# El render utiliza el environment reproducible definido por renv.lock.
