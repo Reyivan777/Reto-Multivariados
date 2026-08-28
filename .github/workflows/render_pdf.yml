@@ -33,6 +33,9 @@ jobs:
           LIB_PATH=$(Rscript --vanilla -e 'invisible(capture.output(source("renv/activate.R"))); cat(.libPaths()[1])' 2>/dev/null)
           echo "R_LIBS_USER=$LIB_PATH" >> "$GITHUB_ENV"
 
+      - name: Instalar maps
+        run: Rscript -e 'install.packages("maps", repos = "https://cloud.r-project.org")'
+
       - name: Configurar Quarto
         uses: quarto-dev/quarto-actions/setup@v2
         with:
