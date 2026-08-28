@@ -13,6 +13,8 @@ format:
     toc: true
     toc-depth: 3
     number-sections: true
+execute:
+  echo: false
 ---
 
 # Etapa 1. Conociendo el negocio
@@ -654,7 +656,7 @@ datos_contaminantes <- datos_etapa2 |>
   )
 
 ggplot(datos_contaminantes, aes(x = Valor)) +
-  geom_histogram(bins = 30) +
+  geom_histogram(bins = 30, na.rm = TRUE) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
   labs(
     title = "Distribución de los contaminantes atmosféricos",
@@ -664,7 +666,7 @@ ggplot(datos_contaminantes, aes(x = Valor)) +
   theme_minimal(base_size = 10)
 ```
 
-Los histogramas permiten comprobar visualmente si las diferencias entre media y mediana identificadas en la sección anterior corresponden a distribuciones asimétricas y si existen colas formadas por concentraciones elevadas.
+Los contaminantes presentan, en general, distribuciones asimétricas hacia la derecha. Este comportamiento es particularmente claro en `NO`, `NOX`, `PM10`, `PM2.5` y `SO2`, donde la mayor parte de las observaciones se concentra en valores bajos o intermedios y una cantidad menor de mediciones elevadas forma colas largas. Este resultado coincide con las diferencias entre media y mediana observadas en la sección 1.4. En `PM10` y `PM2.5`, algunos valores elevados amplían considerablemente el eje de la gráfica, por lo que se complementa la visualización con un acercamiento hasta el percentil 99.
 
 #### Distribución de las variables meteorológicas
 
@@ -679,7 +681,7 @@ datos_meteorologicos <- datos_etapa2 |>
   )
 
 ggplot(datos_meteorologicos, aes(x = Valor)) +
-  geom_histogram(bins = 30) +
+  geom_histogram(bins = 30, na.rm = TRUE) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
   labs(
     title = "Distribución de las variables meteorológicas",
@@ -689,14 +691,14 @@ ggplot(datos_meteorologicos, aes(x = Valor)) +
   theme_minimal(base_size = 10)
 ```
 
-En este grupo interesa observar especialmente la concentración de `RAINF` alrededor de cero, el comportamiento de `SR` a lo largo de periodos con y sin radiación, y la forma de las distribuciones de `TEMP`, `RH`, `BP` y `WS`. La dirección del viento (`WD`) se mantiene como un caso particular por su naturaleza circular.
+Las variables meteorológicas muestran comportamientos más diversos. `BP` y `TEMP` presentan distribuciones relativamente concentradas alrededor de sus valores centrales, mientras que `WS` muestra asimetría hacia valores altos. `RAINF` se concentra fuertemente en cero porque la mayoría de los registros horarios corresponden a periodos sin precipitación, y `SR` también presenta una acumulación importante en cero asociada a las horas sin radiación solar. La distribución de `WD` presenta varios máximos y debe interpretarse considerando que representa una dirección circular y no una magnitud lineal convencional.
 
 #### Dispersión y posibles valores atípicos
 
 ```{r}
 #| label: etapa2-boxplots-contaminantes
 ggplot(datos_contaminantes, aes(x = Variable, y = Valor)) +
-  geom_boxplot() +
+  geom_boxplot(na.rm = TRUE) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
   labs(
     title = "Dispersión de los contaminantes atmosféricos",
@@ -713,7 +715,7 @@ ggplot(datos_contaminantes, aes(x = Variable, y = Valor)) +
 ```{r}
 #| label: etapa2-boxplots-meteorologicas
 ggplot(datos_meteorologicos, aes(x = Variable, y = Valor)) +
-  geom_boxplot() +
+  geom_boxplot(na.rm = TRUE) +
   facet_wrap(~ Variable, scales = "free", ncol = 4) +
   labs(
     title = "Dispersión de las variables meteorológicas",
@@ -727,9 +729,38 @@ ggplot(datos_meteorologicos, aes(x = Variable, y = Valor)) +
   )
 ```
 
-Los valores identificados como atípicos mediante los boxplots no deben interpretarse automáticamente como errores. La limpieza previa eliminó las observaciones fuera de los rangos establecidos para cada variable y año, por lo que los valores extremos restantes pueden representar mediciones reales poco frecuentes y se conservan para los análisis posteriores.
+Los boxplots confirman la presencia de numerosas observaciones alejadas del rango intercuartílico, especialmente en `NO`, `NOX`, `PM10`, `PM2.5` y `SO2`. Estos puntos no deben interpretarse automáticamente como errores. La limpieza previa eliminó las observaciones fuera de los rangos establecidos para cada variable y año, por lo que los valores extremos restantes pueden representar episodios reales poco frecuentes y se conservan para los análisis posteriores.
 
-Si los valores extremos dificultan la lectura de alguno de los diagramas de caja, se podrá utilizar posteriormente una visualización ampliada hasta el percentil 99. Este ajuste sería únicamente visual y no implicaría eliminar observaciones del conjunto de datos.
+#### Acercamiento de contaminantes al percentil 99
+
+Para observar con mayor claridad la región donde se concentra la mayoría de las mediciones, se presenta adicionalmente una visualización de los contaminantes limitada al percentil 99 de cada variable. Este acercamiento se utiliza únicamente con fines gráficos y no modifica el conjunto de datos empleado en los análisis.
+
+```{r}
+#| label: etapa2-boxplots-contaminantes-zoom
+datos_contaminantes_zoom <- datos_contaminantes |>
+  group_by(Variable) |>
+  filter(
+    !is.na(Valor),
+    Valor <= quantile(Valor, 0.99, na.rm = TRUE)
+  ) |>
+  ungroup()
+
+ggplot(datos_contaminantes_zoom, aes(x = Variable, y = Valor)) +
+  geom_boxplot(na.rm = TRUE) +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(
+    title = "Dispersión de contaminantes - visualización hasta el percentil 99",
+    x = NULL,
+    y = "Concentración"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+```
+
+En conjunto, los histogramas y boxplots muestran que las variables no presentan un comportamiento homogéneo: varios contaminantes poseen distribuciones fuertemente asimétricas y valores extremos, mientras que las variables meteorológicas exhiben formas distintas según el fenómeno que representan. En la siguiente sección se analizará si estas diferencias también cambian entre las cuatro estaciones de monitoreo seleccionadas.
 
 ### 1.6 Análisis por estación de monitoreo
 
