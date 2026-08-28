@@ -126,6 +126,16 @@ correlaciones_principales <- correlaciones |>
   slice_head(n = 6) |>
   select(Contaminante, Meteorologica, Correlacion) |>
   mutate(Correlacion = round(Correlacion, 3))
+
+fuerza_contaminantes <- correlaciones |>
+  filter(!is.na(Correlacion)) |>
+  group_by(Contaminante) |>
+  summarise(
+    Mayor_correlacion = max(abs(Correlacion)),
+    .groups = "drop"
+  ) |>
+  arrange(Mayor_correlacion) |>
+  mutate(Contaminante = factor(Contaminante, levels = Contaminante))
 ```
 
 # 1. Objetivo y enfoque del análisis
@@ -242,6 +252,26 @@ knitr::kable(
   digits = 3
 )
 ```
+
+## 5.1 Prioridad preliminar para el modelado
+
+Además de revisar correlaciones individuales, se comparó para cada contaminante la asociación meteorológica de mayor magnitud. Esto permite visualizar cuáles variables objetivo parecen contener una señal meteorológica más clara antes de construir los modelos.
+
+```{r}
+#| label: prioridad-contaminantes-entrega
+#| fig-cap: "Mayor correlación meteorológica absoluta observada para cada contaminante."
+#| fig-height: 2.0
+#| fig-width: 6.3
+ggplot(fuerza_contaminantes, aes(x = Mayor_correlacion, y = Contaminante)) +
+  geom_col() +
+  labs(
+    x = "Mayor |correlación de Spearman|",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 8)
+```
+
+La comparación refuerza que `O3` y los compuestos nitrogenados son candidatos naturales para las primeras pruebas de modelado, mientras que contaminantes con asociaciones meteorológicas más débiles podrían requerir información temporal, espacial o variables adicionales para alcanzar un desempeño comparable. Sin embargo, la selección final no se basará solo en la correlación: también se considerará la proporción de datos disponibles, la estabilidad de las relaciones entre estaciones y la relevancia ambiental de cada contaminante.
 
 El análisis por estación realizado en `reporte.qmd` indica que varias de estas relaciones mantienen el mismo signo en `NTE`, `NTE2`, `NO` y `NE`, especialmente para `O3` y los óxidos de nitrógeno, aunque su magnitud cambia entre ubicaciones. Esto confirma que existe un patrón general, pero también un componente espacial que deberá incorporarse en los modelos.
 
