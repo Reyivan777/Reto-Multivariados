@@ -865,25 +865,170 @@ En conjunto, esta sección permitirá determinar qué tan importante es conserva
 
 ### 1.7 Análisis de correlación
 
+Después de estudiar las distribuciones de las variables y sus diferencias entre estaciones, se analizaron las asociaciones entre los contaminantes atmosféricos y las variables meteorológicas. El objetivo de esta sección es identificar qué condiciones meteorológicas presentan una mayor relación con las concentraciones de cada contaminante y evaluar posteriormente si estas asociaciones se mantienen de forma similar entre las estaciones seleccionadas.
+
+Debido a la asimetría y a la presencia de valores extremos observadas en varias variables durante las secciones anteriores, se utilizó el **coeficiente de correlación de Spearman**. Esta medida se basa en los rangos de las observaciones y permite estudiar relaciones monotónicas sin requerir que sean estrictamente lineales, por lo que resulta adecuada para este análisis exploratorio.
+
+#### Tratamiento de la dirección del viento
+
+La dirección del viento (`WD`) requiere un tratamiento particular debido a su naturaleza circular. Por ejemplo, 1° y 359° representan direcciones muy similares, aunque numéricamente parezcan alejadas. Por esta razón, se transformó en dos componentes mediante las funciones seno y coseno.
+
 ```{r}
-#| label: etapa2-correlaciones
-contaminantes <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2")
-meteorologicas <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD")
-
+#| label: etapa2-preparacion-correlaciones
 datos_cor <- datos_etapa2 |>
-  select(all_of(c(contaminantes, meteorologicas)))
+  mutate(
+    WD_sin = sin(WD * pi / 180),
+    WD_cos = cos(WD * pi / 180)
+  )
 
-matriz_cor <- cor(
-  datos_cor,
-  use = "pairwise.complete.obs",
-  method = "pearson"
+meteorologicas_cor <- c(
+  "BP", "RAINF", "RH", "SR",
+  "TEMP", "WS", "WD_sin", "WD_cos"
 )
-
-round(matriz_cor, 3)
-
-cor_cont_met <- matriz_cor[contaminantes, meteorologicas]
-round(cor_cont_met, 3)
 ```
+
+Las variables `WD_sin` y `WD_cos` permiten incorporar la dirección del viento sin tratar los grados como una variable lineal convencional.
+
+#### Correlación entre contaminantes y variables meteorológicas
+
+Para concentrar el análisis en las relaciones relevantes para el objetivo predictivo, se calcularon únicamente las correlaciones entre los contaminantes y las variables meteorológicas.
+
+```{r}
+#| label: etapa2-correlaciones-generales
+calcular_correlaciones <- function(datos) {
+
+  matriz <- cor(
+    datos |>
+      select(all_of(c(contaminantes, meteorologicas_cor))),
+    use = "pairwise.complete.obs",
+    method = "spearman"
+  )
+
+  as.data.frame(
+    as.table(matriz[contaminantes, meteorologicas_cor])
+  ) |>
+    as_tibble() |>
+    rename(
+      Contaminante = Var1,
+      Meteorologica = Var2,
+      Correlacion = Freq
+    )
+}
+
+correlaciones_generales <- calcular_correlaciones(datos_cor)
+```
+
+El coeficiente de Spearman toma valores entre -1 y 1. Los valores positivos indican que ambas variables tienden a aumentar conjuntamente, mientras que los valores negativos indican que una tiende a disminuir cuando la otra aumenta. Los valores cercanos a cero representan asociaciones monotónicas débiles.
+
+#### Mapa de calor de las correlaciones
+
+```{r}
+#| label: etapa2-heatmap-correlaciones
+ggplot(
+  correlaciones_generales,
+  aes(
+    x = Meteorologica,
+    y = Contaminante,
+    fill = Correlacion
+  )
+) +
+  geom_tile() +
+  geom_text(
+    aes(label = round(Correlacion, 2)),
+    size = 3
+  ) +
+  scale_fill_gradient2(
+    midpoint = 0,
+    limits = c(-1, 1),
+    name = "Spearman"
+  ) +
+  labs(
+    title = "Correlación entre contaminantes y variables meteorológicas",
+    x = "Variable meteorológica",
+    y = "Contaminante"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+El mapa de calor muestra que `O3` es el contaminante con las asociaciones meteorológicas de mayor magnitud. La relación más fuerte se observa con la humedad relativa (`RH`), con una correlación de **-0.549**, lo que indica que valores mayores de humedad tienden a asociarse con menores concentraciones de ozono. En sentido positivo, `O3` presenta asociaciones con la temperatura (`TEMP`, **0.515**), la velocidad del viento (`WS`, **0.506**) y la radiación solar (`SR`, **0.475**).
+
+Los compuestos nitrogenados muestran un patrón diferente. La velocidad del viento presenta correlaciones negativas con `NO2` (**-0.473**), `NOX` (**-0.472**) y `NO` (**-0.350**). La temperatura también se relaciona negativamente con `NOX` (**-0.335**), `NO2` (**-0.307**) y `NO` (**-0.250**). En contraste, las asociaciones observadas para `CO`, `SO2` y `PM2.5` son en general de menor magnitud. Para `PM10`, la relación más destacada es con `RH`, con una correlación de **-0.244**.
+
+La componente `WD_sin` de la dirección del viento presenta una asociación de **0.276** con `O3`, mientras que las demás correlaciones asociadas a `WD_sin` y `WD_cos` son relativamente pequeñas. Esto sugiere que la dirección del viento puede aportar información para algunos contaminantes, pero su importancia deberá evaluarse junto con las demás variables durante el modelado.
+
+#### Relaciones de mayor magnitud
+
+Para facilitar la identificación de las combinaciones más relevantes, se seleccionaron las doce asociaciones con mayor magnitud absoluta.
+
+```{r}
+#| label: etapa2-correlaciones-principales
+correlaciones_principales <- correlaciones_generales |>
+  filter(!is.na(Correlacion)) |>
+  mutate(Magnitud = abs(Correlacion)) |>
+  arrange(desc(Magnitud)) |>
+  slice_head(n = 12) |>
+  select(
+    Contaminante,
+    Meteorologica,
+    Correlacion
+  ) |>
+  mutate(Correlacion = round(Correlacion, 3))
+
+knitr::kable(
+  correlaciones_principales,
+  caption = "Principales asociaciones entre contaminantes y variables meteorológicas"
+)
+```
+
+La tabla confirma que las asociaciones de mayor magnitud se concentran principalmente en `O3` y en los óxidos de nitrógeno. Esto convierte a variables como `RH`, `TEMP`, `WS` y `SR` en candidatas relevantes para los modelos predictivos de estos contaminantes. Sin embargo, estas correlaciones representan asociaciones estadísticas y no deben interpretarse como evidencia de causalidad.
+
+#### Correlaciones por estación de monitoreo
+
+Para evaluar si las relaciones anteriores cambian según la ubicación, se calculó nuevamente la correlación de Spearman de forma independiente para `NTE`, `NTE2`, `NO` y `NE`.
+
+```{r}
+#| label: etapa2-correlaciones-por-estacion
+correlaciones_estacion <- datos_cor |>
+  filter(Estacion %in% estaciones_seleccionadas) |>
+  group_by(Estacion) |>
+  group_modify(~ calcular_correlaciones(.x)) |>
+  ungroup()
+```
+
+```{r}
+#| label: etapa2-heatmap-correlaciones-estacion
+ggplot(
+  correlaciones_estacion,
+  aes(
+    x = Meteorologica,
+    y = Contaminante,
+    fill = Correlacion
+  )
+) +
+  geom_tile() +
+  facet_wrap(~ Estacion, ncol = 2) +
+  scale_fill_gradient2(
+    midpoint = 0,
+    limits = c(-1, 1),
+    name = "Spearman"
+  ) +
+  labs(
+    title = "Correlaciones entre meteorología y contaminantes por estación",
+    x = "Variable meteorológica",
+    y = "Contaminante"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+La comparación por estación permite revisar si las asociaciones generales se mantienen en los cuatro puntos de monitoreo o si cambian según la ubicación. Una relación con signo y magnitud similares entre estaciones sugeriría un patrón relativamente estable, mientras que diferencias importantes indicarían que la estación debe considerarse explícitamente durante el modelado.
+
+En conjunto, el análisis de correlación muestra que la meteorología no se relaciona de la misma manera con todos los contaminantes. `O3` presenta las asociaciones más claras con las variables meteorológicas analizadas, mientras que `NO`, `NO2` y `NOX` destacan principalmente por sus relaciones negativas con la velocidad del viento y la temperatura. Estos resultados proporcionan una primera guía para la selección de variables predictoras, pero deberán complementarse posteriormente con los modelos multivariados y con la evaluación de su desempeño predictivo.
 
 ### 1.8 Calidad de los datos posterior a la limpieza
 
