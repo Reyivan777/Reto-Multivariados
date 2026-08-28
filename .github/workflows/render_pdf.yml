@@ -31,6 +31,29 @@ jobs:
             "readr", "purrr", "lubridate", "knitr"
           ), repos = "https://cloud.r-project.org")
 
+      - name: Normalizar fecha para render
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("quarto/reporte.qmd")
+          text = path.read_text(encoding="utf-8")
+          old = '''    datos |>
+              mutate(
+                across(any_of(c(
+          '''
+          new = '''    datos |>
+              mutate(
+                `fecha y hora` = as.character(`fecha y hora`),
+                across(any_of(c(
+          '''
+
+          if old not in text:
+              raise SystemExit("No se encontró el bloque esperado de leer_base().")
+
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Renderizar PDF
         run: quarto render quarto/reporte.qmd --to pdf
 
@@ -44,6 +67,7 @@ jobs:
         run: |
           mkdir -p docs
           cp quarto/reporte.pdf docs/reporte.pdf
+          git restore quarto/reporte.qmd
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/reporte.pdf
