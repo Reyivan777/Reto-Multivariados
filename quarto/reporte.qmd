@@ -528,17 +528,72 @@ En esta segunda etapa, el análisis se enfocará en describir y explorar las var
 
 ### 1.2 Variables de interés
 
-Las variables utilizadas en el análisis se pueden clasificar en tres grupos principales:
+Para el análisis se seleccionaron las estaciones `NTE`, `NTE2`, `NO` y `NE`. Las variables del subconjunto se clasifican en contaminantes atmosféricos, variables meteorológicas y variables temporales o espaciales. La tabla siguiente resume su función, tipo, valores posibles y proporción de datos faltantes dentro del conjunto utilizado en la Etapa 2.
 
-| Grupo | Variables | Descripción |
-| --- | --- | --- |
-| **Variables meteorológicas** | `BP`, `RAINF`, `RH`, `SR`, `TEMP`, `WS`, `WD` | Presión atmosférica, precipitación, humedad relativa, radiación solar, temperatura, velocidad del viento y dirección del viento. Estas variables se consideran principalmente como variables predictoras. |
-| **Contaminantes atmosféricos** | `CO`, `NO`, `NO2`, `NOX`, `O3`, `PM10`, `PM2.5`, `SO2` | Mediciones de contaminantes registradas por las estaciones de SIMA. Estas variables se consideran como posibles variables objetivo para los modelos predictivos. |
-| **Variables temporales y espaciales** | `Estacion`, `Año`, `fecha y hora` | Variables que permiten identificar dónde y cuándo fue realizada cada medición. No se consideran directamente como variables meteorológicas predictoras, pero son fundamentales para estudiar diferencias entre estaciones y patrones temporales. |
+```{r}
+#| label: etapa2-diccionario-variables
+estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
 
-Las variables meteorológicas serán utilizadas principalmente para estudiar su relación con las concentraciones de contaminantes y determinar cuáles pueden ser útiles para el modelado predictivo. Las variables de contaminantes funcionarán como posibles variables objetivo, aunque su selección definitiva dependerá de la disponibilidad de datos y de los resultados obtenidos durante el análisis exploratorio.
+datos_etapa2 <- datos_limpios |>
+  filter(Estacion %in% estaciones_seleccionadas)
 
-Por otro lado, `Estacion`, `Año` y `fecha y hora` permiten conservar el contexto espacial y temporal de cada observación. La estación de monitoreo tendrá especial relevancia en esta etapa, ya que permitirá comparar el comportamiento de las variables entre los distintos puntos de medición de SIMA, mientras que las variables temporales permitirán identificar cambios y patrones a lo largo del periodo 2020-2025.
+diccionario_etapa2 <- tribble(
+  ~Grupo, ~Variable, ~Descripcion, ~Tipo, ~Valores_posibles,
+  "Contaminante", "CO", "Monóxido de carbono", "Numérica continua", "0-20 ppm*",
+  "Contaminante", "NO", "Monóxido de nitrógeno", "Numérica continua", "0-500 ppb*",
+  "Contaminante", "NO2", "Dióxido de nitrógeno", "Numérica continua", "0-200 ppb*",
+  "Contaminante", "NOX", "Óxidos de nitrógeno", "Numérica continua", "0-500 ppb*",
+  "Contaminante", "O3", "Ozono", "Numérica continua", "0-185 ppb*",
+  "Contaminante", "PM10", "Partículas menores a 10 micrómetros", "Numérica continua", "0-999 µg/m3*",
+  "Contaminante", "PM2.5", "Partículas menores a 2.5 micrómetros", "Numérica continua", "0-999 µg/m3*",
+  "Contaminante", "SO2", "Dióxido de azufre", "Numérica continua", "0-405 ppb*",
+  "Meteorológica", "BP", "Presión atmosférica", "Numérica continua", "687.5-750 mm Hg*",
+  "Meteorológica", "RAINF", "Precipitación", "Numérica continua", "0-80 mm/Hr*",
+  "Meteorológica", "RH", "Humedad relativa", "Numérica continua", "0-100 %*",
+  "Meteorológica", "SR", "Radiación solar", "Numérica continua", "0-1.26 kW/m2*",
+  "Meteorológica", "TEMP", "Temperatura", "Numérica continua", "-6.5-45.5 °C*",
+  "Meteorológica", "WS", "Velocidad del viento", "Numérica continua", "0-75 Km/hr*",
+  "Meteorológica", "WD", "Dirección del viento", "Numérica circular", "0-360°*",
+  "Temporal/espacial", "Estacion", "Estación de monitoreo", "Categórica nominal", "NTE, NTE2, NO, NE",
+  "Temporal/espacial", "Año", "Año de la medición", "Temporal discreta", "2020-2025",
+  "Temporal/espacial", "fecha y hora", "Momento de la medición", "Fecha-hora", "Registros horarios 2020-2025"
+)
+
+faltantes_diccionario <- datos_etapa2 |>
+  summarise(
+    across(
+      all_of(diccionario_etapa2$Variable),
+      ~ round(mean(is.na(.x)) * 100, 2)
+    )
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "Variable",
+    values_to = "Nulos_porcentaje"
+  )
+
+tabla_variables_etapa2 <- diccionario_etapa2 |>
+  left_join(faltantes_diccionario, by = "Variable")
+
+knitr::kable(
+  tabla_variables_etapa2,
+  col.names = c(
+    "Grupo", "Variable", "Descripción", "Tipo",
+    "Valores posibles / unidad", "% nulos"
+  ),
+  caption = "Descripción de las variables utilizadas en la Etapa 2"
+)
+```
+
+\*Los intervalos mostrados para las variables numéricas representan la envolvente de los límites válidos utilizados durante la limpieza entre 2020 y 2025. El límite exacto puede variar según el año y se encuentra documentado en la etapa anterior.
+
+Las variables meteorológicas se consideran principalmente como posibles predictoras y los contaminantes como posibles variables objetivo. `Estacion`, `Año` y `fecha y hora` no representan mediciones meteorológicas, pero conservan el contexto espacial y temporal de cada registro. La selección definitiva de contaminantes y predictores dependerá tanto de la disponibilidad de datos como de las asociaciones identificadas durante el análisis exploratorio.
+
+#### Técnicas estadísticas utilizadas
+
+Para responder al objetivo de esta etapa se emplean medidas de tendencia central y dispersión para caracterizar las mediciones; histogramas y diagramas de caja para estudiar la forma de las distribuciones, su asimetría y los posibles valores atípicos; tablas de frecuencia y comparaciones descriptivas por estación para evaluar diferencias espaciales; y correlaciones para identificar asociaciones preliminares entre las variables meteorológicas y los contaminantes. Debido a la asimetría y a los valores extremos observados en varias variables, el análisis de asociación utiliza el coeficiente de Spearman en lugar de depender únicamente de una correlación lineal convencional.
+
+La revisión de Cifuentes et al. (2021) proporciona un antecedente directo para relacionar variables meteorológicas con concentraciones de contaminantes dentro de modelos predictivos de calidad del aire. En este proyecto, las técnicas descriptivas y de correlación se utilizan como una etapa previa al modelado para identificar qué variables presentan mayor disponibilidad, variabilidad y relación estadística con los contaminantes de interés.
 
 ### 1.3 Dimensión y estructura del conjunto de datos
 
@@ -546,11 +601,6 @@ La Etapa 2 parte directamente de `datos_limpios`, el conjunto consolidado y depu
 
 ```{r}
 #| label: etapa2-seleccion-y-dimensiones
-estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
-
-datos_etapa2 <- datos_limpios |>
-  filter(Estacion %in% estaciones_seleccionadas)
-
 dimensiones_etapa2 <- datos_etapa2 |>
   count(Año, name = "Registros") |>
   mutate(Columnas = ncol(datos_etapa2))
