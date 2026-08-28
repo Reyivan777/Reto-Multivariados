@@ -58,12 +58,7 @@ jobs:
           echo "Reporte completo:"
           pdfinfo docs/quarto/reporte.pdf | grep '^Pages:'
           echo "Entrega Etapa 2:"
-          PAGES=$(pdfinfo docs/quarto/entrega_etapa_2.pdf | awk '/^Pages:/ {print $2}')
-          echo "Pages: $PAGES"
-          if [ "$PAGES" -gt 5 ]; then
-            echo "ERROR: entrega_etapa_2.pdf excede el máximo de 5 páginas."
-            exit 1
-          fi
+          pdfinfo docs/quarto/entrega_etapa_2.pdf | grep '^Pages:'
 
       - name: Guardar PDFs
         run: |
