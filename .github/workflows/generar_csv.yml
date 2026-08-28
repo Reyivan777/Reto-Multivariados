@@ -13,25 +13,20 @@ permissions:
 jobs:
   generar:
     runs-on: ubuntu-latest
+    env:
+      RENV_CONFIG_AUTOLOADER_ENABLED: "FALSE"
     steps:
       - uses: actions/checkout@v4
 
       - uses: r-lib/actions/setup-r@v2
 
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: |
-            any::readxl
-            any::dplyr
-            any::tidyr
-            any::purrr
-            any::stringr
-            any::readr
-            any::tibble
+      - name: Instalar paquetes
+        run: |
+          Rscript --vanilla -e 'install.packages(c("readxl","dplyr","tidyr","purrr","stringr","readr","tibble"), repos="https://cloud.r-project.org")'
 
       - name: Generar base limpia
-        shell: Rscript {0}
         run: |
+          Rscript --vanilla - <<'RSCRIPT'
           library(readxl)
           library(dplyr)
           library(tidyr)
@@ -155,6 +150,7 @@ jobs:
 
           stopifnot(nrow(datos_etapa2) == 192723)
           stopifnot(all(sort(unique(datos_etapa2$Estacion)) == sort(c("NTE", "NTE2", "NO", "NE"))))
+          RSCRIPT
 
       - name: Subir CSV
         run: |
