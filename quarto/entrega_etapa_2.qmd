@@ -1,7 +1,7 @@
 ---
-title: "Etapa 2. Comprensión y preparación de los datos"
-author:
-  - "Equipo 4"
+title: "Etapa 2 entrega"
+author: 
+  - "Equipo 4:"
   - "Rey Iván de la Fuente Chávez, A01709445"
   - "Jannette Cristina Flores Rodríguez, A01255711"
   - "Matías Romero Mariné, A01708802"
@@ -10,21 +10,11 @@ author:
 date: today
 format:
   pdf:
-    documentclass: article
-    papersize: letter
-    fontsize: 10pt
-    geometry:
-      - margin=1.3cm
-    toc: false
+    toc: true
+    toc-depth: 3
     number-sections: true
-    fig-pos: H
-    fig-width: 6.8
-    fig-height: 3.2
-linestretch: 0.92
 execute:
   echo: false
-  warning: false
-  message: false
 ---
 
 ```{r}
