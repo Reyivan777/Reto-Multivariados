@@ -41,46 +41,23 @@ jobs:
         with:
           tinytex: true
 
-      - name: Renderizar y localizar PDF
+      - name: Renderizar PDF
         run: |
-          # Elimina una copia anterior para no confundirla con el PDF recién generado.
-          rm -f "$GITHUB_WORKSPACE/docs/reporte.pdf"
-
           quarto render quarto/reporte.qmd --to pdf
-
-          # Quarto puede resolver output-dir de forma distinta al renderizar un archivo
-          # desde una subcarpeta. Localizamos el PDF real y lo normalizamos en docs/.
-          PDF_PATH=$(find "$GITHUB_WORKSPACE" -type f -name 'reporte.pdf' -print -quit)
-
-          if [ -z "$PDF_PATH" ]; then
-            echo "ERROR: No se encontró reporte.pdf después del render."
-            echo "PDF encontrados en el workspace:"
-            find "$GITHUB_WORKSPACE" -type f -name '*.pdf' -print
-            exit 1
-          fi
-
-          echo "PDF generado en: $PDF_PATH"
-          mkdir -p "$GITHUB_WORKSPACE/docs"
-          TARGET="$GITHUB_WORKSPACE/docs/reporte.pdf"
-
-          if [ "$(realpath "$PDF_PATH")" != "$(realpath -m "$TARGET")" ]; then
-            cp "$PDF_PATH" "$TARGET"
-          fi
-
-          test -s "$TARGET"
-          echo "PDF normalizado en: $TARGET"
+          test -s docs/quarto/reporte.pdf
+          echo "PDF generado en docs/quarto/reporte.pdf"
 
       - name: Revisar páginas
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y poppler-utils
-          pdfinfo docs/reporte.pdf | grep '^Pages:'
+          pdfinfo docs/quarto/reporte.pdf | grep '^Pages:'
 
       - name: Guardar PDF
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/reporte.pdf
+          git add docs/quarto/reporte.pdf
           if ! git diff --cached --quiet; then
             git commit -m "Actualiza PDF"
             git push
