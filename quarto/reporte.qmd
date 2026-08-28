@@ -1067,7 +1067,7 @@ knitr::kable(
 )
 ```
 
-Los valores faltantes no se eliminan de forma generalizada en esta etapa. Su tratamiento dependerá del contaminante que se seleccione como variable objetivo y de los requerimientos del modelo utilizado. Por ello, la disponibilidad de información será uno de los criterios para definir cuáles contaminantes y variables predictoras pueden utilizarse de manera confiable.
+Los valores faltantes constituyen el principal problema de calidad que permanece en el conjunto. A nivel general, los mayores porcentajes de ausencia corresponden a `SO2` (24.49 %), `O3` (24.30 %), `NO2` (23.66 %) y `NOX` (23.38 %). En contraste, `SR` (4.02 %) y `PM10` (5.51 %) presentan una disponibilidad considerablemente mayor. Los valores faltantes no se eliminaron de forma generalizada, ya que su tratamiento dependerá del contaminante seleccionado como variable objetivo y de los requerimientos del modelo utilizado.
 
 #### Valores faltantes por estación
 
@@ -1107,7 +1107,7 @@ knitr::kable(
 )
 ```
 
-Esta comparación permite identificar si la falta de información se distribuye de forma similar entre estaciones o si ciertas combinaciones de variable y punto de monitoreo presentan una disponibilidad considerablemente menor. Estas diferencias deberán considerarse durante la selección del conjunto de entrenamiento.
+La disponibilidad de información no es uniforme entre estaciones. Los casos más relevantes son `RH` en `NTE`, con 54.76 % de valores faltantes, y `PM2.5` en `NO`, con 41.36 %. Estas combinaciones deberán analizarse con especial cuidado si se utilizan en modelos específicos por estación. En contraste, `NTE2` presenta una disponibilidad alta para varias variables meteorológicas, con porcentajes de ausencia de 0.45 % en `SR`, 1.08 % en `RAINF` y `WS`, 1.15 % en `TEMP` y 1.22 % en `BP` y `WD`.
 
 #### Verificación final de rangos y duplicados
 
@@ -1153,7 +1153,7 @@ knitr::kable(
 )
 ```
 
-Después del proceso de limpieza no permanecen mediciones fuera de los rangos definidos para cada variable y año, y la revisión de la combinación año-estación-fecha permite confirmar la ausencia de registros duplicados en el subconjunto seleccionado. Los valores extremos que permanecen dentro de los rangos válidos se conservan, ya que pueden representar observaciones reales y no errores de captura.
+La verificación final obtuvo **0 observaciones fuera de rango y 0 combinaciones año-estación-fecha duplicadas**. Esto confirma que el proceso de limpieza corrigió los registros inválidos identificados anteriormente y que no existen duplicados bajo el criterio utilizado. Los valores extremos que permanecen dentro de los rangos válidos se conservan, ya que pueden representar observaciones reales y no errores de captura.
 
 #### Frecuencia de registros por estación
 
@@ -1184,9 +1184,9 @@ ggplot(tabla_frecuencia_estacion, aes(x = Estacion, y = Registros)) +
   theme_minimal(base_size = 10)
 ```
 
-La frecuencia de registros permite evaluar si las cuatro estaciones aportan cantidades de información comparables o si existe alguna estación con una representación considerablemente menor. Esta diferencia, en caso de ser importante, deberá considerarse al comparar estaciones y durante la partición de los datos para los modelos.
+Las cuatro estaciones aportan aproximadamente 48 mil registros cada una, por lo que no existe un desbalance importante en el número total de observaciones. Sin embargo, esta similitud en cantidad de filas no implica que todas las variables tengan la misma disponibilidad en cada estación, como muestran los porcentajes de valores faltantes anteriores.
 
-En general, el conjunto seleccionado se encuentra depurado respecto a valores inválidos y duplicados. El principal aspecto de calidad que permanece es la presencia de datos faltantes, cuya magnitud puede variar entre variables y estaciones. Por esta razón, la disponibilidad de observaciones deberá considerarse junto con las relaciones encontradas en el análisis de correlación antes de seleccionar definitivamente los contaminantes y las variables predictoras. La estrategia para tratar los valores faltantes se definirá posteriormente de acuerdo con las necesidades del modelo seleccionado, evitando eliminar información de manera innecesaria.
+En general, el conjunto seleccionado se encuentra depurado respecto a valores fuera de rango y duplicados, y las cuatro estaciones están representadas por cantidades de registros comparables. El principal aspecto de calidad que permanece es la presencia de datos faltantes, cuya magnitud varía entre variables y estaciones. Por esta razón, la selección de contaminantes objetivo y variables predictoras deberá considerar conjuntamente dos criterios: la relación meteorológica identificada en el análisis de correlación y la disponibilidad suficiente de observaciones. La estrategia para tratar los valores faltantes se definirá posteriormente según las necesidades del modelo seleccionado, evitando eliminar información de manera innecesaria.
 
 # Declaratoria y referencias
 ## Link GitHub:
