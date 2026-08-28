@@ -338,17 +338,64 @@ detalle_fdr <- purrr::imap_dfr(
 )
 
 detalle_fdr
+```
 
+```{r}
+# Valores -9999 utilizados como indicador de dato faltante
 datos_limpios <- datos_limpios |>
   mutate(
-    across(c(RH, SR, RAINF, TEMP), ~ na_if(.x, -9999)),
-    WS = if_else(Año == 2020 & WS > 75, NA_real_, WS),
-    SR = if_else(Año == 2020 & SR > 1, NA_real_, SR),
-    BP = if_else(Año == 2020 & (BP < 690 | BP > 750), NA_real_, BP),
-    NO = if_else(Año == 2021 & NO > 350, NA_real_, NO),
-    NO2 = if_else(Año == 2021 & NO2 < 0, NA_real_, NO2),
-    SR = if_else(Año == 2021 & SR > 1, NA_real_, SR)
+    across(
+      any_of(c(
+        "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5",
+        "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
+      )),
+      ~ na_if(.x, -9999)
+    )
   )
+
+# Convertir a NA cualquier valor fuera del rango permitido
+# correspondiente a su variable y año
+for (i in seq_len(nrow(limites))) {
+
+  año_i <- limites$Año[i]
+  variable_i <- limites$Variable[i]
+  min_i <- limites$Min[i]
+  max_i <- limites$Max[i]
+
+  fuera_rango <-
+    datos_limpios$Año == año_i &
+    !is.na(datos_limpios[[variable_i]]) &
+    (
+      datos_limpios[[variable_i]] < min_i |
+      datos_limpios[[variable_i]] > max_i
+    )
+
+  datos_limpios[[variable_i]][fuera_rango] <- NA_real_
+}
+```
+
+
+```{r}
+tabla_fdr_post <- purrr::pmap_dfr(
+  limites,
+  function(Año, Variable, Min, Max) {
+
+    x <- datos_limpios[[Variable]]
+    seleccion <- datos_limpios$Año == Año
+
+    tibble(
+      Año = Año,
+      Variable = Variable,
+      Fuera_de_rango = sum(
+        x[seleccion] < Min | x[seleccion] > Max,
+        na.rm = TRUE
+      )
+    )
+  }
+)
+
+tabla_fdr_post |>
+  filter(Fuera_de_rango > 0)
 ```
 
 ### 4. Preparación para el análisis y modelado
@@ -569,7 +616,7 @@ tabla_descriptiva <- datos_etapa2 |>
   pivot_longer(
     everything(),
     names_to = c("Variable", ".value"),
-    names_pattern = "(.*)_(Media|Mediana|Moda|Min|Max|Rango|Varianza|DE|Q1|Q3)"
+    names_pattern = "^(.*)_(Mediana|Media|Moda|Min|Max|Rango|Varianza|DE|Q1|Q3)$"
   ) |>
   mutate(across(where(is.numeric), ~ round(.x, 2)))
 
@@ -579,6 +626,8 @@ knitr::kable(
   caption = "Estadística descriptiva de las variables cuantitativas"
 )
 ```
+
+
 
 La media, mediana y moda describen la tendencia central de las mediciones, mientras que el rango, la varianza y la desviación estándar permiten evaluar su dispersión. Los cuartiles Q1 y Q3 se conservan porque servirán como referencia para el análisis de distribución y valores atípicos de la siguiente sección.
 
