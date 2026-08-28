@@ -30,7 +30,8 @@ jobs:
 
       - name: Activar renv
         run: |
-          echo "R_LIBS_USER=$(Rscript -e 'cat(.libPaths()[1])')" >> "$GITHUB_ENV"
+          LIB_PATH=$(Rscript --vanilla -e 'invisible(capture.output(source("renv/activate.R"))); cat(.libPaths()[1])' 2>/dev/null)
+          echo "R_LIBS_USER=$LIB_PATH" >> "$GITHUB_ENV"
 
       - name: Configurar Quarto
         uses: quarto-dev/quarto-actions/setup@v2
