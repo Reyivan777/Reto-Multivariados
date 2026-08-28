@@ -1209,6 +1209,62 @@ knitr::kable(
 
 La verificación final obtuvo **0 observaciones fuera de rango y 0 combinaciones año-estación-fecha duplicadas**. Esto confirma que el proceso de limpieza corrigió los registros inválidos identificados anteriormente y que no existen duplicados bajo el criterio utilizado. Los valores extremos que permanecen dentro de los rangos válidos se conservan, ya que pueden representar observaciones reales y no errores de captura.
 
+#### Verificación de categorías y escritura
+
+Como parte de la revisión de calidad también se verificó que la variable categórica `Estacion` contenga únicamente las categorías esperadas y que los nombres de las variables requeridas estén presentes después del proceso de homologación.
+
+```{r}
+#| label: etapa2-verificacion-categorias
+estaciones_observadas <- datos_etapa2 |>
+  distinct(Estacion) |>
+  arrange(Estacion) |>
+  pull(Estacion) |>
+  as.character()
+
+estaciones_inesperadas <- setdiff(
+  estaciones_observadas,
+  estaciones_seleccionadas
+)
+
+variables_esperadas <- c(
+  "fecha y hora", variables_medicion,
+  "Año", "Estacion"
+)
+
+variables_faltantes <- setdiff(
+  variables_esperadas,
+  names(datos_etapa2)
+)
+
+resumen_categorias <- tibble(
+  Verificacion = c(
+    "Categorías observadas en Estacion",
+    "Categorías inesperadas",
+    "Variables esperadas faltantes"
+  ),
+  Resultado = c(
+    paste(estaciones_observadas, collapse = ", "),
+    ifelse(
+      length(estaciones_inesperadas) == 0,
+      "Ninguna",
+      paste(estaciones_inesperadas, collapse = ", ")
+    ),
+    ifelse(
+      length(variables_faltantes) == 0,
+      "Ninguna",
+      paste(variables_faltantes, collapse = ", ")
+    )
+  )
+)
+
+knitr::kable(
+  resumen_categorias,
+  caption = "Verificación de categorías y nombres de variables"
+)
+```
+
+La revisión confirma que las categorías observadas corresponden únicamente a `NE`, `NO`, `NTE` y `NTE2`, sin etiquetas adicionales o inconsistencias de escritura dentro del subconjunto seleccionado. Asimismo, todas las variables esperadas están presentes después de la homologación realizada en la etapa anterior, por lo que no se identifican errores de escritura pendientes en los nombres utilizados para este análisis.
+
 #### Frecuencia de registros por estación
 
 Finalmente, se revisó la distribución de registros de la variable categórica `Estacion`. Al tratarse de una variable nominal, su descripción se realiza mediante frecuencias y porcentajes; una medida ordinal como la mediana no resulta aplicable.
