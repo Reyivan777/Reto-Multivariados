@@ -1,6 +1,6 @@
 ---
-title: "Reporte de la Situación Problema"
-author: 
+title: "Reporte del reto SIMA: predicción de ozono a corto plazo"
+author:
   - "Equipo 4:"
   - "Rey Iván de la Fuente Chávez, A01709445"
   - "Jannette Cristina Flores Rodríguez, A01255711"
@@ -17,1328 +17,223 @@ execute:
   echo: false
 ---
 
-# Etapa 1. Conociendo el negocio
+# Introducción y planteamiento
 
-## PARTE I. Conociendo el Negocio
+## Contexto del proyecto
 
-### Presentación general del proyecto (resumen del proyecto).
+La contaminación atmosférica representa un problema relevante para la salud pública y para la gestión ambiental de las ciudades. En la Zona Metropolitana de Monterrey (ZMM), las concentraciones de contaminantes pueden variar considerablemente a lo largo del día debido a la interacción entre emisiones, condiciones meteorológicas y características propias de cada zona. Por esta razón, además de conocer el estado actual de la calidad del aire, resulta útil estudiar si los registros históricos permiten anticipar su comportamiento en el corto plazo.
 
-La contaminación atmosférica representa un problema importante de salud pública debido a los efectos que contaminantes como PM2.5, PM10, O₃, NO₂, SO₂ y CO pueden generar en la población. En zonas urbanas como el Área Metropolitana de Monterrey, su monitoreo resulta especialmente relevante debido a la actividad industrial, vehicular y a las condiciones meteorológicas que pueden favorecer la acumulación o dispersión de contaminantes.
+En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) opera una red de estaciones que registra de forma horaria contaminantes atmosféricos y variables meteorológicas. Entre los contaminantes disponibles se encuentran monóxido de carbono (CO), monóxido de nitrógeno (NO), dióxido de nitrógeno (NO2), óxidos de nitrógeno (NOX), ozono (O3), partículas menores a 10 y 2.5 micrómetros (PM10 y PM2.5) y dióxido de azufre (SO2). También se registran variables como temperatura, humedad relativa, radiación solar, presión atmosférica, precipitación, velocidad del viento y dirección del viento.
 
-En Nuevo León, el Sistema Integral de Monitoreo Ambiental (SIMA) registra información sobre la calidad del aire mediante una red de estaciones que miden concentraciones de contaminantes y variables meteorológicas. Estas mediciones permiten conocer las condiciones ambientales de distintas zonas y proporcionan información útil para analizar el comportamiento de la contaminación atmosférica.
+El reto planteado por SIMA permite analizar estas mediciones mediante técnicas estadísticas multivariadas y de modelado predictivo. En las primeras exploraciones del conjunto de datos se observó que intentar estudiar y predecir simultáneamente todos los contaminantes producía un objetivo demasiado amplio. Por ello, el proyecto se delimita a un problema concreto: **la predicción de la concentración horaria de ozono (O3) en el corto plazo**.
 
-Las condiciones meteorológicas influyen directamente en la dinámica de los contaminantes. Variables como temperatura, humedad, velocidad y dirección del viento, presión, precipitación y radiación solar pueden modificar su formación, transporte y dispersión. Dado esto, en este proyecto ha surgido la pregunta: ¿Es posible aprovechar los registros históricos de SIMA para entender y anticipar el comportamiento de la contaminación atmosférica a partir de las variables meteorológicas? A continuación se presenta la revisión bibliográfica que sustenta esta pregunta, así como la descripción del problema, los objetivos del proyecto y las fuentes de información utilizadas.
+## Problema de investigación
 
-### Revisión de bibliografía
+El ozono troposférico es un contaminante cuyo comportamiento está relacionado con las condiciones atmosféricas y con otros contaminantes presentes en el ambiente. La temperatura, la radiación solar, la humedad y el viento, entre otras variables, pueden aportar información relevante para entender su variación. Además, al tratarse de mediciones horarias, la concentración observada en un momento también depende de la dinámica temporal reciente.
 
-**Sobre la medición de la calidad del aire, su impacto social e importancia.**\
-La contaminación atmosférica es reconocida como uno de los principales riesgos ambientales para la salud pública. En el Área Metropolitana de Monterrey, Cerón Bretón et al. (2020) encontraron asociaciones entre mayores concentraciones de contaminantes atmosféricos y un incremento en el riesgo de mortalidad diaria, efecto que se agrava con temperaturas elevadas y que resulta especialmente relevante en adultos mayores. A nivel internacional, las Guías de Calidad del Aire 2021 de la Organización Mundial de la Salud (Hoffmann et al., 2021) refuerzan esta relevancia. En zonas donde la contaminación ya es relativamente baja, reducir las concentraciones de contaminantes criterio (PM2.5, PM10, O3, NO2, SO2 y CO) genera beneficios medibles para la salud de la población.
+Los registros históricos de SIMA contienen ambas fuentes de información: las condiciones meteorológicas y de contaminación observadas en distintas estaciones, así como su evolución temporal. El problema central del proyecto consiste en determinar si esta información puede utilizarse para generar pronósticos útiles de O3 con anticipación suficiente para apoyar el seguimiento de episodios de concentración elevada.
 
-En México, estas guías se traducen en las Normas Oficiales Mexicanas de salud ambiental (NOM-020, 021, 022, 023 y 025-SSA1). Estas establecen los límites permisibles para cada contaminante y sirven como referencia para evaluar el cumplimiento y diseñar políticas de mitigación. La medición de la calidad del aire contribuye a la protección de la salud y a la rendición de cuentas hacia la ciudadanía.
+El análisis se enfocará inicialmente en las estaciones `NTE`, `NTE2`, `NO` y `NE`, utilizando los registros disponibles entre 2020 y 2025. Esta delimitación permite trabajar con un conjunto espacial manejable y mantener continuidad con el análisis exploratorio realizado previamente, sin intentar modelar simultáneamente toda la red de monitoreo.
 
-**Centrado en el objetivo de trabajo (Modelado predictivo con variables meteorológicas)**\
-Con respecto al uso de variables meteorológicas para predecir contaminantes, Cifuentes et al. (2021) desarrollaron modelos de regresión lineal múltiple, Support Vector Regression y redes neuronales para predecir concentraciones horarias de O3 y PM2.5, encontrando que variables como la radiación solar y la temperatura resultan especialmente útiles cuando no se cuenta con suficiente información directa de contaminantes. Esto ayuda a confirmar la viabilidad de construir modelos predictivos de calidad del aire a partir de datos meteorológicos y provee sugerencias para la priorización de variables durante el modelado.
+## Pregunta de investigación
 
-### Descripción del problema específico
+**¿Con qué precisión puede predecirse la concentración horaria de O3 con un horizonte de hasta 24 horas en las estaciones NTE, NTE2, NO y NE, utilizando los registros históricos de contaminantes, variables meteorológicas y variables temporales proporcionados por SIMA entre 2020 y 2025?**
 
-\
-El Sistema Integral de Monitoreo Ambiental (SIMA) cuenta con una red de estaciones que registra de forma continua contaminantes atmosféricos, así como variables meteorológicas en la Zona Metropolitana de Monterrey. Sin embargo, esta información histórica no se ha explotado de forma sistemática para anticipar concentraciones de contaminantes a partir de las condiciones meteorológicas, lo cual limita la correcta comunicación de los riesgos que conlleva una calidad del aire crítica para la población.
+Esta pregunta transforma el reto en un problema de predicción temporal claramente evaluable: existe una variable objetivo definida, un horizonte de pronóstico específico y un conjunto delimitado de datos con el cual entrenar y evaluar los modelos.
 
-A partir de esta problemática, este proyecto busca responder las siguientes preguntas de investigación:\
-- ¿Cuáles son las variables meteorológicas (como humedad, temperatura, dirección del viento, radiación solar, etc.) que muestran mayor relación con las concentraciones de cada contaminante criterio registradas por SIMA?\
-- ¿Es posible desarrollar modelos estadísticos y/o de aprendizaje automático que, a partir de variables meteorológicas históricas proporcionadas, puedan predecir de manera confiable las concentraciones de estos contaminantes en las estaciones de monitoreo?\
-- ¿Esta relación entre meteorología y contaminantes varía según la estación del año, la hora del día o la estación de monitoreo específica?
+## Objetivo general
 
-### Objetivos de este proyecto
+Desarrollar y evaluar modelos capaces de **predecir la concentración horaria de ozono (O3) con un horizonte de hasta 24 horas** en las estaciones `NTE`, `NTE2`, `NO` y `NE` de la Zona Metropolitana de Monterrey, utilizando información histórica de contaminantes, variables meteorológicas y características temporales registradas por SIMA durante el periodo 2020-2025.
 
-**Objetivo general**\
-El objetivo general de este proyecto es desarrollar y evaluar modelos predictivos que permitan estimar las concentraciones de contaminantes atmosféricos criterio en la Zona Metropolitana de Monterrey a partir de variables meteorológicas registradas por SIMA en el periodo 2020-2025, con el fin de aportar herramientas que apoyen la comunicación de riesgos de calidad del aire.
+## Objetivos específicos
 
-**Objetivos específicos**\
-1. Identificar las variables meteorológicas con mayor relación estadística con respecto a las concentraciones de cada contaminante criterio registrado por SIMA.\
-2. Construir y comparar modelos estadísticos que predigan las concentraciones de contaminantes a partir de variables meteorológicas, seleccionando los contaminantes objetivo con base en la calidad y disponibilidad de datos.\
-3. Evaluar si la relación entre las variables meteorológicas y los contaminantes varía según la estacionalidad temporal o la estación de monitoreo, con el fin de identificar patrones temporales y espaciales de relevancia.
+1. Preparar y validar la calidad de los registros históricos necesarios para modelar O3, conservando la estructura temporal y espacial de las mediciones.
+2. Caracterizar el comportamiento del O3 e identificar qué variables meteorológicas, contaminantes y patrones temporales aportan información relevante para su predicción.
+3. Construir variables derivadas que representen la dinámica temporal del problema, incluyendo características de fecha y hora y rezagos de mediciones disponibles antes del momento de predicción.
+4. Construir y comparar al menos dos enfoques de modelado, incluyendo un modelo estadístico interpretable y un modelo capaz de representar relaciones no lineales.
+5. Evaluar los modelos mediante una separación cronológica de los datos y métricas de error, analizando además cómo cambia el desempeño según el horizonte de predicción y la estación de monitoreo.
 
-### Justificación de los objetivos
+## Justificación y antecedentes
 
-La revisión bibliográfica mencionada anteriormente confirma que existe evidencia sólida de que las concentraciones de contaminantes atmosféricos están asociadas a riesgos de salud significativos, incluso en niveles relativamente bajos (Hoffmann et al., 2021), y que esta relación se ha documentado específicamente en la Zona Metropolitana de Monterrey (abreviada como "ZMM"). Esto justifica la relevancia social del objetivo general, ya que cualquier elemento que ayude a anticipar concentraciones de contaminantes tiene un impacto en la protección de la salud pública local.
+La relevancia del problema parte de la relación entre contaminación atmosférica y salud pública. Cerón Bretón et al. (2020) documentaron asociaciones entre contaminación atmosférica, temperatura y mortalidad diaria en el norte de México. A nivel internacional, las Guías de Calidad del Aire de la Organización Mundial de la Salud resaltan la importancia de reducir la exposición de la población a contaminantes criterio y de contar con información confiable para su seguimiento (Hoffmann et al., 2021).
 
-Igualmente, se ha demostrado que metodológicamente es viable predecir contaminantes como O3 y PM2.5 basándose en variables meteorológicas mediante técnicas estadísticas y de aprendizaje automático, especialmente en contextos donde no se cuenta con un monitoreo continuo de todos los contaminantes (Cifuentes et al., 2021). Existe un área de oportunidad para aplicar este tipo de modelado a los datos históricos que genera SIMA y explorar si la relación meteorología-contaminante varía según la estacionalidad o la ubicación de las estaciones de esta zona en Monterrey.
+Desde la perspectiva predictiva, Cifuentes et al. (2021) analizaron la predicción horaria de O3 y PM2.5 mediante variables meteorológicas y distintos modelos, mostrando que información como temperatura y radiación solar puede resultar útil para anticipar concentraciones de contaminantes. Este antecedente proporciona una base metodológica para estudiar si los registros históricos de SIMA permiten construir modelos adaptados a las condiciones de la ZMM.
 
-Con este proyecto se busca contribuir aprovechando la infraestructura de datos ya existente de SIMA (de 2020 a 2025) para construir modelos predictivos adaptados a las condiciones específicas de Monterrey, aplicando la metodología en un contexto geográfico y temporal.
+La elección de O3 como variable objetivo también responde al análisis exploratorio realizado durante el proyecto. Frente a otros contaminantes, el ozono mostró asociaciones meteorológicas más claras y consistentes, por lo que ofrece un punto de partida razonable para construir un primer sistema predictivo. Estas relaciones se volverán a cuantificar y validar en la sección de análisis exploratorio de este reporte antes de utilizarse para seleccionar predictores.
 
-### Descripción de las fuentes de información
+El objetivo no es atribuir causalidad a las variables ni sustituir los procedimientos oficiales de pronóstico de SIMA. El propósito es evaluar, con los datos disponibles y dentro del alcance académico del reto, qué tan bien puede anticiparse el comportamiento del O3 y qué información resulta más útil para hacerlo.
 
-La fuente de información utilizada en este proyecto proviene del Sistema Integral de Monitoreo Ambiental (SIMA), organismo encargado de operar la red de estaciones de monitoreo de calidad del aire en el estado de Nuevo León. SIMA aporta de manera pública bases de datos históricas que contienen registros de las distintas estaciones de monitoreo en la ZMM. Cada registro corresponde a una medición por hora y estación. Este registro incluye variables de contaminantes atmosféricos criterio \[monóxido de carbono (CO), monóxido de nitrógeno (NO), dióxido de nitrógeno (NO2), óxidos de nitrógeno (NOx), ozono (O3), partículas menores a 10 micrómetros (PM10), partículas menores a 2.5 micrómetros (PM2.5) y dióxido de azufre (SO2), entre otros\], e igualmente contiene variables meteorológicas, como precipitación (RAINF), humedad relativa (RH), radiación solar (SR), temperatura (TEMP), velocidad del viento (WS) y su dirección (WD), entre otras.
+## Alcance del pronóstico
 
-La combinación de estas variables permite estudiar la relación entre condiciones atmosféricas y concentraciones de contaminantes en el tiempo y en distintos puntos de la ZMM. Como el objetivo del proyecto es predictivo, se eligió integrar los seis años proporcionados en una sola base. Las variables meteorológicas se consideran como variables predictoras (independientes), mientras que los contaminantes se tratan como variables objetivo, modelando cada uno de forma independiente.
+El horizonte máximo de predicción se establece en **24 horas**. Esto no significa utilizar los datos de 2020-2025 para generar una predicción fija de un día posterior al final de la base. El modelo se plantea como un esquema de pronóstico móvil.
 
-La selección final de los contaminantes a modelar dependerá de los datos disponibles y de la fuerza de su relación con las variables meteorológicas. Esto se desarrolla en la sección de preparación de datos, ubicada más adelante en este mismo entregable.
+En un momento determinado $t$, únicamente se utilizará información disponible hasta ese instante para estimar las concentraciones futuras de O3 durante las horas siguientes. De forma conceptual:
 
-## PARTE II. Comprensión y preparación de los datos
+$$
+\text{información disponible hasta } t
+\longrightarrow
+\widehat{O_3}(t+1),\ldots,\widehat{O_3}(t+24)
+$$
 
-### 1. Carga y homologación de los datos
+Cuando exista una nueva medición, esa información podrá incorporarse para generar nuevamente el pronóstico de las siguientes 24 horas. Esta estructura evita utilizar información futura durante la predicción y permite evaluar el desempeño del modelo de forma semejante a como se utilizaría posteriormente con nuevos datos.
 
-Primero se cargan las librerías necesarias y se integran las bases de 2020 a 2025. Durante la lectura se homologan los nombres de las variables para que todos los años tengan una estructura consistente antes de realizar la revisión de calidad.
+El horizonte de 24 horas se utilizará como máximo de evaluación. Durante el modelado se analizará si el error aumenta conforme crece la distancia entre el momento de observación y la hora pronosticada.
 
-```{r}
-#| label: carga-homologacion-datos
-library(tidyverse)
-library(here)
-library(readxl)
-library(maps)
-library(stringr)
-library(readr)
-library(purrr)
-
-options(scipen = 999)
-
-leer_base <- function(archivo, año) {
-  hojas <- excel_sheets(archivo)
-  map_dfr(hojas, function(hoja) {
-    datos <- read_excel(archivo, sheet = hoja, col_types = "text")
-    nombres <- names(datos)
-    nombres <- nombres |>
-      str_replace_all("[\r\n]", " ") |>
-      str_replace("\\s*\\([^)]*\\).*", "") |>
-      str_squish()
-
-    nombres[tolower(nombres) == "fecha y hora"] <- "fecha y hora"
-    nombres[tolower(nombres) == "date"] <- "fecha y hora"
-    nombres[toupper(nombres) == "PRS"] <- "BP"
-    nombres[toupper(nombres) == "TOUT"] <- "TEMP"
-    nombres[toupper(nombres) == "WSR"] <- "WS"
-    nombres[toupper(nombres) == "WDR"] <- "WD"
-    nombres[toupper(nombres) == "CO"] <- "CO"
-    nombres[toupper(nombres) == "NO"] <- "NO"
-    nombres[toupper(nombres) == "NO2"] <- "NO2"
-    nombres[toupper(nombres) == "NOX"] <- "NOX"
-    nombres[toupper(nombres) == "O3"] <- "O3"
-    nombres[toupper(nombres) == "PM10"] <- "PM10"
-    nombres[toupper(nombres) == "PM2.5"] <- "PM2.5"
-    nombres[toupper(nombres) == "RAINF"] <- "RAINF"
-    nombres[toupper(nombres) == "RH"] <- "RH"
-    nombres[toupper(nombres) == "SO2"] <- "SO2"
-    nombres[toupper(nombres) == "SR"] <- "SR"
-    names(datos) <- nombres
-
-    datos |>
-      mutate(
-        across(any_of(c(
-          "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5",
-          "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
-        )), ~ suppressWarnings(parse_number(as.character(.x)))),
-        Año = año,
-        Estacion = hoja
-      )
-  })
-}
-
-calidad_aire_2020_tbl <- leer_base(here("data", "BD 2020.xlsx"), 2020)
-calidad_aire_2021_tbl <- leer_base(here("data", "BD 2021.xlsx"), 2021)
-calidad_aire_2022_tbl <- leer_base(here("data", "BD 2022.xlsx"), 2022)
-calidad_aire_2023_tbl <- leer_base(here("data", "BD 2023.xlsx"), 2023)
-calidad_aire_2024_tbl <- leer_base(here("data", "BD 2024.xlsx"), 2024)
-calidad_aire_2025_tbl <- leer_base(here("data", "BD 2025.xlsx"), 2025)
-
-bases <- list(
-  "2020" = calidad_aire_2020_tbl,
-  "2021" = calidad_aire_2021_tbl,
-  "2022" = calidad_aire_2022_tbl,
-  "2023" = calidad_aire_2023_tbl,
-  "2024" = calidad_aire_2024_tbl,
-  "2025" = calidad_aire_2025_tbl
-)
-
-datos_limpios <- bind_rows(bases)
-```
-
-El objeto `datos_limpios` concentra los registros de los seis años y será la base sobre la que se aplicarán las decisiones de limpieza y preparación de esta etapa.
-
-### 2. Exploración inicial de estructura y calidad
-
-Antes de modificar los datos se revisan las dimensiones de cada año, la disponibilidad de variables, sus descripciones, los valores faltantes y los rangos esperados. Esta revisión permite detectar inconsistencias y definir qué observaciones requieren corrección.
-
-```{r}
-#| label: exploracion-estructura-inicial
-dimensiones <- purrr::imap_dfr(
-  bases,
-  ~ tibble(Año = .y, Registros = nrow(.x), Columnas = ncol(.x))
-)
-
-variables_por_año <- purrr::imap_dfr(
-  bases,
-  ~ tibble(Año = .y, Variable = names(.x))
-)
-
-tabla_variables <- variables_por_año |>
-  mutate(Presente = "Sí") |>
-  tidyr::pivot_wider(names_from = Año, values_from = Presente, values_fill = "No")
-
-dimensiones
-tabla_variables
-
-diccionario <- tibble(
-  Variable = c(
-    "fecha y hora", "CO", "NO", "NO2", "NOX", "O3",
-    "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2",
-    "SR", "TEMP", "WS", "WD"
-  ),
-  Descripcion = c(
-    "Fecha y hora de la medición",
-    "Monóxido de carbono (ppm)",
-    "Monóxido de nitrógeno (ppb)",
-    "Dióxido de nitrógeno (ppb)",
-    "Óxidos de nitrógeno, suma de NO + NO2 (ppb)",
-    "Ozono (ppb)",
-    "Material particulado menor a 10 micrómetros (µg/m3)",
-    "Material particulado menor a 2.5 micrómetros (µg/m3)",
-    "Presión atmosférica (mm Hg)",
-    "Precipitación (mm/Hr)",
-    "Humedad relativa (%)",
-    "Dióxido de azufre (ppb)",
-    "Radiación solar (kW/m2)",
-    "Temperatura (ºC)",
-    "Velocidad del viento (Km/hr)",
-    "Dirección del viento (º)"
-  ),
-  Tipo = c("Fecha-hora", rep("Numérico", 15))
-)
-
-diccionario
-```
-
-```{r}
-#| label: revision-calidad-inicial
-tabla_faltantes <- purrr::imap_dfr(
-  bases,
-  ~ .x |>
-    summarise(across(everything(), list(
-      Nulos = ~ sum(is.na(.)),
-      Porcentaje = ~ round(mean(is.na(.)) * 100, 2)
-    ))) |>
-    pivot_longer(
-      everything(),
-      names_to = c("Variable", ".value"),
-      names_pattern = "(.*)_(Nulos|Porcentaje)"
-    ) |>
-    mutate(Año = .y)
-)
-
-tabla_valores <- purrr::imap_dfr(
-  bases,
-  ~ .x |>
-    select(where(is.numeric)) |>
-    summarise(across(everything(), list(
-      Min = ~ ifelse(all(is.na(.)), NA, min(., na.rm = TRUE)),
-      Max = ~ ifelse(all(is.na(.)), NA, max(., na.rm = TRUE)),
-      Media = ~ ifelse(all(is.na(.)), NA, mean(., na.rm = TRUE))
-    ))) |>
-    pivot_longer(
-      everything(),
-      names_to = c("Variable", ".value"),
-      names_pattern = "(.*)_(Min|Max|Media)"
-    ) |>
-    mutate(Año = .y)
-)
-
-limites <- tribble(
-  ~Año, ~Variable, ~Min, ~Max,
-  2020, "PM10", 0, 800, 2020, "PM2.5", 0, 205.94, 2020, "O3", 0, 153,
-  2020, "NO", 0, 500, 2020, "NO2", 0, 200, 2020, "NOX", 0, 500,
-  2020, "SO2", 0, 200, 2020, "CO", 0, 20, 2020, "RH", 0, 100,
-  2020, "WS", 0, 75, 2020, "TEMP", 0, 41, 2020, "SR", 0, 1,
-  2020, "BP", 690, 750, 2020, "WD", 0, 360, 2020, "RAINF", 0, 30,
-  2021, "PM10", 0, 800, 2021, "PM2.5", 0, 325, 2021, "O3", 0, 175,
-  2021, "NO", 0, 350, 2021, "NO2", 0, 100, 2021, "NOX", 0, 400,
-  2021, "SO2", 0, 300, 2021, "CO", 0, 10, 2021, "RH", 0, 100,
-  2021, "WS", 0, 40, 2021, "TEMP", -6.5, 45, 2021, "SR", 0, 1,
-  2021, "BP", 690, 740, 2021, "WD", 0, 360, 2021, "RAINF", 0, 80,
-  2022, "PM10", 0, 999, 2022, "PM2.5", 0, 450, 2022, "O3", 0, 160,
-  2022, "NO", 0, 400, 2022, "NO2", 0, 175, 2022, "NOX", 0, 420,
-  2022, "SO2", 0, 200, 2022, "CO", 0, 8, 2022, "RH", 0, 100,
-  2022, "WS", 0, 35, 2022, "TEMP", -5, 45, 2022, "SR", 0, 1.25,
-  2022, "BP", 700, 740, 2022, "WD", 0, 360, 2022, "RAINF", 0, 25,
-  2023, "PM10", 0, 900, 2023, "PM2.5", 0, 800, 2023, "O3", 0, 175,
-  2023, "NO", 0, 500, 2023, "NO2", 0, 175, 2023, "NOX", 0, 500,
-  2023, "SO2", 0, 250, 2023, "CO", 0, 14, 2023, "RH", 0, 100,
-  2023, "WS", 0, 40, 2023, "TEMP", 0, 45, 2023, "SR", 0, 1,
-  2023, "BP", 690, 740, 2023, "WD", 0, 360, 2023, "RAINF", 0, 70,
-  2024, "PM10", 0, 999, 2024, "PM2.5", 0, 999, 2024, "O3", 0, 180,
-  2024, "NO", 0, 400, 2024, "NO2", 0, 130, 2024, "NOX", 0, 500,
-  2024, "SO2", 0, 150, 2024, "CO", 0, 18, 2024, "RH", 0, 100,
-  2024, "WS", 0, 38, 2024, "TEMP", -4, 45.5, 2024, "SR", 0, 1.26,
-  2024, "BP", 687.5, 740, 2024, "WD", 0, 360, 2024, "RAINF", 0, 50,
-  2025, "PM10", 0, 820, 2025, "PM2.5", 0, 350, 2025, "O3", 0, 185,
-  2025, "NO", 0, 350, 2025, "NO2", 0, 175, 2025, "NOX", 0, 400,
-  2025, "SO2", 0, 405, 2025, "CO", 0, 10, 2025, "RH", 0, 100,
-  2025, "WS", 0, 40, 2025, "TEMP", -4.5, 45, 2025, "SR", 0, 1.2,
-  2025, "BP", 688, 740, 2025, "WD", 0, 360, 2025, "RAINF", 0, 25
-)
-
-tabla_fdr <- purrr::imap_dfr(
-  bases,
-  function(datos, año) {
-    limites_año <- limites |> filter(Año == as.numeric(año))
-    purrr::pmap_dfr(limites_año, function(Año, Variable, Min, Max) {
-      x <- datos[[Variable]]
-      tibble(
-        Año = Año,
-        Variable = Variable,
-        Min_permitido = Min,
-        Max_permitido = Max,
-        Fuera_de_rango = sum(x < Min | x > Max, na.rm = TRUE)
-      )
-    })
-  }
-)
-
-tabla_faltantes
-tabla_valores
-tabla_fdr
-```
-
-### 3. Limpieza de los datos
-
-A partir de los límites revisados se identifican los registros fuera de rango y se corrigen los casos detectados previamente. Los valores `-9999` utilizados como banderas de ausencia en algunas variables meteorológicas también se convierten a `NA`, de modo que la Etapa 2 reciba directamente la versión ya depurada del conjunto.
-
-```{r}
-#| label: limpieza-datos
-detalle_fdr <- purrr::imap_dfr(
-  bases,
-  function(datos, año) {
-    limites_año <- limites |> filter(Año == as.numeric(año))
-    purrr::pmap_dfr(limites_año, function(Año, Variable, Min, Max) {
-      if (!Variable %in% names(datos)) return(tibble())
-      datos |>
-        filter(
-          !is.na(.data[[Variable]]),
-          .data[[Variable]] < Min | .data[[Variable]] > Max
-        ) |>
-        transmute(
-          Año = Año,
-          Estacion = Estacion,
-          `fecha y hora` = `fecha y hora`,
-          Variable = Variable,
-          Valor = .data[[Variable]],
-          Min_permitido = Min,
-          Max_permitido = Max
-        )
-    })
-  }
-)
-
-detalle_fdr
-```
-
-```{r}
-# Valores -9999 utilizados como indicador de dato faltante
-datos_limpios <- datos_limpios |>
-  mutate(
-    across(
-      any_of(c(
-        "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5",
-        "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
-      )),
-      ~ na_if(.x, -9999)
-    )
-  )
-
-# Convertir a NA cualquier valor fuera del rango permitido
-# correspondiente a su variable y año
-for (i in seq_len(nrow(limites))) {
-
-  año_i <- limites$Año[i]
-  variable_i <- limites$Variable[i]
-  min_i <- limites$Min[i]
-  max_i <- limites$Max[i]
-
-  fuera_rango <-
-    datos_limpios$Año == año_i &
-    !is.na(datos_limpios[[variable_i]]) &
-    (
-      datos_limpios[[variable_i]] < min_i |
-      datos_limpios[[variable_i]] > max_i
-    )
-
-  datos_limpios[[variable_i]][fuera_rango] <- NA_real_
-}
-```
-
-```{r}
-tabla_fdr_post <- purrr::pmap_dfr(
-  limites,
-  function(Año, Variable, Min, Max) {
-
-    x <- datos_limpios[[Variable]]
-    seleccion <- datos_limpios$Año == Año
-
-    tibble(
-      Año = Año,
-      Variable = Variable,
-      Fuera_de_rango = sum(
-        x[seleccion] < Min | x[seleccion] > Max,
-        na.rm = TRUE
-      )
-    )
-  }
-)
-
-tabla_fdr_post |>
-  filter(Fuera_de_rango > 0)
-```
-
-### 4. Preparación para el análisis y modelado
-
-Se conservarán los registros de 2020 a 2025 porque el objetivo predictivo requiere una cantidad amplia de observaciones. Las variables meteorológicas se consideran variables independientes y los contaminantes posibles variables objetivo. La selección final de contaminantes dependerá de la disponibilidad de información y de la relación que presenten con las variables meteorológicas.
-
-También se verifica que no existan registros duplicados y se revisan los valores atípicos por estación mediante el rango intercuartílico. Los datos faltantes se conservan como `NA` para decidir posteriormente si requieren imputación según el modelo seleccionado.
-
-```{r}
-#| label: duplicados-y-outliers
-duplicados <- datos_limpios |>
-  count(Año, Estacion, `fecha y hora`) |>
-  filter(n > 1)
-
-duplicados
-
-variables_numericas <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP", "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD")
-
-detectar_outliers <- function(datos, variable) {
-  datos |>
-    group_by(Estacion) |>
-    mutate(
-      Q1 = quantile(.data[[variable]], 0.25, na.rm = TRUE),
-      Q3 = quantile(.data[[variable]], 0.75, na.rm = TRUE),
-      IQR = Q3 - Q1,
-      Lim_inf = Q1 - 1.5 * IQR,
-      Lim_sup = Q3 + 1.5 * IQR,
-      Outlier = .data[[variable]] < Lim_inf | .data[[variable]] > Lim_sup
-    ) |>
-    filter(Outlier == TRUE) |>
-    ungroup() |>
-    select(Año, Estacion, `fecha y hora`, all_of(variable), Q1, Q3, Lim_inf, Lim_sup)
-}
-
-tabla_outliers <- map_dfr(
-  variables_numericas,
-  function(var) {
-    resultado <- detectar_outliers(datos_limpios, var)
-    total_validos <- sum(!is.na(datos_limpios[[var]]))
-    total_outliers <- nrow(resultado)
-    tibble(
-      Variable = var,
-      Datos_validos = total_validos,
-      Outliers = total_outliers,
-      Porcentaje = round(total_outliers / total_validos * 100, 3)
-    )
-  }
-)
-
-tabla_outliers
-```
-
-Como podemos observar en nuestra tabla de valores atípicos, utilizando el rango intercuartílico, algunos valores llegan a representar hasta el 11.82% de los datos. Esta es una cantidad significativa que no se puede eliminar de la base de datos sin un análisis adicional.
-
-### 5. Transformaciones y atributos derivados
-
-Se prepara una versión escalada de las variables meteorológicas para técnicas sensibles a la escala y, por separado, una versión de modelado que incorpora atributos temporales derivados de la fecha y hora. De esta forma se preserva `datos_limpios` como la versión base depurada que utilizará la siguiente etapa.
-
-```{r}
-#| label: transformaciones-modelado
-datos_escalados <- datos_limpios |>
-  mutate(across(c(BP, RAINF, RH, SR, TEMP, WS, WD), ~ as.numeric(scale(.x))))
-
-convertir_fecha_hora <- function(x) {
-  x_chr <- as.character(x)
-  x_num <- suppressWarnings(as.numeric(x_chr))
-
-  fecha_excel <- as.POSIXct(
-    x_num * 86400,
-    origin = "1899-12-30",
-    tz = "UTC"
-  )
-
-  fecha_texto <- suppressWarnings(
-    lubridate::parse_date_time(
-      x_chr,
-      orders = c(
-        "Ymd HMS", "Ymd HM",
-        "dmY HMS", "dmY HM",
-        "mdY HMS", "mdY HM"
-      ),
-      tz = "UTC"
-    )
-  )
-
-  dplyr::coalesce(fecha_excel, fecha_texto)
-}
-
-datos_modelo <- datos_limpios |>
-  mutate(
-    `fecha y hora` = convertir_fecha_hora(`fecha y hora`),
-    Hora = lubridate::hour(`fecha y hora`),
-    Dia = lubridate::day(`fecha y hora`),
-    Mes = lubridate::month(`fecha y hora`),
-    Dia_semana = lubridate::wday(`fecha y hora`, label = TRUE),
-    Estacion = as.factor(Estacion),
-    Dia_semana = as.factor(Dia_semana)
-  )
-
-levels(datos_modelo$Estacion)
-levels(datos_modelo$Dia_semana)
-```
-
-### Informe preparación de los datos
-
-La base de datos consolidada integra los seis años de registros proporcionados por SIMA (2020-2025), sumando un total de 688,199 registros horarios distribuidos en distintas estaciones de monitoreo de la Zona Metropolitana de Monterrey. Cada año contribuyó así:\
-- 2020 - 114,102 registros\
-- 2021 - 122,629 registros\
-- 2022 - 123,383 registros\
-- 2023 - 131,370 registros\
-- 2024 - 131,741 registros\
-- 2025 - 64,974 registros (año parcial)
-
-La base contiene 18 variables por registro en la mayoría de los años: una variable de fecha y hora, 8 variables de contaminantes atmosféricos criterio (CO, NO, NO2, NOx, O3, PM10, PM2.5, SO2), 7 variables meteorológicas (BP, RAINF, RH, SR, TEMP, WS, WD) y 2 variables identificadoras (Año, Estación).
-
-La inconsistencia de nombres de la variable temporal en 2025 se homogeneizó durante la carga de los datos, de modo que tanto `date` como `fecha y hora` se estandarizan bajo el nombre `fecha y hora` para su procesamiento posterior.
-
-**Datos faltantes**\
-El porcentaje de valores faltantes varía considerablemente por variable, año y estación, como se documenta en la tabla `tabla_faltantes` generada en el código. Se observó que algunas variables (como NO, NO2 y NOx) presentan proporciones muy altas de valores nulos en ciertos años y estaciones. Esto tiene sentido al leer la "NOTA" de color rojo en el archivo Excel de Etiquetas de las bases de datos, también proporcionado para realizar este proyecto, donde se menciona que "Todos los valores que salgan con esta bandera debe hacer 0 a excepción de los que están en SE2 que en vez de 0, será 0.36". Esta nota aplica para NO y NOx.  
-  
-Para el tratamiento de los valores faltantes se establecieron varios puntos. Los valores registrados con la bandera -9999 en las variables meteorológicas se convirtieron a NA en la etapa de limpieza, ya que representan una ausencia de medición y no un valor real. De manera similar, los registros fuera de los rangos operativos definidos por año (documentados en la tabla de límites) se convirtieron a NA, en lugar de eliminarse por completo, para conservar la estructura horaria estándar del conjunto de datos. Los valores faltantes originados por vacíos naturales de la red de monitoreo se mantienen como NA en esta etapa, ya que su tratamiento (imputación por media, mediana, o interpolación temporal) dependerá del modelo predictivo final y del contaminante objetivo seleccionado, decisión que se tomará en la siguiente entrega. No se excluyen registros completos por la presencia de valores faltantes en variables individuales, menos en los casos de inconsistencia estructural ya documentados (como la columna de fecha de 2025). Esta política se aplicó de manera consistente en las cuatro estaciones seleccionadas (NTE, NTE2, NO, NE) y quedó reflejada en la base de datos limpia final (datos_etapa2_limpio.csv), disponible en el repositorio de GitHub del equipo.
-
-**Datos duplicados**\
-Se verificó que no hay valores duplicados.
-
-**Datos atípicos (outliers)**\
-Se aplicó el método del rango intercuartílico por estación para cada una de las variables numéricas. Los resultados en `tabla_outliers` muestran que el porcentaje de valores atípicos varía por variable, llegando hasta un 11.82% en el caso más alto. Debido a esta magnitud, se decidió no eliminar los outliers en esta entrega, ya que, en el caso de los contaminantes, probablemente representan episodios reales de contaminación crítica. En futuras entregas se considerará generar variables "bandera" que ayuden a marcar cada registro atípico sin eliminarlo, preservando toda la información para su uso posterior en análisis de sensibilidad de los modelos.
-
-**Variables categóricas**\
-Se identificaron `Estacion` y `Dia_semana` como variables categóricas relevantes para el análisis, las cuales fueron convertidas a tipo factor en `datos_modelo`. Se decidió no generar variables dummy en esta etapa, ya que la transformación depende del tipo de modelo predictivo que se seleccione finalmente.
-
-**Binning**\
-No se consideró necesario discretizar las variables de contaminantes ni meteorológicas en esta etapa, ya que el objetivo del proyecto es predecir concentraciones continuas utilizando modelos de regresión y discretizar podría implicar una pérdida de información para este fin.
-
-**Transformación y escalamiento**\
-Se generó una versión escalada y estandarizada de las variables meteorológicas continuas (`datos_escalados`), disponible en caso de aplicar técnicas sensibles a la escala de los datos. Para el resto de los modelos, se puede conservar la versión con los valores en su escala original.
-
-Por otra parte, a partir de la variable fecha y hora, se derivaron las variables Hora, Día, Mes y Día de la semana en `datos_modelo`, con el fin de identificar patrones temporales y estacionales en la relación entre meteorología y contaminantes.
-
-Además de la unión de los datos de los seis años, no fue necesario reestructurar la base de datos, ya que el formato largo por observación horaria y estación es correcto para las técnicas de modelado predictivo contempladas.
-
-**Otros planes a futuro**\
-Se contempla la posibilidad de agrupar los datos de forma estacional (invierno, verano, otoño, primavera) o mensual, con el objetivo de responder de manera más completa la pregunta de investigación 3 (si la relación meteorología-contaminante varía por estacionalidad). Esto, en caso de realizarse, crearía variables nuevas.
-
-# Etapa 2. Comprensión y preparación de los datos
-
-## 1. Comprensión descriptiva de los datos
-
-### 1.1 Objetivo del análisis
-
-En esta segunda etapa, el análisis se enfocará en describir y explorar las variables disponibles antes de realizar el modelado. Se estudiarán sus principales características estadísticas, distribuciones, variabilidad, valores atípicos y diferencias entre estaciones de monitoreo. Además, se analizarán las relaciones preliminares entre las variables meteorológicas y las concentraciones de contaminantes, con el propósito de identificar cuáles variables presentan mayor relevancia para la construcción posterior de los modelos predictivos.
-
-### 1.2 Variables de interés
-La Etapa 2 parte directamente de `datos_limpios`, el conjunto consolidado y depurado en la etapa anterior. A partir de este objeto se seleccionaron las estaciones `NTE`, `NTE2`, `NO` y `NE`, concentradas en el sector norte del Área Metropolitana de Monterrey y con especial interés en San Nicolás de los Garza y sus zonas colindantes. Esta selección permite conservar un contexto espacial relevante sin utilizar simultáneamente toda la red de SIMA, lo que reduciría la manejabilidad del conjunto de datos y aumentaría la complejidad del modelado posterior.
-
-Para el análisis se seleccionaron las estaciones `NTE`, `NTE2`, `NO` y `NE`. Las variables del subconjunto se clasifican en contaminantes atmosféricos, variables meteorológicas y variables temporales o espaciales. La tabla siguiente resume su función, tipo, valores posibles y proporción de datos faltantes dentro del conjunto utilizado en la Etapa 2. 
-
-```{r}
-#| label: etapa2-diccionario-variables
-estaciones_seleccionadas <- c("NTE", "NTE2", "NO", "NE")
-
-datos_etapa2 <- datos_limpios |>
-  filter(Estacion %in% estaciones_seleccionadas)
-
-diccionario_etapa2 <- tribble(
-  ~Grupo, ~Variable, ~Descripcion, ~Tipo, ~Valores_posibles,
-  "Contaminante", "CO", "Monóxido de carbono", "Numérica continua", "0-20 ppm*",
-  "Contaminante", "NO", "Monóxido de nitrógeno", "Numérica continua", "0-500 ppb*",
-  "Contaminante", "NO2", "Dióxido de nitrógeno", "Numérica continua", "0-200 ppb*",
-  "Contaminante", "NOX", "Óxidos de nitrógeno", "Numérica continua", "0-500 ppb*",
-  "Contaminante", "O3", "Ozono", "Numérica continua", "0-185 ppb*",
-  "Contaminante", "PM10", "Partículas menores a 10 micrómetros", "Numérica continua", "0-999 µg/m3*",
-  "Contaminante", "PM2.5", "Partículas menores a 2.5 micrómetros", "Numérica continua", "0-999 µg/m3*",
-  "Contaminante", "SO2", "Dióxido de azufre", "Numérica continua", "0-405 ppb*",
-  "Meteorológica", "BP", "Presión atmosférica", "Numérica continua", "687.5-750 mm Hg*",
-  "Meteorológica", "RAINF", "Precipitación", "Numérica continua", "0-80 mm/Hr*",
-  "Meteorológica", "RH", "Humedad relativa", "Numérica continua", "0-100 %*",
-  "Meteorológica", "SR", "Radiación solar", "Numérica continua", "0-1.26 kW/m2*",
-  "Meteorológica", "TEMP", "Temperatura", "Numérica continua", "-6.5-45.5 °C*",
-  "Meteorológica", "WS", "Velocidad del viento", "Numérica continua", "0-75 Km/hr*",
-  "Meteorológica", "WD", "Dirección del viento", "Numérica circular", "0-360°*",
-  "Temporal/espacial", "Estacion", "Estación de monitoreo", "Categórica nominal", "NTE, NTE2, NO, NE",
-  "Temporal/espacial", "Año", "Año de la medición", "Temporal discreta", "2020-2025",
-  "Temporal/espacial", "fecha y hora", "Momento de la medición", "Fecha-hora", "Registros horarios 2020-2025"
-)
-
-faltantes_diccionario <- datos_etapa2 |>
-  summarise(
-    across(
-      all_of(diccionario_etapa2$Variable),
-      ~ round(mean(is.na(.x)) * 100, 2)
-    )
-  ) |>
-  pivot_longer(
-    everything(),
-    names_to = "Variable",
-    values_to = "Nulos_porcentaje"
-  )
-
-tabla_variables_etapa2 <- diccionario_etapa2 |>
-  left_join(faltantes_diccionario, by = "Variable")
-
-knitr::kable(
-  tabla_variables_etapa2,
-  col.names = c(
-    "Grupo", "Variable", "Descripción", "Tipo",
-    "Valores posibles / unidad", "% nulos"
-  ),
-  caption = "Descripción de las variables utilizadas en la Etapa 2"
-)
-```
-
-\*Los intervalos mostrados para las variables numéricas representan la envolvente de los límites válidos utilizados durante la limpieza entre 2020 y 2025. El límite exacto puede variar según el año y se encuentra documentado en la etapa anterior.
-
-Las variables meteorológicas se consideran principalmente como posibles predictoras y los contaminantes como posibles variables objetivo. `Estacion`, `Año` y `fecha y hora` no representan mediciones meteorológicas, pero conservan el contexto espacial y temporal de cada registro. La selección definitiva de contaminantes y predictores dependerá tanto de la disponibilidad de datos como de las asociaciones identificadas durante el análisis exploratorio.
-
-#### Técnicas estadísticas utilizadas
-
-Para responder al objetivo de esta etapa se emplean medidas de tendencia central y dispersión para caracterizar las mediciones; histogramas y diagramas de caja para estudiar la forma de las distribuciones, su asimetría y los posibles valores atípicos; tablas de frecuencia y comparaciones descriptivas por estación para evaluar diferencias espaciales; y correlaciones para identificar asociaciones preliminares entre las variables meteorológicas y los contaminantes. Debido a la asimetría y a los valores extremos observados en varias variables, el análisis de asociación utiliza el coeficiente de Spearman en lugar de depender únicamente de una correlación lineal convencional.
-
-La revisión de Cifuentes et al. (2021) proporciona un antecedente directo para relacionar variables meteorológicas con concentraciones de contaminantes dentro de modelos predictivos de calidad del aire. En este proyecto, las técnicas descriptivas y de correlación se utilizan como una etapa previa al modelado para identificar qué variables presentan mayor disponibilidad, variabilidad y relación estadística con los contaminantes de interés.
-
-### 1.3 Dimensión y estructura del conjunto de datos
-
-
-
-```{r}
-#| label: etapa2-seleccion-y-dimensiones
-dimensiones_etapa2 <- datos_etapa2 |>
-  count(Año, name = "Registros") |>
-  mutate(Columnas = ncol(datos_etapa2))
-
-dimensiones_reporte <- dimensiones_etapa2 |>
-  mutate(Año = as.character(Año)) |>
-  bind_rows(
-    tibble(
-      Año = "Total",
-      Registros = nrow(datos_etapa2),
-      Columnas = ncol(datos_etapa2)
-    )
-  )
-
-knitr::kable(
-  dimensiones_reporte,
-  col.names = c("Año", "Registros", "Columnas"),
-  caption = "Dimensión del conjunto de datos utilizado en la Etapa 2"
-)
-
-glimpse(datos_etapa2)
-```
-
-Cada fila del conjunto representa una medición asociada a una estación de monitoreo y a un momento específico. Las columnas reúnen los contaminantes atmosféricos, las variables meteorológicas y los identificadores temporales y espaciales descritos anteriormente. La integración de los seis años permite analizar la evolución de las mediciones entre 2020 y 2025 y comparar el comportamiento de las cuatro estaciones seleccionadas.
-
-### 1.4 Estadística descriptiva de variables cuantitativas
-
-Para obtener una primera descripción del comportamiento de las variables cuantitativas, se calcularon medidas de tendencia central y dispersión sobre los registros de las cuatro estaciones seleccionadas. Estas medidas permiten identificar valores representativos, variabilidad y diferencias de escala entre las variables antes de estudiar sus distribuciones y relaciones.
-
-```{r}
-#| label: etapa2-estadistica-descriptiva
-variables_medicion <- c(
-  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "BP",
-  "RAINF", "RH", "SO2", "SR", "TEMP", "WS", "WD"
-)
-
-moda <- function(x) {
-  x <- x[!is.na(x)]
-  if (length(x) == 0) return(NA_real_)
-  valores <- unique(x)
-  valores[which.max(tabulate(match(x, valores)))]
-}
-
-tabla_descriptiva <- datos_etapa2 |>
-  select(any_of(variables_medicion)) |>
-  summarise(
-    across(
-      everything(),
-      list(
-        Media = ~ mean(.x, na.rm = TRUE),
-        Mediana = ~ median(.x, na.rm = TRUE),
-        Moda = ~ moda(.x),
-        Min = ~ min(.x, na.rm = TRUE),
-        Max = ~ max(.x, na.rm = TRUE),
-        Rango = ~ max(.x, na.rm = TRUE) - min(.x, na.rm = TRUE),
-        Varianza = ~ var(.x, na.rm = TRUE),
-        DE = ~ sd(.x, na.rm = TRUE),
-        Q1 = ~ quantile(.x, 0.25, na.rm = TRUE),
-        Q3 = ~ quantile(.x, 0.75, na.rm = TRUE)
-      ),
-      .names = "{.col}_{.fn}"
-    )
-  ) |>
-  pivot_longer(
-    everything(),
-    names_to = c("Variable", ".value"),
-    names_pattern = "^(.*)_(Mediana|Media|Moda|Min|Max|Rango|Varianza|DE|Q1|Q3)$"
-  ) |>
-  mutate(across(where(is.numeric), ~ round(.x, 2)))
-
-knitr::kable(
-  tabla_descriptiva,
-  digits = 2,
-  caption = "Estadística descriptiva de las variables cuantitativas"
-)
-```
-
-La media, mediana y moda describen la tendencia central de las mediciones, mientras que el rango, la varianza y la desviación estándar permiten evaluar su dispersión. Los cuartiles Q1 y Q3 se conservaron como referencia para el análisis posterior de distribución y valores atípicos. Debido a que varias de las variables son continuas, la moda debe interpretarse con cautela, ya que corresponde al valor observado con mayor frecuencia y depende de la precisión con la que se registran las mediciones.
-
-En los contaminantes atmosféricos se observa, en general, una media superior a la mediana. Esta diferencia es especialmente clara en `NO` (media de 13.56 frente a una mediana de 5.10), `NOX` (30.82 frente a 19.40), `PM10` (59.17 frente a 50.00) y `PM2.5` (20.03 frente a 17.00). Esto sugiere la presencia de distribuciones con asimetría hacia valores altos, donde mediciones elevadas desplazan el promedio por encima del valor central. Esta característica se verificará visualmente mediante histogramas y boxplots en la siguiente sección.
-
-En las variables meteorológicas se presentan comportamientos distintos. La presión atmosférica (`BP`) muestra una media de 714.95 y una mediana de 714.60, indicando una concentración relativamente estable alrededor de sus valores centrales. La precipitación (`RAINF`) presenta una media de 0.01 y tanto mediana como moda iguales a cero, por lo que la mayoría de los registros horarios corresponden a periodos sin precipitación. De forma similar, la radiación solar (`SR`) presenta mediana y moda de cero, asociadas a los periodos del día sin radiación solar. La temperatura (`TEMP`) registra una media de 23.45 °C y una mediana de 24.13 °C, mientras que la humedad relativa (`RH`) presenta una media de 55.92 % y una mediana de 58.00 %.
-
-La verificación posterior a la limpieza no detectó observaciones fuera de los límites definidos para cada variable y año, por lo que estas estadísticas se calcularon sobre el conjunto depurado. Los valores extremos que permanecen dentro de los rangos permitidos no se consideran automáticamente errores, ya que pueden corresponder a observaciones reales y serán evaluados como posibles valores atípicos en el análisis de distribución. Finalmente, la dirección del viento (`WD`) requiere una interpretación especial por tratarse de una variable circular: valores cercanos a 0° y 360° representan direcciones similares, por lo que su media aritmética no debe interpretarse de la misma manera que la del resto de las variables cuantitativas.
-
-### 1.5 Distribución de las variables
-
-Para complementar las medidas descriptivas obtenidas anteriormente, se analizó la distribución de las variables mediante histogramas y diagramas de caja. Los histogramas permiten observar la forma, concentración y asimetría de las mediciones, mientras que los boxplots facilitan la identificación de su dispersión y de posibles valores atípicos.
-
-#### Distribución de los contaminantes atmosféricos
-
-```{r}
-#| label: etapa2-histogramas-contaminantes
-contaminantes <- c("CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2")
-meteorologicas <- c("BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD")
-
-datos_contaminantes <- datos_etapa2 |>
-  select(all_of(contaminantes)) |>
-  pivot_longer(
-    cols = everything(),
-    names_to = "Variable",
-    values_to = "Valor"
-  )
-
-ggplot(datos_contaminantes, aes(x = Valor)) +
-  geom_histogram(bins = 30, na.rm = TRUE) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Distribución de los contaminantes atmosféricos",
-    x = "Concentración",
-    y = "Frecuencia"
-  ) +
-  theme_minimal(base_size = 10)
-```
-
-Los contaminantes presentan, en general, distribuciones asimétricas hacia la derecha. Este comportamiento es particularmente claro en `NO`, `NOX`, `PM10`, `PM2.5` y `SO2`, donde la mayor parte de las observaciones se concentra en valores bajos o intermedios y una cantidad menor de mediciones elevadas forma colas largas. Este resultado coincide con las diferencias entre media y mediana observadas en la sección 1.4. En `PM10` y `PM2.5`, algunos valores elevados amplían considerablemente el eje de la gráfica, por lo que se complementa la visualización con un acercamiento hasta el percentil 99.
-
-#### Distribución de las variables meteorológicas
-
-```{r}
-#| label: etapa2-histogramas-meteorologicas
-datos_meteorologicos <- datos_etapa2 |>
-  select(all_of(meteorologicas)) |>
-  pivot_longer(
-    cols = everything(),
-    names_to = "Variable",
-    values_to = "Valor"
-  )
-
-ggplot(datos_meteorologicos, aes(x = Valor)) +
-  geom_histogram(bins = 30, na.rm = TRUE) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Distribución de las variables meteorológicas",
-    x = "Valor",
-    y = "Frecuencia"
-  ) +
-  theme_minimal(base_size = 10)
-```
-
-Las variables meteorológicas muestran comportamientos más diversos. `BP` y `TEMP` presentan distribuciones relativamente concentradas alrededor de sus valores centrales, mientras que `WS` muestra asimetría hacia valores altos. `RAINF` se concentra fuertemente en cero porque la mayoría de los registros horarios corresponden a periodos sin precipitación, y `SR` también presenta una acumulación importante en cero asociada a las horas sin radiación solar. La distribución de `WD` presenta varios máximos y debe interpretarse considerando que representa una dirección circular y no una magnitud lineal convencional.
-
-#### Dispersión y posibles valores atípicos
-
-```{r}
-#| label: etapa2-boxplots-contaminantes
-ggplot(datos_contaminantes, aes(x = Variable, y = Valor)) +
-  geom_boxplot(na.rm = TRUE) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Dispersión de los contaminantes atmosféricos",
-    x = NULL,
-    y = "Concentración"
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank()
-  )
-```
-
-```{r}
-#| label: etapa2-boxplots-meteorologicas
-ggplot(datos_meteorologicos, aes(x = Variable, y = Valor)) +
-  geom_boxplot(na.rm = TRUE) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Dispersión de las variables meteorológicas",
-    x = NULL,
-    y = "Valor"
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank()
-  )
-```
-
-Los boxplots confirman la presencia de numerosas observaciones alejadas del rango intercuartílico, especialmente en `NO`, `NOX`, `PM10`, `PM2.5` y `SO2`. Estos puntos no deben interpretarse automáticamente como errores. La limpieza previa eliminó las observaciones fuera de los rangos establecidos para cada variable y año, por lo que los valores extremos restantes pueden representar episodios reales poco frecuentes y se conservan para los análisis posteriores.
-
-#### Acercamiento de contaminantes al percentil 99
-
-Para observar con mayor claridad la región donde se concentra la mayoría de las mediciones, se presenta adicionalmente una visualización de los contaminantes limitada al percentil 99 de cada variable. Este acercamiento se utiliza únicamente con fines gráficos y no modifica el conjunto de datos empleado en los análisis.
-
-```{r}
-#| label: etapa2-boxplots-contaminantes-zoom
-datos_contaminantes_zoom <- datos_contaminantes |>
-  group_by(Variable) |>
-  filter(
-    !is.na(Valor),
-    Valor <= quantile(Valor, 0.99, na.rm = TRUE)
-  ) |>
-  ungroup()
-
-ggplot(datos_contaminantes_zoom, aes(x = Variable, y = Valor)) +
-  geom_boxplot(na.rm = TRUE) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Dispersión de contaminantes - visualización hasta el percentil 99",
-    x = NULL,
-    y = "Concentración"
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank()
-  )
-```
-
-En conjunto, los histogramas y boxplots muestran que las variables no presentan un comportamiento homogéneo: varios contaminantes poseen distribuciones fuertemente asimétricas y valores extremos, mientras que las variables meteorológicas exhiben formas distintas según el fenómeno que representan. En la siguiente sección se analizará si estas diferencias también cambian entre las cuatro estaciones de monitoreo seleccionadas.
-
-### 1.6 Análisis por estación de monitoreo
-
-Una vez descrito el comportamiento general de las variables, se compararon las estaciones `NTE`, `NTE2`, `NO` y `NE` para identificar posibles diferencias espaciales en las concentraciones de contaminantes y en las condiciones meteorológicas. Esta comparación permite evaluar si las cuatro estaciones presentan comportamientos similares o si la ubicación del punto de monitoreo debe considerarse explícitamente en los análisis posteriores.
-
-#### Estadística descriptiva por estación
-
-Para resumir las diferencias entre estaciones se calcularon la media, mediana y desviación estándar de cada variable de medición. La media y mediana permiten comparar los niveles centrales registrados en cada estación, mientras que la desviación estándar muestra las diferencias en variabilidad.
-
-```{r}
-#| label: etapa2-estadistica-por-estacion
-tabla_estacion <- datos_etapa2 |>
-  group_by(Estacion) |>
-  summarise(
-    across(
-      all_of(variables_medicion),
-      list(
-        Media = ~ if (all(is.na(.x))) NA_real_ else mean(.x, na.rm = TRUE),
-        Mediana = ~ if (all(is.na(.x))) NA_real_ else median(.x, na.rm = TRUE),
-        DE = ~ if (all(is.na(.x))) NA_real_ else sd(.x, na.rm = TRUE)
-      ),
-      .names = "{.col}_{.fn}"
-    ),
-    .groups = "drop"
-  ) |>
-  pivot_longer(
-    cols = -Estacion,
-    names_to = c("Variable", ".value"),
-    names_pattern = "^(.*)_(Media|Mediana|DE)$"
-  ) |>
-  mutate(
-    Estacion = factor(Estacion, levels = estaciones_seleccionadas),
-    Variable = factor(Variable, levels = variables_medicion),
-    across(c(Media, Mediana, DE), ~ round(.x, 2))
-  ) |>
-  arrange(Variable, Estacion)
-
-knitr::kable(
-  tabla_estacion,
-  digits = 2,
-  caption = "Media, mediana y desviación estándar por variable y estación"
-)
-```
-
-La tabla permite detectar qué variables presentan mayores diferencias en sus valores centrales o en su dispersión entre estaciones. Estas diferencias se complementan visualmente con diagramas de caja, ya que los boxplots permiten comparar simultáneamente la mediana, el rango intercuartílico y los valores extremos de cada estación.
-
-#### Comparación de contaminantes por estación
-
-```{r}
-#| label: etapa2-contaminantes-por-estacion
-datos_estacion_contaminantes <- datos_etapa2 |>
-  select(Estacion, all_of(contaminantes)) |>
-  pivot_longer(
-    cols = -Estacion,
-    names_to = "Variable",
-    values_to = "Valor"
-  ) |>
-  mutate(Estacion = factor(Estacion, levels = estaciones_seleccionadas))
-
-ggplot(datos_estacion_contaminantes, aes(x = Estacion, y = Valor)) +
-  geom_boxplot(na.rm = TRUE, outlier.alpha = 0.25) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Distribución de contaminantes por estación de monitoreo",
-    x = "Estación",
-    y = "Concentración"
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-La comparación entre estaciones muestra diferencias espaciales claras en varios contaminantes. La estación `NTE2` presenta las mayores concentraciones típicas de los compuestos nitrogenados, con medianas de 10.00 para `NO`, 20.20 para `NO2` y 32.50 para `NOX`, considerablemente superiores a las observadas en las otras estaciones. `PM10` también presenta su mayor mediana en `NTE2` (57.00), mientras que la estación `NO` registra la menor (41.00). En contraste, `O3` alcanza su mayor mediana en `NO` (26.00) y la menor en `NTE2` (20.00). Para `PM2.5` y `SO2` las diferencias entre estaciones son menos pronunciadas.
-
-#### Comparación de variables meteorológicas por estación
-
-```{r}
-#| label: etapa2-meteorologicas-por-estacion
-datos_estacion_meteorologicas <- datos_etapa2 |>
-  select(Estacion, all_of(meteorologicas)) |>
-  pivot_longer(
-    cols = -Estacion,
-    names_to = "Variable",
-    values_to = "Valor"
-  ) |>
-  mutate(Estacion = factor(Estacion, levels = estaciones_seleccionadas))
-
-ggplot(datos_estacion_meteorologicas, aes(x = Estacion, y = Valor)) +
-  geom_boxplot(na.rm = TRUE, outlier.alpha = 0.25) +
-  facet_wrap(~ Variable, scales = "free", ncol = 4) +
-  labs(
-    title = "Distribución de variables meteorológicas por estación",
-    x = "Estación",
-    y = "Valor"
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-Las condiciones meteorológicas también presentan diferencias entre ubicaciones. `NE` registra la mayor humedad relativa, con una mediana de 65 %, así como la mayor presión atmosférica (718.80) y velocidad del viento (8.20 km/h). La temperatura presenta un comportamiento más homogéneo, con medianas cercanas a 24 °C en las cuatro estaciones. La precipitación se concentra alrededor de cero en todos los puntos de monitoreo, mientras que la radiación solar muestra valores promedio mayores en `NO` y menores en `NTE`. La dirección del viento se interpreta únicamente de forma exploratoria en esta sección debido a su naturaleza circular.
-
-En conjunto, los resultados indican que las estaciones no presentan un comportamiento completamente homogéneo. Las diferencias son particularmente importantes para los óxidos de nitrógeno y, en menor medida, para variables como `PM10`, `O3`, humedad, presión y velocidad del viento. Por esta razón, la estación de monitoreo debe conservarse como un componente espacial relevante durante los análisis y modelos posteriores, ya que ignorar la ubicación podría ocultar diferencias sistemáticas entre los puntos de medición.
-
-### 1.7 Análisis de correlación
-
-Después de estudiar las distribuciones de las variables y sus diferencias entre estaciones, se analizaron las asociaciones entre los contaminantes atmosféricos y las variables meteorológicas. El objetivo de esta sección es identificar qué condiciones meteorológicas presentan una mayor relación con las concentraciones de cada contaminante y evaluar posteriormente si estas asociaciones se mantienen de forma similar entre las estaciones seleccionadas.
-
-Debido a la asimetría y a la presencia de valores extremos observadas en varias variables durante las secciones anteriores, se utilizó el **coeficiente de correlación de Spearman**. Esta medida se basa en los rangos de las observaciones y permite estudiar relaciones monotónicas sin requerir que sean estrictamente lineales, por lo que resulta adecuada para este análisis exploratorio.
-
-#### Tratamiento de la dirección del viento
-
-La dirección del viento (`WD`) requiere un tratamiento particular debido a su naturaleza circular. Por ejemplo, 1° y 359° representan direcciones muy similares, aunque numéricamente parezcan alejadas. Por esta razón, se transformó en dos componentes mediante las funciones seno y coseno.
-
-```{r}
-#| label: etapa2-preparacion-correlaciones
-datos_cor <- datos_etapa2 |>
-  mutate(
-    WD_sin = sin(WD * pi / 180),
-    WD_cos = cos(WD * pi / 180)
-  )
-
-meteorologicas_cor <- c(
-  "BP", "RAINF", "RH", "SR",
-  "TEMP", "WS", "WD_sin", "WD_cos"
-)
-```
-
-Las variables `WD_sin` y `WD_cos` permiten incorporar la dirección del viento sin tratar los grados como una variable lineal convencional.
-
-#### Correlación entre contaminantes y variables meteorológicas
-
-Para concentrar el análisis en las relaciones relevantes para el objetivo predictivo, se calcularon únicamente las correlaciones entre los contaminantes y las variables meteorológicas.
-
-```{r}
-#| label: etapa2-correlaciones-generales
-calcular_correlaciones <- function(datos) {
-
-  matriz <- cor(
-    datos |>
-      select(all_of(c(contaminantes, meteorologicas_cor))),
-    use = "pairwise.complete.obs",
-    method = "spearman"
-  )
-
-  as.data.frame(
-    as.table(matriz[contaminantes, meteorologicas_cor])
-  ) |>
-    as_tibble() |>
-    rename(
-      Contaminante = Var1,
-      Meteorologica = Var2,
-      Correlacion = Freq
-    )
-}
-
-correlaciones_generales <- calcular_correlaciones(datos_cor)
-```
-
-El coeficiente de Spearman toma valores entre -1 y 1. Los valores positivos indican que ambas variables tienden a aumentar conjuntamente, mientras que los valores negativos indican que una tiende a disminuir cuando la otra aumenta. Los valores cercanos a cero representan asociaciones monotónicas débiles.
-
-#### Mapa de calor de las correlaciones
-
-```{r}
-#| label: etapa2-heatmap-correlaciones
-ggplot(
-  correlaciones_generales,
-  aes(
-    x = Meteorologica,
-    y = Contaminante,
-    fill = Correlacion
-  )
-) +
-  geom_tile() +
-  geom_text(
-    aes(label = round(Correlacion, 2)),
-    size = 3
-  ) +
-  scale_fill_gradient2(
-    midpoint = 0,
-    limits = c(-1, 1),
-    name = "Spearman"
-  ) +
-  labs(
-    title = "Correlación entre contaminantes y variables meteorológicas",
-    x = "Variable meteorológica",
-    y = "Contaminante"
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
-```
-
-El mapa de calor muestra que `O3` es el contaminante con las asociaciones meteorológicas de mayor magnitud. La relación más fuerte se observa con la humedad relativa (`RH`), con una correlación de **-0.549**, lo que indica que valores mayores de humedad tienden a asociarse con menores concentraciones de ozono. En sentido positivo, `O3` presenta asociaciones con la temperatura (`TEMP`, **0.515**), la velocidad del viento (`WS`, **0.506**) y la radiación solar (`SR`, **0.475**).
-
-Los compuestos nitrogenados muestran un patrón diferente. La velocidad del viento presenta correlaciones negativas con `NO2` (**-0.473**), `NOX` (**-0.472**) y `NO` (**-0.350**). La temperatura también se relaciona negativamente con `NOX` (**-0.335**), `NO2` (**-0.307**) y `NO` (**-0.250**). En contraste, las asociaciones observadas para `CO`, `SO2` y `PM2.5` son en general de menor magnitud. Para `PM10`, la relación más destacada es con `RH`, con una correlación de **-0.244**.
-
-La componente `WD_sin` de la dirección del viento presenta una asociación de **0.276** con `O3`, mientras que las demás correlaciones asociadas a `WD_sin` y `WD_cos` son relativamente pequeñas. Esto sugiere que la dirección del viento puede aportar información para algunos contaminantes, pero su importancia deberá evaluarse junto con las demás variables durante el modelado.
-
-#### Relaciones de mayor magnitud
-
-Para facilitar la identificación de las combinaciones más relevantes, se seleccionaron las doce asociaciones con mayor magnitud absoluta.
-
-```{r}
-#| label: etapa2-correlaciones-principales
-correlaciones_principales <- correlaciones_generales |>
-  filter(!is.na(Correlacion)) |>
-  mutate(Magnitud = abs(Correlacion)) |>
-  arrange(desc(Magnitud)) |>
-  slice_head(n = 12) |>
-  select(
-    Contaminante,
-    Meteorologica,
-    Correlacion
-  ) |>
-  mutate(Correlacion = round(Correlacion, 3))
-
-knitr::kable(
-  correlaciones_principales,
-  caption = "Principales asociaciones entre contaminantes y variables meteorológicas"
-)
-```
-
-La tabla confirma que las asociaciones de mayor magnitud se concentran principalmente en `O3` y en los óxidos de nitrógeno. Esto convierte a variables como `RH`, `TEMP`, `WS` y `SR` en candidatas relevantes para los modelos predictivos de estos contaminantes. Sin embargo, estas correlaciones representan asociaciones estadísticas y no deben interpretarse como evidencia de causalidad.
-
-#### Correlaciones por estación de monitoreo
-
-Para evaluar si las relaciones anteriores cambian según la ubicación, se calculó nuevamente la correlación de Spearman de forma independiente para `NTE`, `NTE2`, `NO` y `NE`.
-
-```{r}
-#| label: etapa2-correlaciones-por-estacion
-correlaciones_estacion <- datos_cor |>
-  filter(Estacion %in% estaciones_seleccionadas) |>
-  group_by(Estacion) |>
-  group_modify(~ calcular_correlaciones(.x)) |>
-  ungroup()
-```
-
-```{r}
-#| label: etapa2-heatmap-correlaciones-estacion
-ggplot(
-  correlaciones_estacion,
-  aes(
-    x = Meteorologica,
-    y = Contaminante,
-    fill = Correlacion
-  )
-) +
-  geom_tile() +
-  facet_wrap(~ Estacion, ncol = 2) +
-  scale_fill_gradient2(
-    midpoint = 0,
-    limits = c(-1, 1),
-    name = "Spearman"
-  ) +
-  labs(
-    title = "Correlaciones entre meteorología y contaminantes por estación",
-    x = "Variable meteorológica",
-    y = "Contaminante"
-  ) +
-  theme_minimal(base_size = 9) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
-```
-
-La comparación por estación muestra que varias de las asociaciones identificadas en el análisis general se mantienen en los cuatro puntos de monitoreo. El ozono (`O3`) presenta de manera consistente una relación negativa con la humedad relativa (`RH`) y relaciones positivas con la temperatura (`TEMP`), la velocidad del viento (`WS`) y, en general, la radiación solar (`SR`). Aunque la magnitud de las correlaciones cambia entre `NTE`, `NTE2`, `NO` y `NE`, el signo de estas asociaciones se conserva en gran parte de los casos, lo que sugiere un patrón relativamente estable para el ozono.
-
-Los contaminantes nitrogenados (`NO`, `NO2` y `NOX`) también muestran un comportamiento relativamente consistente entre estaciones. Sus asociaciones con la velocidad del viento (`WS`) son principalmente negativas y se observan relaciones negativas adicionales con la temperatura (`TEMP`). En contraste, las correlaciones de `CO`, `SO2`, `PM10` y `PM2.5` son generalmente de menor magnitud y presentan mayores variaciones entre los puntos de monitoreo.
-
-Las componentes de dirección del viento (`WD_sin` y `WD_cos`) muestran una mayor variabilidad entre estaciones. Esto indica que la relación entre la dirección del viento y las concentraciones puede depender de la ubicación del punto de monitoreo, ya que una misma dirección puede representar condiciones de transporte distintas según la estación. En conjunto, existen patrones meteorológicos comunes entre las cuatro estaciones, particularmente para `O3` y los óxidos de nitrógeno, pero también se observan diferencias espaciales que justifican conservar `Estacion` como una variable relevante durante el modelado.
-
-En conjunto, el análisis de correlación indica que las variables meteorológicas no tienen la misma relación con todos los contaminantes. `O3` presenta las asociaciones más claras con la meteorología, especialmente con `RH`, `TEMP`, `WS` y `SR`, mientras que `NO`, `NO2` y `NOX` destacan por sus asociaciones negativas con la velocidad del viento y la temperatura. La presencia de patrones similares entre estaciones proporciona evidencia de relaciones generales, pero las diferencias observadas indican que el componente espacial también debe considerarse en los modelos posteriores. Estas asociaciones servirán como una primera guía para seleccionar variables predictoras, sin interpretarlas como relaciones causales.
-
-### 1.8 Calidad de los datos posterior a la limpieza
-
-Como cierre de la comprensión descriptiva, se realizó una verificación final de la calidad del subconjunto utilizado en la Etapa 2. El objetivo es identificar qué problemas permanecen después de la limpieza y qué aspectos deberán considerarse antes de seleccionar las variables y construir los modelos predictivos.
-
-#### Valores faltantes
-
-Primero se cuantificó la disponibilidad general de información para cada variable, considerando el número de observaciones válidas, los valores faltantes y su porcentaje respecto al total de registros seleccionados.
-
-```{r}
-#| label: etapa2-faltantes-generales
-tabla_faltantes_etapa2 <- datos_etapa2 |>
-  select(all_of(variables_medicion)) |>
-  summarise(
-    across(
-      everything(),
-      list(
-        Datos_validos = ~ sum(!is.na(.x)),
-        Nulos = ~ sum(is.na(.x)),
-        Porcentaje = ~ round(mean(is.na(.x)) * 100, 2)
-      ),
-      .names = "{.col}_{.fn}"
-    )
-  ) |>
-  pivot_longer(
-    everything(),
-    names_to = c("Variable", ".value"),
-    names_pattern = "^(.*)_(Datos_validos|Nulos|Porcentaje)$"
-  ) |>
-  mutate(Variable = factor(Variable, levels = variables_medicion)) |>
-  arrange(Variable)
-
-knitr::kable(
-  tabla_faltantes_etapa2,
-  caption = "Disponibilidad de datos por variable en la Etapa 2"
-)
-```
-
-Los valores faltantes constituyen el principal problema de calidad que permanece en el conjunto. A nivel general, los mayores porcentajes de ausencia corresponden a `SO2` (24.49 %), `O3` (24.30 %), `NO2` (23.66 %) y `NOX` (23.38 %). En contraste, `SR` (4.02 %) y `PM10` (5.51 %) presentan una disponibilidad considerablemente mayor. Los valores faltantes no se eliminaron de forma generalizada, ya que su tratamiento dependerá del contaminante seleccionado como variable objetivo y de los requerimientos del modelo utilizado.
-
-#### Valores faltantes por estación
-
-El porcentaje global puede ocultar problemas específicos de una estación. Por esta razón, también se calculó el porcentaje de valores faltantes de cada variable de manera independiente para `NTE`, `NTE2`, `NO` y `NE`.
-
-```{r}
-#| label: etapa2-faltantes-por-estacion
-tabla_faltantes_estacion <- datos_etapa2 |>
-  group_by(Estacion) |>
-  summarise(
-    across(
-      all_of(variables_medicion),
-      ~ round(mean(is.na(.x)) * 100, 2)
-    ),
-    .groups = "drop"
-  ) |>
-  pivot_longer(
-    cols = -Estacion,
-    names_to = "Variable",
-    values_to = "Porcentaje_faltante"
-  ) |>
-  mutate(
-    Estacion = factor(Estacion, levels = estaciones_seleccionadas),
-    Variable = factor(Variable, levels = variables_medicion)
-  ) |>
-  arrange(Variable, Estacion)
-
-tabla_faltantes_estacion_reporte <- tabla_faltantes_estacion |>
-  pivot_wider(
-    names_from = Estacion,
-    values_from = Porcentaje_faltante
-  )
-
-knitr::kable(
-  tabla_faltantes_estacion_reporte,
-  caption = "Porcentaje de valores faltantes por variable y estación"
-)
-```
-
-La disponibilidad de información no es uniforme entre estaciones. Los casos más relevantes son `RH` en `NTE`, con 54.76 % de valores faltantes, y `PM2.5` en `NO`, con 41.36 %. Estas combinaciones deberán analizarse con especial cuidado si se utilizan en modelos específicos por estación. En contraste, `NTE2` presenta una disponibilidad alta para varias variables meteorológicas, con porcentajes de ausencia de 0.45 % en `SR`, 1.08 % en `RAINF` y `WS`, 1.15 % en `TEMP` y 1.22 % en `BP` y `WD`.
-
-#### Verificación final de rangos y duplicados
-
-La limpieza de la etapa anterior convirtió en `NA` los valores que se encontraban fuera de los límites establecidos para cada variable y año. Para verificar que el subconjunto utilizado en esta etapa conserva esa condición, se repitió la comprobación sobre `datos_etapa2`. También se revisaron posibles registros duplicados definidos por una misma combinación de año, estación y fecha-hora.
-
-```{r}
-#| label: etapa2-verificacion-calidad
-tabla_fdr_etapa2 <- purrr::pmap_dfr(
-  limites,
-  function(Año, Variable, Min, Max) {
-    x <- datos_etapa2[[Variable]]
-    seleccion <- datos_etapa2$Año == Año
-
-    tibble(
-      Año = Año,
-      Variable = Variable,
-      Fuera_de_rango = sum(
-        x[seleccion] < Min | x[seleccion] > Max,
-        na.rm = TRUE
-      )
-    )
-  }
-)
-
-duplicados_fecha_etapa2 <- datos_etapa2 |>
-  count(Año, Estacion, `fecha y hora`) |>
-  filter(n > 1)
-
-resumen_calidad_etapa2 <- tibble(
-  Verificacion = c(
-    "Observaciones fuera de rango",
-    "Combinaciones año-estación-fecha duplicadas"
-  ),
-  Resultado = c(
-    sum(tabla_fdr_etapa2$Fuera_de_rango),
-    nrow(duplicados_fecha_etapa2)
-  )
-)
-
-knitr::kable(
-  resumen_calidad_etapa2,
-  caption = "Verificación final de rangos y duplicados"
-)
-```
-
-La verificación final obtuvo **0 observaciones fuera de rango y 0 combinaciones año-estación-fecha duplicadas**. Esto confirma que el proceso de limpieza corrigió los registros inválidos identificados anteriormente y que no existen duplicados bajo el criterio utilizado. Los valores extremos que permanecen dentro de los rangos válidos se conservan, ya que pueden representar observaciones reales y no errores de captura.
-
-#### Verificación de categorías y escritura
-
-Como parte de la revisión de calidad también se verificó que la variable categórica `Estacion` contenga únicamente las categorías esperadas y que los nombres de las variables requeridas estén presentes después del proceso de homologación.
-
-```{r}
-#| label: etapa2-verificacion-categorias
-estaciones_observadas <- datos_etapa2 |>
-  distinct(Estacion) |>
-  arrange(Estacion) |>
-  pull(Estacion) |>
-  as.character()
-
-estaciones_inesperadas <- setdiff(
-  estaciones_observadas,
-  estaciones_seleccionadas
-)
-
-variables_esperadas <- c(
-  "fecha y hora", variables_medicion,
-  "Año", "Estacion"
-)
-
-variables_faltantes <- setdiff(
-  variables_esperadas,
-  names(datos_etapa2)
-)
-
-resumen_categorias <- tibble(
-  Verificacion = c(
-    "Categorías observadas en Estacion",
-    "Categorías inesperadas",
-    "Variables esperadas faltantes"
-  ),
-  Resultado = c(
-    paste(estaciones_observadas, collapse = ", "),
-    ifelse(
-      length(estaciones_inesperadas) == 0,
-      "Ninguna",
-      paste(estaciones_inesperadas, collapse = ", ")
-    ),
-    ifelse(
-      length(variables_faltantes) == 0,
-      "Ninguna",
-      paste(variables_faltantes, collapse = ", ")
-    )
-  )
-)
-
-knitr::kable(
-  resumen_categorias,
-  caption = "Verificación de categorías y nombres de variables"
-)
-```
-
-La revisión confirma que las categorías observadas corresponden únicamente a `NE`, `NO`, `NTE` y `NTE2`, sin etiquetas adicionales o inconsistencias de escritura dentro del subconjunto seleccionado. Asimismo, todas las variables esperadas están presentes después de la homologación realizada en la etapa anterior, por lo que no se identifican errores de escritura pendientes en los nombres utilizados para este análisis.
-
-#### Frecuencia de registros por estación
-
-Finalmente, se revisó la distribución de registros de la variable categórica `Estacion`. Al tratarse de una variable nominal, su descripción se realiza mediante frecuencias y porcentajes; una medida ordinal como la mediana no resulta aplicable.
-
-```{r}
-#| label: etapa2-frecuencia-estaciones
-tabla_frecuencia_estacion <- datos_etapa2 |>
-  count(Estacion, name = "Registros") |>
-  mutate(
-    Porcentaje = round(Registros / sum(Registros) * 100, 2),
-    Estacion = factor(Estacion, levels = estaciones_seleccionadas)
-  ) |>
-  arrange(Estacion)
-
-knitr::kable(
-  tabla_frecuencia_estacion,
-  caption = "Frecuencia de registros por estación de monitoreo"
-)
-
-ggplot(tabla_frecuencia_estacion, aes(x = Estacion, y = Registros)) +
-  geom_col() +
-  labs(
-    title = "Cantidad de registros por estación de monitoreo",
-    x = "Estación",
-    y = "Número de registros"
-  ) +
-  theme_minimal(base_size = 10)
-```
-
-Las cuatro estaciones aportan aproximadamente 48 mil registros cada una, por lo que no existe un desbalance importante en el número total de observaciones. Sin embargo, esta similitud en cantidad de filas no implica que todas las variables tengan la misma disponibilidad en cada estación, como muestran los porcentajes de valores faltantes anteriores.
-
-En general, el conjunto seleccionado se encuentra depurado respecto a valores fuera de rango y duplicados, y las cuatro estaciones están representadas por cantidades de registros comparables. El principal aspecto de calidad que permanece es la presencia de datos faltantes, cuya magnitud varía entre variables y estaciones. Por esta razón, la selección de contaminantes objetivo y variables predictoras deberá considerar conjuntamente dos criterios: la relación meteorológica identificada en el análisis de correlación y la disponibilidad suficiente de observaciones. La estrategia para tratar los valores faltantes se definirá posteriormente según las necesidades del modelo seleccionado, evitando eliminar información de manera innecesaria.  
-
-### 1.9 Dificultades de medición de la calidad del aire  
-  
-Además de los problemas de limpieza documentados en las secciones anteriores, es importante resaltar las limitaciones propias al proceso de medición de la calidad del aire y que no se originan en el procesamiento de los datos. La red de monitoreo de SIMA, está sujeta a interrupciones de cobertura temporal por mantenimiento, calibración periódica de los equipos o fallas técnicas puntuales, lo cual puede explicar parte de los valores faltantes observados en contaminantes como NO2, NOX y SO2, además de los errores de captura o transmisión. La calibración de los sensores, que se requiere periódicamente para mantener la precisión de las mediciones conforme a las Normas Oficiales Mexicanas correspondientes, puede generar ventanas de tiempo sin registro válido durante el proceso. También la continuidad de las mediciones puede verse afectada por la ubicación física de cada estación (por ejemplo,interferencias del entorno urbano inmediato), lo que introduce más variabilidad entre estaciones que no necesariamente refleja diferencias reales en la calidad del aire. Estas consideraciones son relevantes para interpretar con más cuidado los valores faltantes y aquellos atípicos identificados en el conjunto de datos, ya que una parte de ellos podría estar asociada a estas limitaciones de medición y no exclusivamente a fenómenos atmosféricos o errores de limpieza.
-  
-  
-### 1.10 Conclusiones y siguientes pasos
-
-El análisis descriptivo permitió caracterizar el comportamiento de las variables utilizadas en las cuatro estaciones seleccionadas. Se identificó que varios contaminantes, especialmente `NO`, `NOX`, `PM10`, `PM2.5` y `SO2`, presentan distribuciones asimétricas y valores extremos. Debido a que la verificación posterior a la limpieza confirmó que estos valores se encuentran dentro de los rangos permitidos, se conservaron como observaciones potencialmente reales en lugar de eliminarlos automáticamente.
-
-La comparación espacial mostró que las estaciones no presentan un comportamiento completamente homogéneo. `NTE2` destacó por mayores concentraciones típicas de `NO`, `NO2` y `NOX`, mientras que otros contaminantes, como `O3` y `PM10`, presentaron patrones diferentes entre estaciones. También se observaron diferencias meteorológicas en variables como humedad relativa, presión atmosférica y velocidad del viento, lo que confirma la importancia de conservar `Estacion` como componente espacial durante los análisis posteriores.
-
-El análisis de correlación permitió identificar asociaciones preliminares entre meteorología y contaminación. `O3` presentó las relaciones de mayor magnitud, principalmente con `RH`, `TEMP`, `WS` y `SR`. Por otra parte, `NO`, `NO2` y `NOX` mostraron asociaciones negativas principalmente con la velocidad del viento y la temperatura. Varios de estos patrones se mantuvieron entre estaciones, aunque también se encontraron diferencias espaciales, particularmente en las componentes relacionadas con la dirección del viento. Estas asociaciones servirán como referencia para la selección posterior de variables predictoras, sin interpretarse como relaciones causales.
-
-Finalmente, la verificación de calidad confirmó que no permanecen observaciones fuera de los rangos establecidos ni registros duplicados. El principal aspecto pendiente es la presencia de valores faltantes, cuya proporción cambia considerablemente según la variable y la estación. Por lo tanto, el siguiente paso será seleccionar los contaminantes objetivo considerando conjuntamente su relación con las variables meteorológicas y la disponibilidad de información. Posteriormente se definirá el tratamiento de los valores faltantes, se prepararán las variables necesarias para el modelado y se construirán y compararán modelos predictivos que permitan evaluar qué tan bien pueden estimarse las concentraciones de contaminantes a partir de las condiciones meteorológicas.
+## Variables consideradas
+
+La variable objetivo del proyecto es la concentración horaria de **O3**. Las posibles variables predictoras se organizan en cuatro grupos:
+
+| Grupo | Variables principales | Función dentro del modelo |
+|---|---|---|
+| Variable objetivo | O3 | Concentración que se desea predecir |
+| Meteorológicas | BP, RAINF, RH, SR, TEMP, WS, WD | Describir las condiciones atmosféricas asociadas con la formación, transporte y dispersión del O3 |
+| Contaminantes | CO, NO, NO2, NOX, PM10, PM2.5, SO2 y valores previos de O3 | Incorporar información del estado reciente de la contaminación atmosférica |
+| Temporales y espaciales | Fecha, hora, día, mes, estación de monitoreo | Representar patrones horarios, estacionales y diferencias entre estaciones |
+
+Además de estas variables originales, se evaluará la creación de **rezagos temporales**. Por ejemplo, para realizar una predicción en el momento $t$, pueden utilizarse valores observados previamente como $O_3(t)$, $O_3(t-1)$, $O_3(t-2)$ o mediciones meteorológicas recientes. La cantidad de rezagos y variables finales se determinará durante la preparación para el modelado para evitar incorporar información redundante o futura.
+
+La dirección del viento requiere un tratamiento particular por ser una variable circular. Por ello, se evaluará su representación mediante componentes seno y coseno en lugar de utilizar directamente los grados como si fueran una variable lineal.
+
+## Estrategia general de análisis
+
+El proyecto seguirá una secuencia orientada directamente al problema predictivo:
+
+1. **Comprensión y limpieza de los datos.** Integrar las bases de 2020 a 2025, homologar nombres y unidades, identificar valores faltantes, registros inválidos y duplicados, y conservar únicamente información adecuada para el análisis.
+2. **Análisis exploratorio enfocado en O3.** Estudiar su distribución, comportamiento horario y estacional, diferencias entre estaciones y relación con las variables candidatas a predictoras.
+3. **Preparación temporal.** Ordenar los registros cronológicamente, construir variables temporales y rezagos, y definir las observaciones disponibles para cada horizonte de predicción.
+4. **Modelado.** Construir primero una referencia simple y posteriormente comparar modelos estadísticos y modelos más flexibles. Entre los candidatos se consideran la regresión lineal múltiple y métodos no lineales como Random Forest o Gradient Boosting.
+5. **Evaluación.** Medir el error sobre periodos posteriores a los utilizados para el entrenamiento y analizar los resultados por estación y horizonte de predicción.
+
+Debido a la naturaleza temporal del problema, los datos **no se dividirán aleatoriamente**. La separación inicial propuesta es:
+
+- **2020-2023:** entrenamiento.
+- **2024:** validación y selección de modelos.
+- **2025:** prueba final sobre datos no utilizados durante la construcción del modelo.
+
+Esta separación podrá ajustarse si la disponibilidad de O3 o de alguna variable predictora genera periodos con cobertura insuficiente, pero siempre se conservará el orden temporal para evitar fuga de información del futuro hacia el entrenamiento.
+
+Como referencia mínima se incluirá un modelo base de persistencia, que supone que el comportamiento reciente del O3 es una aproximación de su comportamiento próximo. Los modelos desarrollados deberán superar esta referencia para demostrar que las variables adicionales aportan capacidad predictiva.
+
+La evaluación se realizará principalmente mediante **MAE (Mean Absolute Error)** y **RMSE (Root Mean Squared Error)**, complementadas con gráficas de valores observados contra predichos y análisis del error a través del tiempo. Estas métricas permitirán comparar modelos utilizando las mismas observaciones y determinar no solo cuál obtiene menor error promedio, sino también en qué condiciones falla.
+
+## Fuente de información
+
+Los datos utilizados provienen del Sistema Integral de Monitoreo Ambiental (SIMA) de Nuevo León. Las bases disponibles para el proyecto contienen registros horarios de las estaciones de monitoreo durante el periodo 2020-2025. Cada registro combina información temporal, identificación de la estación, concentraciones de contaminantes y variables meteorológicas.
+
+El reporte conservará los datos originales sin modificar como fuente de referencia y generará conjuntos derivados para limpieza, análisis y modelado. Las decisiones de exclusión, transformación o imputación se documentarán en las siguientes secciones y deberán responder directamente a las necesidades del problema de predicción de O3.
+
+<!--
+La estructura técnica de las etapas anteriores se reconstruirá a partir de aquí.
+El código previo permanece disponible en el historial de Git y se reincorporará únicamente
+cuando aporte información necesaria para el objetivo actual, evitando arrastrar secciones
+que respondían al objetivo anterior más amplio.
+-->
+
+# Datos
+
+## Carga y homologación
+
+Pendiente de reestructurar a partir del código existente de las etapas anteriores.
+
+## Estructura y disponibilidad
+
+Pendiente de documentar la dimensión final del conjunto, cobertura temporal y disponibilidad por estación y variable.
+
+## Selección del subconjunto de trabajo
+
+Pendiente de justificar y validar formalmente la selección de `NTE`, `NTE2`, `NO` y `NE` para el modelado de O3.
+
+# Preparación de los datos
+
+## Valores faltantes y registros inválidos
+
+Pendiente de reconstruir el proceso de limpieza manteniendo únicamente las decisiones necesarias para el modelado.
+
+## Valores extremos
+
+Pendiente de diferenciar entre errores de medición y episodios reales de concentraciones elevadas antes de decidir cualquier eliminación.
+
+## Variables temporales y espaciales
+
+Pendiente de construir la representación definitiva de fecha, hora, estacionalidad y estación de monitoreo.
+
+# Análisis exploratorio
+
+## Comportamiento del O3
+
+Pendiente de describir su distribución, tendencia temporal y patrones horarios y estacionales.
+
+## Diferencias entre estaciones
+
+Pendiente de comparar el comportamiento del O3 entre `NTE`, `NTE2`, `NO` y `NE`.
+
+## Relación con variables meteorológicas y contaminantes
+
+Pendiente de reconstruir el análisis de asociación concentrándolo únicamente en las variables relevantes para la predicción de O3.
+
+# Preparación para modelado
+
+## Construcción de rezagos
+
+Pendiente de definir qué información histórica estará disponible para cada pronóstico.
+
+## Separación cronológica
+
+Se utilizará como punto de partida 2020-2023 para entrenamiento, 2024 para validación y 2025 para prueba final.
+
+## Conjunto final de predictores
+
+Pendiente de seleccionar variables según disponibilidad, fundamento físico, análisis exploratorio y desempeño durante la validación.
+
+# Modelado
+
+## Modelo base
+
+Pendiente de implementar un modelo de persistencia que sirva como referencia mínima de desempeño.
+
+## Modelo estadístico
+
+Pendiente de construir y validar un modelo interpretable, inicialmente regresión lineal múltiple con variables temporales y rezagos.
+
+## Modelo no lineal
+
+Pendiente de comparar el modelo estadístico con al menos un método capaz de capturar relaciones no lineales, como Random Forest o Gradient Boosting.
+
+# Evaluación
+
+## Métricas
+
+Se utilizarán principalmente MAE y RMSE sobre periodos no utilizados durante el entrenamiento.
+
+## Error por horizonte
+
+Pendiente de evaluar cómo cambia el error desde las predicciones más cercanas hasta el horizonte máximo de 24 horas.
+
+## Error por estación
+
+Pendiente de determinar si el desempeño del modelo cambia entre los puntos de monitoreo seleccionados.
+
+# Conclusiones
+
+Pendiente de redactar una vez completado el modelado y su evaluación.
 
 # Declaratoria y referencias
 
-## Link GitHub:
+## Link GitHub
 
 https://github.com/Reyivan777/Reto-Multivariados
 
 ## Declaratoria de uso IA
 
-Opción B. Se utilizó IA de la siguiente forma:\
-Herramienta: Claude.\
-Uso realizado: Apoyo en la búsqueda de referencias bibliográficas complementarias, así como en la estructuración de borradores de las secciones del informe de la Parte I. Igualmente, apoyo con sintaxis del código de la Parte 2.\
-Secciones donde se utilizó: Parte I. Conociendo el Negocio y Parte II. Comprensión y Preparación de los Datos.\
-Validación realizada por los estudiantes: Hemos revisado, editado y validado el contenido generado, verificando la veracidad de las referencias y asegurando la coherencia con el objetivo del proyecto. Como equipo asumimos la responsabilidad del contenido final entregado.
+Opción B. Se utilizó IA de la siguiente forma:
+
+Herramienta: ChatGPT y otras herramientas de IA utilizadas por el equipo durante el desarrollo.
+
+Uso realizado: Apoyo en la estructuración del reporte, revisión de redacción, discusión metodológica y apoyo con sintaxis de código.
+
+Secciones donde se utilizó: Se documentarán de manera específica conforme avance la versión final del reporte.
+
+Validación realizada por los estudiantes: El equipo revisa, verifica y edita los contenidos y resultados obtenidos, y asume la responsabilidad del contenido final entregado.
 
 ## Referencias bibliográficas
 
