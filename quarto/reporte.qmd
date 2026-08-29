@@ -447,7 +447,6 @@ resumen_faltantes <- map_dfr(
     numerico <- datos_tipos[[variable]]
     texto <- str_squish(original)
 
-    faltantes_originales <- sum(is.na(original) | texto == "")
     no_numericos <- sum(
       !is.na(original) &
         texto != "" &
@@ -475,7 +474,11 @@ knitr::kable(
 )
 ```
 
-`Porcentaje_faltante` considera tanto los `NA` actuales como las observaciones con `-9999`, ya que estas últimas no representan una medición real. La tabla permite identificar qué variables tienen suficiente cobertura antes de decidir cómo tratar las ausencias.
+Los faltantes representan un problema importante para varias variables. `SO2` presenta 24.49 % de ausencia, `NO2` 23.66 %, `NOX` 23.37 % y `NO` 20.42 %. Si estas variables se incorporan como predictoras sin un tratamiento específico, podrían reducir considerablemente la cantidad de observaciones disponibles para entrenar los modelos.
+
+El caso más importante para el objetivo del proyecto es `O3`: faltan 46,839 de los 192,723 registros, equivalentes al 24.30 %. Esto deja 145,884 mediciones observadas de la variable que se desea predecir. Los momentos donde el valor objetivo no está disponible no podrán utilizarse directamente para entrenar o evaluar una predicción de esa hora, por lo que antes de construir los horizontes de pronóstico será necesario revisar cómo se distribuyen estas ausencias entre años y estaciones.
+
+La disponibilidad es considerablemente mayor en variables como `SR` (3.68 % de faltantes), `PM10` (5.51 %), `RAINF` (7.47 %) y `BP` (8.11 %). Las banderas `-9999` son poco frecuentes: aparecen únicamente en `RH` (2 casos), `SR` (1) y `TEMP` (1), por lo que no explican los porcentajes elevados de ausencia. También aparecen cuatro valores no numéricos en varias variables, una cantidad mínima respecto al tamaño total de la base, aunque deberán identificarse antes de cerrar la limpieza.
 
 También se verifica que no existan dos registros para la misma estación y la misma fecha-hora.
 
@@ -496,7 +499,9 @@ knitr::kable(
 )
 ```
 
-En este punto todavía no se modifica ningún valor. El siguiente paso será decidir el tratamiento de `-9999` y de cualquier otra observación inválida a partir de los resultados de estas verificaciones.
+No se encontraron registros duplicados para una misma combinación de estación y fecha-hora, por lo que no es necesario eliminar observaciones por este motivo.
+
+Antes de imputar o eliminar valores faltantes conviene revisar su distribución por año y estación. Un porcentaje global de 24.30 % en `O3`, por ejemplo, puede corresponder a ausencias relativamente uniformes o estar concentrado en periodos y estaciones específicos; ambas situaciones requieren decisiones de modelado distintas.
 
 ## Valores extremos
 
