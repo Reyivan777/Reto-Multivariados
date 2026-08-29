@@ -133,11 +133,13 @@ que respondían al objetivo anterior más amplio.
 
 ## Archivos fuente
 
-La información original se encuentra en seis archivos de Excel proporcionados para el reto, uno por cada año entre 2020 y 2025. Cada archivo contiene varias hojas y cada hoja corresponde a una estación de monitoreo de SIMA. El archivo de 2025 contiene únicamente el periodo disponible hasta el momento de descarga, por lo que ese año tiene menos registros que los anteriores.
+La información original se encuentra en seis archivos de Excel proporcionados para el reto, uno por cada año entre 2020 y 2025. Cada archivo contiene varias hojas y cada hoja corresponde a una estación de monitoreo de SIMA. El archivo de 2025 contiene únicamente el periodo disponible hasta junio, por lo que ese año tiene aproximadamente la mitad de registros que los años completos.
 
 ## Carga inicial
 
-La primera lectura se realiza sin modificar los nombres de las columnas ni interpretar todavía las mediciones. Todas las columnas provenientes de Excel se leen inicialmente como texto. Esto evita que R realice conversiones automáticas diferentes entre años y permite detectar explícitamente las inconsistencias antes de corregirlas.
+El proyecto utiliza únicamente las estaciones `NTE`, `NTE2`, `NO` y `NE`. Por ello, estas cuatro hojas se seleccionan desde el momento de lectura de cada archivo y las demás estaciones no se cargan en memoria.
+
+Todas las columnas provenientes de Excel se leen inicialmente como texto. Esto mantiene una lectura consistente entre años y deja las conversiones de tipo para una etapa posterior.
 
 ```{r}
 #| label: carga-datos-brutos
@@ -147,8 +149,9 @@ library(here)
 library(purrr)
 
 rm(list = ls())
-
 options(scipen = 999)
+
+estaciones_interes <- c("NTE", "NTE2", "NO", "NE")
 
 archivos <- tibble(Año = 2020:2025) |>
   mutate(
@@ -156,9 +159,10 @@ archivos <- tibble(Año = 2020:2025) |>
   )
 
 leer_anio_bruto <- function(archivo, anio) {
-  hojas <- excel_sheets(archivo)
+  hojas_disponibles <- excel_sheets(archivo)
+  hojas_interes <- intersect(estaciones_interes, hojas_disponibles)
 
-  map_dfr(hojas, function(hoja) {
+  map_dfr(hojas_interes, function(hoja) {
     read_excel(
       archivo,
       sheet = hoja,
@@ -179,27 +183,11 @@ datos_brutos <- map2_dfr(
 )
 ```
 
-El objeto `datos_brutos` reúne la información de los seis archivos y conserva dos identificadores añadidos durante la lectura: `Año`, que indica el archivo de origen, y `Estacion`, obtenida directamente del nombre de la hoja. En este punto todavía no se eliminan registros, no se corrigen valores y no se filtran estaciones o variables.
-
-Esta separación entre **carga** y **preparación** es deliberada. `datos_brutos` funcionará como una representación de trabajo de los archivos originales, mientras que las transformaciones necesarias para obtener el conjunto de modelado se realizarán de manera explícita en las siguientes secciones.
-
-## Selección del subconjunto de trabajo
-
-Como el objetivo del proyecto ya está delimitado a las estaciones `NTE`, `NTE2`, `NO` y `NE`, no es necesario realizar el análisis detallado de estructura y disponibilidad sobre toda la red de SIMA. Las demás estaciones permanecen en `datos_brutos` como respaldo de la fuente original, pero a partir de este punto el flujo de trabajo utiliza únicamente las cuatro estaciones de interés.
-
-```{r}
-#| label: seleccion-estaciones
-estaciones_interes <- c("NTE", "NTE2", "NO", "NE")
-
-datos_interes_brutos <- datos_brutos |>
-  filter(Estacion %in% estaciones_interes)
-```
-
-Esta selección se realiza antes de la homologación y limpieza para evitar procesar información que no será utilizada posteriormente. Al mismo tiempo, se conserva `datos_brutos` sin filtrar, de modo que el subconjunto puede reconstruirse desde la fuente original si fuera necesario.
+`datos_brutos` contiene desde este punto únicamente las cuatro estaciones que se utilizarán en el proyecto. `Año` aparece como entero porque se agrega directamente desde el código; las columnas provenientes de Excel permanecen como `character` por la opción `col_types = "text"`.
 
 ## Estructura y disponibilidad inicial
 
-Antes de modificar las variables se verifica que las cuatro estaciones seleccionadas estén presentes en los seis años y se revisa cuántos registros aporta cada combinación de año y estación. En esta sección, **disponibilidad** se refiere únicamente a la existencia y cantidad de registros; el porcentaje de valores faltantes de cada variable se calculará después de homologar las columnas, para no confundir diferencias estructurales entre archivos con datos realmente ausentes.
+Primero se revisa cuántos registros aporta cada estación en cada año.
 
 ```{r}
 #| label: disponibilidad-registros
@@ -208,7 +196,7 @@ registros_por_estacion <- expand_grid(
   Estacion = estaciones_interes
 ) |>
   left_join(
-    datos_interes_brutos |>
+    datos_brutos |>
       count(Año, Estacion, name = "Registros"),
     by = c("Año", "Estacion")
   ) |>
@@ -224,45 +212,30 @@ registros_por_estacion |>
   )
 ```
 
-Un valor igual a cero en esta tabla indicaría que una de las estaciones no está disponible en un año determinado y obligaría a reconsiderar la cobertura temporal utilizada para el modelado. Si las cuatro estaciones presentan registros durante todo el periodo, se conserva la selección planteada.
+Las cuatro estaciones tienen cobertura durante los seis años. Entre 2020 y 2024 cada estación aporta aproximadamente 8,760 registros por año, consistente con mediciones horarias durante prácticamente todo el año. En 2025 se observan alrededor de 4,344 registros por estación porque la base disponible termina en junio.
 
-También se revisa la estructura general del subconjunto antes de realizar cualquier transformación.
+También se resume la estructura resultante antes de homologar los nombres de las variables.
 
 ```{r}
 #| label: estructura-inicial
 resumen_estructura <- tibble(
-  Registros = nrow(datos_interes_brutos),
-  Columnas = ncol(datos_interes_brutos),
-  Años = n_distinct(datos_interes_brutos$Año),
-  Estaciones = n_distinct(datos_interes_brutos$Estacion)
-)
-
-columnas_brutas <- tibble(
-  Columna = names(datos_interes_brutos),
-  Tipo_lectura = map_chr(
-    datos_interes_brutos,
-    ~ class(.x)[1]
-  )
+  Registros = nrow(datos_brutos),
+  Columnas = ncol(datos_brutos),
+  Años = n_distinct(datos_brutos$Año),
+  Estaciones = n_distinct(datos_brutos$Estacion)
 )
 
 knitr::kable(
   resumen_estructura,
-  caption = "Estructura inicial del subconjunto de trabajo"
-)
-
-knitr::kable(
-  columnas_brutas,
-  caption = "Columnas resultantes de la carga inicial"
+  caption = "Estructura inicial del conjunto de trabajo"
 )
 ```
 
-En este punto la cantidad de columnas representa la **unión de los encabezados encontrados en los seis archivos**. Por ello, si una misma variable cambió de nombre entre años, puede aparecer temporalmente como dos columnas distintas. Además, las mediciones continúan almacenadas como texto.
+El conjunto reúne 192,723 registros de las cuatro estaciones seleccionadas. Antes de homologar, el número de columnas es mayor al esperado porque algunos archivos utilizan nombres diferentes para una misma variable.
 
 ## Homologación de la estructura
 
-Antes de evaluar valores faltantes o convertir las mediciones a formato numérico, se unifican los nombres que representan la misma variable. Esta homologación corrige diferencias de escritura entre los archivos anuales, pero todavía **no modifica los valores registrados**.
-
-Las principales equivalencias identificadas son las siguientes:
+Al comparar los encabezados de los seis archivos se identificaron algunas variables que cambian de nombre según el año. Estas equivalencias ya habían aparecido en el código anterior del proyecto y se conservaron porque corresponden a diferencias reales observadas en los archivos originales.
 
 ```{r}
 #| label: equivalencias-nombres
@@ -281,7 +254,7 @@ knitr::kable(
 )
 ```
 
-Además de estas equivalencias, algunos encabezados incluyen unidades entre paréntesis o saltos de línea. Para identificar correctamente las columnas, primero se crea una versión auxiliar de cada nombre sin estas diferencias de formato. Después se combinan las columnas equivalentes en una sola variable estándar.
+Además, algunos encabezados contienen unidades entre paréntesis o saltos de línea. La función siguiente normaliza esas diferencias de formato y después combina las columnas equivalentes bajo un único nombre.
 
 ```{r}
 #| label: homologacion-estructura
@@ -309,32 +282,30 @@ extraer_variable <- function(datos, aliases) {
   reduce(datos[columnas], coalesce)
 }
 
-datos_homologados <- datos_interes_brutos |>
+datos_homologados <- datos_brutos |>
   transmute(
     Año,
     Estacion,
-    fecha_hora = extraer_variable(datos_interes_brutos, c("fecha y hora", "date")),
-    CO = extraer_variable(datos_interes_brutos, "CO"),
-    NO = extraer_variable(datos_interes_brutos, "NO"),
-    NO2 = extraer_variable(datos_interes_brutos, "NO2"),
-    NOX = extraer_variable(datos_interes_brutos, "NOX"),
-    O3 = extraer_variable(datos_interes_brutos, "O3"),
-    PM10 = extraer_variable(datos_interes_brutos, "PM10"),
-    PM2.5 = extraer_variable(datos_interes_brutos, "PM2.5"),
-    SO2 = extraer_variable(datos_interes_brutos, "SO2"),
-    BP = extraer_variable(datos_interes_brutos, c("BP", "PRS")),
-    RAINF = extraer_variable(datos_interes_brutos, "RAINF"),
-    RH = extraer_variable(datos_interes_brutos, "RH"),
-    SR = extraer_variable(datos_interes_brutos, "SR"),
-    TEMP = extraer_variable(datos_interes_brutos, c("TEMP", "TOUT")),
-    WS = extraer_variable(datos_interes_brutos, c("WS", "WSR")),
-    WD = extraer_variable(datos_interes_brutos, c("WD", "WDR"))
+    fecha_hora = extraer_variable(datos_brutos, c("fecha y hora", "date")),
+    CO = extraer_variable(datos_brutos, "CO"),
+    NO = extraer_variable(datos_brutos, "NO"),
+    NO2 = extraer_variable(datos_brutos, "NO2"),
+    NOX = extraer_variable(datos_brutos, "NOX"),
+    O3 = extraer_variable(datos_brutos, "O3"),
+    PM10 = extraer_variable(datos_brutos, "PM10"),
+    PM2.5 = extraer_variable(datos_brutos, "PM2.5"),
+    SO2 = extraer_variable(datos_brutos, "SO2"),
+    BP = extraer_variable(datos_brutos, c("BP", "PRS")),
+    RAINF = extraer_variable(datos_brutos, "RAINF"),
+    RH = extraer_variable(datos_brutos, "RH"),
+    SR = extraer_variable(datos_brutos, "SR"),
+    TEMP = extraer_variable(datos_brutos, c("TEMP", "TOUT")),
+    WS = extraer_variable(datos_brutos, c("WS", "WSR")),
+    WD = extraer_variable(datos_brutos, c("WD", "WDR"))
   )
 ```
 
-El resultado es `datos_homologados`, que conserva únicamente las variables relevantes para el proyecto bajo una estructura común para los seis años. En este punto las mediciones siguen siendo texto; la conversión de tipos y la revisión de valores se realizarán después, dentro de la preparación de los datos.
-
-Como verificación, se comprueba que la estructura obtenida contenga exactamente los identificadores, la variable temporal y las variables de medición que se espera utilizar.
+El resultado conserva una sola columna por variable y mantiene todavía las mediciones como texto.
 
 ```{r}
 #| label: verificacion-homologacion
@@ -360,7 +331,7 @@ knitr::kable(
 )
 ```
 
-Con esto se obtiene una estructura consistente antes de comenzar la limpieza. La siguiente revisión se enfocará en convertir las variables a sus tipos correctos y cuantificar la disponibilidad real de O3 y de sus posibles predictores.
+Después de la homologación se conservan los mismos 192,723 registros en 18 columnas y no falta ninguna de las variables esperadas para el análisis.
 
 # Preparación de los datos
 
