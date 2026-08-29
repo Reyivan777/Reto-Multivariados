@@ -432,11 +432,71 @@ knitr::kable(
 )
 ```
 
-En `datos_tipos` las mediciones ya pueden utilizarse para cálculos estadísticos. Los valores faltantes, banderas de medición y valores fuera de rango todavía no se corrigen en este paso; se revisan por separado a continuación.
+La conversión produjo las 15 variables de medición en formato numérico y `fecha_hora` en formato `POSIXct`. El periodo resultante va del 1 de enero de 2020 al 30 de junio de 2025 a las 23:00, sin fechas que hayan quedado sin convertir.
 
 ## Valores faltantes y registros inválidos
 
-Pendiente de reconstruir el proceso de limpieza manteniendo únicamente las decisiones necesarias para el modelado.
+Antes de reemplazar o eliminar valores se cuantifican los problemas presentes en cada variable. Esta revisión distingue tres situaciones: valores que ya están ausentes (`NA`), valores no vacíos que no pudieron convertirse a número y la bandera `-9999`, utilizada en los archivos para indicar mediciones no válidas en algunas variables.
+
+```{r}
+#| label: diagnostico-faltantes-banderas
+resumen_faltantes <- map_dfr(
+  variables_medicion,
+  function(variable) {
+    original <- datos_homologados[[variable]]
+    numerico <- datos_tipos[[variable]]
+    texto <- str_squish(original)
+
+    faltantes_originales <- sum(is.na(original) | texto == "")
+    no_numericos <- sum(
+      !is.na(original) &
+        texto != "" &
+        is.na(numerico)
+    )
+    bandera_9999 <- sum(numerico == -9999, na.rm = TRUE)
+
+    tibble(
+      Variable = variable,
+      Faltantes = sum(is.na(numerico)),
+      No_numericos = no_numericos,
+      Bandera_menos9999 = bandera_9999,
+      Porcentaje_faltante = round(
+        (sum(is.na(numerico)) + bandera_9999) /
+          nrow(datos_tipos) * 100,
+        2
+      )
+    )
+  }
+)
+
+knitr::kable(
+  resumen_faltantes,
+  caption = "Diagnóstico inicial de valores faltantes y banderas por variable"
+)
+```
+
+`Porcentaje_faltante` considera tanto los `NA` actuales como las observaciones con `-9999`, ya que estas últimas no representan una medición real. La tabla permite identificar qué variables tienen suficiente cobertura antes de decidir cómo tratar las ausencias.
+
+También se verifica que no existan dos registros para la misma estación y la misma fecha-hora.
+
+```{r}
+#| label: diagnostico-duplicados
+duplicados <- datos_tipos |>
+  count(Estacion, fecha_hora, name = "n") |>
+  filter(!is.na(fecha_hora), n > 1)
+
+resumen_duplicados <- tibble(
+  Combinaciones_duplicadas = nrow(duplicados),
+  Registros_involucrados = sum(duplicados$n)
+)
+
+knitr::kable(
+  resumen_duplicados,
+  caption = "Verificación de registros duplicados"
+)
+```
+
+En este punto todavía no se modifica ningún valor. El siguiente paso será decidir el tratamiento de `-9999` y de cualquier otra observación inválida a partir de los resultados de estas verificaciones.
 
 ## Valores extremos
 
