@@ -335,6 +335,105 @@ Después de la homologación se conservan los mismos 192,723 registros en 18 col
 
 # Preparación de los datos
 
+## Conversión de tipos
+
+La estructura ya está homologada, pero las mediciones todavía se encuentran almacenadas como texto. En este paso se convierte `fecha_hora` a un formato de fecha y hora y las 15 variables de medición a tipo numérico. `Año` se mantiene como entero y `Estacion` como identificador de texto.
+
+La columna temporal aparece en dos formatos dentro de los archivos: algunos registros se almacenan como números seriales de Excel y otros como texto con fecha y hora. La función siguiente contempla ambos casos sin modificar el orden temporal de las observaciones.
+
+```{r}
+#| label: conversion-tipos
+variables_medicion <- c(
+  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2",
+  "BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD"
+)
+
+convertir_fecha_hora <- function(x) {
+  x <- str_squish(x)
+  x_num <- suppressWarnings(as.numeric(x))
+
+  fecha_excel <- as.POSIXct(
+    x_num * 86400,
+    origin = "1899-12-30",
+    tz = "UTC"
+  )
+
+  fecha_texto <- suppressWarnings(
+    lubridate::parse_date_time(
+      x,
+      orders = c(
+        "Ymd HMS", "Ymd HM",
+        "dmY HMS", "dmY HM",
+        "mdY HMS", "mdY HM"
+      ),
+      tz = "UTC"
+    )
+  )
+
+  coalesce(fecha_excel, fecha_texto)
+}
+
+datos_tipos <- datos_homologados |>
+  mutate(
+    fecha_hora = convertir_fecha_hora(fecha_hora),
+    across(
+      all_of(variables_medicion),
+      ~ suppressWarnings(parse_number(.x))
+    )
+  )
+```
+
+La zona horaria se fija como `UTC` únicamente para conservar una representación uniforme de fecha y hora; no se realiza una conversión del horario registrado por SIMA.
+
+Antes de continuar con la limpieza se verifica que la transformación haya producido los tipos esperados y se cuantifican las fechas no vacías que no pudieron interpretarse.
+
+```{r}
+#| label: verificacion-tipos
+fechas_no_convertidas <- sum(
+  !is.na(datos_homologados$fecha_hora) &
+    str_squish(datos_homologados$fecha_hora) != "" &
+    is.na(datos_tipos$fecha_hora)
+)
+
+resumen_tipos <- tibble(
+  Elemento = c(
+    "Año",
+    "Estacion",
+    "fecha_hora",
+    "Variables de medición"
+  ),
+  Resultado = c(
+    class(datos_tipos$Año)[1],
+    class(datos_tipos$Estacion)[1],
+    class(datos_tipos$fecha_hora)[1],
+    paste0(
+      sum(map_lgl(datos_tipos[variables_medicion], is.numeric)),
+      "/",
+      length(variables_medicion),
+      " numéricas"
+    )
+  )
+)
+
+resumen_fechas <- tibble(
+  Primera_fecha = min(datos_tipos$fecha_hora, na.rm = TRUE),
+  Ultima_fecha = max(datos_tipos$fecha_hora, na.rm = TRUE),
+  Fechas_no_convertidas = fechas_no_convertidas
+)
+
+knitr::kable(
+  resumen_tipos,
+  caption = "Tipos de datos después de la transformación"
+)
+
+knitr::kable(
+  resumen_fechas,
+  caption = "Verificación de la conversión de fecha y hora"
+)
+```
+
+En `datos_tipos` las mediciones ya pueden utilizarse para cálculos estadísticos. Los valores faltantes, banderas de medición y valores fuera de rango todavía no se corrigen en este paso; se revisan por separado a continuación.
+
 ## Valores faltantes y registros inválidos
 
 Pendiente de reconstruir el proceso de limpieza manteniendo únicamente las decisiones necesarias para el modelado.
