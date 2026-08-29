@@ -131,13 +131,61 @@ que respondían al objetivo anterior más amplio.
 
 # Datos
 
-## Carga y homologación
+## Archivos fuente
 
-Pendiente de reestructurar a partir del código existente de las etapas anteriores.
+La información original se encuentra en seis archivos de Excel proporcionados para el reto, uno por cada año entre 2020 y 2025. Cada archivo contiene varias hojas y cada hoja corresponde a una estación de monitoreo de SIMA. El archivo de 2025 contiene únicamente el periodo disponible hasta el momento de descarga, por lo que ese año tiene menos registros que los anteriores.
+
+En esta reconstrucción se parte nuevamente de los archivos originales `BD 2020.xlsx` a `BD 2025.xlsx`. El archivo `datos_etapa2_limpios.csv`, generado durante la entrega anterior, se conserva en el repositorio como antecedente, pero no se utiliza como punto de partida del nuevo flujo. De esta forma, todas las decisiones de limpieza y transformación quedan reproducibles desde los datos originales.
+
+## Carga inicial
+
+La primera lectura se realiza sin modificar los nombres de las columnas ni interpretar todavía las mediciones. Todas las columnas provenientes de Excel se leen inicialmente como texto. Esto evita que R realice conversiones automáticas diferentes entre años y permite detectar explícitamente las inconsistencias antes de corregirlas.
+
+```{r}
+#| label: carga-datos-brutos
+library(tidyverse)
+library(readxl)
+library(here)
+library(purrr)
+
+options(scipen = 999)
+
+archivos <- tibble(Año = 2020:2025) |>
+  mutate(
+    Archivo = here("data", paste0("BD ", Año, ".xlsx"))
+  )
+
+leer_anio_bruto <- function(archivo, anio) {
+  hojas <- excel_sheets(archivo)
+
+  map_dfr(hojas, function(hoja) {
+    read_excel(
+      archivo,
+      sheet = hoja,
+      col_types = "text"
+    ) |>
+      mutate(
+        Año = anio,
+        Estacion = hoja,
+        .before = 1
+      )
+  })
+}
+
+datos_brutos <- map2_dfr(
+  archivos$Archivo,
+  archivos$Año,
+  leer_anio_bruto
+)
+```
+
+El objeto `datos_brutos` reúne la información de los seis archivos y conserva dos identificadores añadidos durante la lectura: `Año`, que indica el archivo de origen, y `Estacion`, obtenida directamente del nombre de la hoja. En este punto todavía no se eliminan registros, no se corrigen valores y no se filtran estaciones o variables.
+
+Esta separación entre **carga** y **preparación** es deliberada. `datos_brutos` funcionará como una representación de trabajo de los archivos originales, mientras que las transformaciones necesarias para obtener el conjunto de modelado se realizarán de manera explícita en las siguientes secciones.
 
 ## Estructura y disponibilidad
 
-Pendiente de documentar la dimensión final del conjunto, cobertura temporal y disponibilidad por estación y variable.
+Pendiente de revisar la estructura resultante de `datos_brutos`, homologar las diferencias entre años y cuantificar la disponibilidad de O3 y de sus posibles predictores.
 
 ## Selección del subconjunto de trabajo
 
