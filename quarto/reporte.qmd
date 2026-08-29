@@ -135,11 +135,10 @@ que respondían al objetivo anterior más amplio.
 
 La información original se encuentra en seis archivos de Excel proporcionados para el reto, uno por cada año entre 2020 y 2025. Cada archivo contiene varias hojas y cada hoja corresponde a una estación de monitoreo de SIMA. El archivo de 2025 contiene únicamente el periodo disponible hasta el momento de descarga, por lo que ese año tiene menos registros que los anteriores.
 
-En esta reconstrucción se parte nuevamente de los archivos originales `BD 2020.xlsx` a `BD 2025.xlsx`. El archivo `datos_etapa2_limpios.csv`, generado durante la entrega anterior, se conserva en el repositorio como antecedente, pero no se utiliza como punto de partida del nuevo flujo. De esta forma, todas las decisiones de limpieza y transformación quedan reproducibles desde los datos originales.
-
 ## Carga inicial
 
 La primera lectura se realiza sin modificar los nombres de las columnas ni interpretar todavía las mediciones. Todas las columnas provenientes de Excel se leen inicialmente como texto. Esto evita que R realice conversiones automáticas diferentes entre años y permite detectar explícitamente las inconsistencias antes de corregirlas.
+
 
 ```{r}
 #| label: carga-datos-brutos
@@ -147,6 +146,8 @@ library(tidyverse)
 library(readxl)
 library(here)
 library(purrr)
+
+rm(list = ls())
 
 options(scipen = 999)
 
