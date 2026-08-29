@@ -256,7 +256,111 @@ knitr::kable(
 )
 ```
 
-En este punto la cantidad de columnas representa la **unión de los encabezados encontrados en los seis archivos**. Por ello, si una misma variable cambió de nombre entre años, puede aparecer temporalmente como dos columnas distintas. Además, las mediciones continúan almacenadas como texto. La siguiente etapa consistirá precisamente en homologar los nombres de las variables y convertir únicamente las columnas necesarias a su tipo correcto antes de evaluar valores faltantes o realizar cualquier análisis estadístico.
+En este punto la cantidad de columnas representa la **unión de los encabezados encontrados en los seis archivos**. Por ello, si una misma variable cambió de nombre entre años, puede aparecer temporalmente como dos columnas distintas. Además, las mediciones continúan almacenadas como texto.
+
+## Homologación de la estructura
+
+Antes de evaluar valores faltantes o convertir las mediciones a formato numérico, se unifican los nombres que representan la misma variable. Esta homologación corrige diferencias de escritura entre los archivos anuales, pero todavía **no modifica los valores registrados**.
+
+Las principales equivalencias identificadas son las siguientes:
+
+```{r}
+#| label: equivalencias-nombres
+equivalencias_nombres <- tribble(
+  ~Variable_estandar, ~Nombres_en_archivos,
+  "fecha_hora", "fecha y hora / date",
+  "BP", "BP / PRS",
+  "TEMP", "TEMP / TOUT",
+  "WS", "WS / WSR",
+  "WD", "WD / WDR"
+)
+
+knitr::kable(
+  equivalencias_nombres,
+  caption = "Equivalencias utilizadas para homologar la estructura"
+)
+```
+
+Además de estas equivalencias, algunos encabezados incluyen unidades entre paréntesis o saltos de línea. Para identificar correctamente las columnas, primero se crea una versión auxiliar de cada nombre sin estas diferencias de formato. Después se combinan las columnas equivalentes en una sola variable estándar.
+
+```{r}
+#| label: homologacion-estructura
+normalizar_etiqueta <- function(x) {
+  x |>
+    str_replace_all("[\r\n]", " ") |>
+    str_replace("\\s*\\([^)]*\\).*", "") |>
+    str_squish() |>
+    str_to_upper()
+}
+
+extraer_variable <- function(datos, aliases) {
+  nombres_originales <- names(datos)
+  nombres_normalizados <- normalizar_etiqueta(nombres_originales)
+  aliases_normalizados <- normalizar_etiqueta(aliases)
+
+  columnas <- nombres_originales[
+    nombres_normalizados %in% aliases_normalizados
+  ]
+
+  if (length(columnas) == 0) {
+    return(rep(NA_character_, nrow(datos)))
+  }
+
+  reduce(datos[columnas], coalesce)
+}
+
+datos_homologados <- datos_interes_brutos |>
+  transmute(
+    Año,
+    Estacion,
+    fecha_hora = extraer_variable(datos_interes_brutos, c("fecha y hora", "date")),
+    CO = extraer_variable(datos_interes_brutos, "CO"),
+    NO = extraer_variable(datos_interes_brutos, "NO"),
+    NO2 = extraer_variable(datos_interes_brutos, "NO2"),
+    NOX = extraer_variable(datos_interes_brutos, "NOX"),
+    O3 = extraer_variable(datos_interes_brutos, "O3"),
+    PM10 = extraer_variable(datos_interes_brutos, "PM10"),
+    PM2.5 = extraer_variable(datos_interes_brutos, "PM2.5"),
+    SO2 = extraer_variable(datos_interes_brutos, "SO2"),
+    BP = extraer_variable(datos_interes_brutos, c("BP", "PRS")),
+    RAINF = extraer_variable(datos_interes_brutos, "RAINF"),
+    RH = extraer_variable(datos_interes_brutos, "RH"),
+    SR = extraer_variable(datos_interes_brutos, "SR"),
+    TEMP = extraer_variable(datos_interes_brutos, c("TEMP", "TOUT")),
+    WS = extraer_variable(datos_interes_brutos, c("WS", "WSR")),
+    WD = extraer_variable(datos_interes_brutos, c("WD", "WDR"))
+  )
+```
+
+El resultado es `datos_homologados`, que conserva únicamente las variables relevantes para el proyecto bajo una estructura común para los seis años. En este punto las mediciones siguen siendo texto; la conversión de tipos y la revisión de valores se realizarán después, dentro de la preparación de los datos.
+
+Como verificación, se comprueba que la estructura obtenida contenga exactamente los identificadores, la variable temporal y las variables de medición que se espera utilizar.
+
+```{r}
+#| label: verificacion-homologacion
+variables_esperadas <- c(
+  "Año", "Estacion", "fecha_hora",
+  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2",
+  "BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD"
+)
+
+resumen_homologacion <- tibble(
+  Registros = nrow(datos_homologados),
+  Columnas = ncol(datos_homologados),
+  Variables_faltantes = if_else(
+    length(setdiff(variables_esperadas, names(datos_homologados))) == 0,
+    "Ninguna",
+    paste(setdiff(variables_esperadas, names(datos_homologados)), collapse = ", ")
+  )
+)
+
+knitr::kable(
+  resumen_homologacion,
+  caption = "Verificación de la estructura homologada"
+)
+```
+
+Con esto se obtiene una estructura consistente antes de comenzar la limpieza. La siguiente revisión se enfocará en convertir las variables a sus tipos correctos y cuantificar la disponibilidad real de O3 y de sus posibles predictores.
 
 # Preparación de los datos
 
