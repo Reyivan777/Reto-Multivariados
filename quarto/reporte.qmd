@@ -503,6 +503,57 @@ No se encontraron registros duplicados para una misma combinación de estación 
 
 Antes de imputar o eliminar valores faltantes conviene revisar su distribución por año y estación. Un porcentaje global de 24.30 % en `O3`, por ejemplo, puede corresponder a ausencias relativamente uniformes o estar concentrado en periodos y estaciones específicos; ambas situaciones requieren decisiones de modelado distintas.
 
+### Distribución de faltantes de O3
+
+Como `O3` es la variable objetivo, primero se revisa su disponibilidad por estación y año. En esta variable no se encontraron banderas `-9999`, por lo que sus ausencias corresponden directamente a valores `NA` después de la conversión.
+
+```{r}
+#| label: faltantes-o3-estacion-anio
+o3_estacion_anio <- datos_tipos |>
+  group_by(Año, Estacion) |>
+  summarise(
+    Registros = n(),
+    O3_disponibles = sum(!is.na(O3)),
+    O3_faltantes = sum(is.na(O3)),
+    Porcentaje_faltante = round(mean(is.na(O3)) * 100, 2),
+    .groups = "drop"
+  )
+
+porcentaje_o3_estacion_anio <- o3_estacion_anio |>
+  select(Año, Estacion, Porcentaje_faltante) |>
+  pivot_wider(
+    names_from = Estacion,
+    values_from = Porcentaje_faltante
+  )
+
+knitr::kable(
+  porcentaje_o3_estacion_anio,
+  caption = "Porcentaje de O3 faltante por año y estación"
+)
+```
+
+Además del comportamiento anual, se resume la cobertura total de O3 de cada estación durante todo el periodo.
+
+```{r}
+#| label: faltantes-o3-por-estacion
+o3_por_estacion <- datos_tipos |>
+  group_by(Estacion) |>
+  summarise(
+    Registros = n(),
+    O3_disponibles = sum(!is.na(O3)),
+    O3_faltantes = sum(is.na(O3)),
+    Porcentaje_faltante = round(mean(is.na(O3)) * 100, 2),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_estacion,
+  caption = "Disponibilidad total de O3 por estación"
+)
+```
+
+Estas dos tablas permitirán distinguir si el 24.30 % global de O3 faltante se distribuye de manera parecida entre las cuatro estaciones o si está concentrado en estaciones y años específicos. La decisión sobre qué periodos conservar, excluir o tratar se tomará después de revisar estos resultados.
+
 ## Valores extremos
 
 Pendiente de diferenciar entre errores de medición y episodios reales de concentraciones elevadas antes de decidir cualquier eliminación.
