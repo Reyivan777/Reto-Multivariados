@@ -974,11 +974,144 @@ La variable `Fecha` servirá principalmente para ordenar y visualizar la serie t
 
 ## Comportamiento del O3
 
-Pendiente de describir su distribución, tendencia temporal y patrones horarios y estacionales.
+El análisis exploratorio comienza con la variable objetivo. En este primer bloque se revisa su distribución general, se compara entre las cuatro estaciones y se estudia su patrón promedio a lo largo de las 24 horas del día. Solo se utilizan mediciones válidas de O3; los valores faltantes permanecen fuera de los cálculos descriptivos.
+
+```{r}
+#| label: resumen-descriptivo-o3
+resumen_o3 <- datos_preparados |>
+  summarise(
+    Observaciones = sum(!is.na(O3)),
+    Media = mean(O3, na.rm = TRUE),
+    Mediana = median(O3, na.rm = TRUE),
+    Desv_estandar = sd(O3, na.rm = TRUE),
+    P25 = quantile(O3, 0.25, na.rm = TRUE),
+    P75 = quantile(O3, 0.75, na.rm = TRUE),
+    Minimo = min(O3, na.rm = TRUE),
+    Maximo = max(O3, na.rm = TRUE)
+  ) |>
+  mutate(
+    across(
+      -Observaciones,
+      ~ round(.x, 2)
+    )
+  )
+
+knitr::kable(
+  resumen_o3,
+  caption = "Resumen descriptivo de O3 entre 2021 y 2025"
+)
+```
+
+```{r}
+#| label: distribucion-o3
+#| fig-cap: "Distribución de las concentraciones horarias de O3"
+#| fig-width: 7
+#| fig-height: 4.5
+datos_preparados |>
+  filter(!is.na(O3)) |>
+  ggplot(aes(x = O3)) +
+  geom_histogram(bins = 40) +
+  labs(
+    x = "O3",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
 
 ## Diferencias entre estaciones
 
-Pendiente de comparar el comportamiento del O3 entre `NTE`, `NTE2`, `NO` y `NE`.
+Se comparan las mediciones de O3 de `NTE`, `NTE2`, `NO` y `NE` mediante estadísticos descriptivos y su distribución por estación.
+
+```{r}
+#| label: resumen-o3-estacion
+resumen_o3_estacion <- datos_preparados |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = sum(!is.na(O3)),
+    Media = mean(O3, na.rm = TRUE),
+    Mediana = median(O3, na.rm = TRUE),
+    P25 = quantile(O3, 0.25, na.rm = TRUE),
+    P75 = quantile(O3, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    across(
+      c(Media, Mediana, P25, P75),
+      ~ round(.x, 2)
+    )
+  )
+
+knitr::kable(
+  resumen_o3_estacion,
+  caption = "Resumen de O3 por estación"
+)
+```
+
+```{r}
+#| label: distribucion-o3-estacion
+#| fig-cap: "Distribución de O3 por estación"
+#| fig-width: 7
+#| fig-height: 4.5
+datos_preparados |>
+  filter(!is.na(O3)) |>
+  ggplot(aes(x = Estacion, y = O3)) +
+  geom_boxplot(outlier.alpha = 0.15) +
+  labs(
+    x = "Estación",
+    y = "O3"
+  ) +
+  theme_minimal()
+```
+
+### Patrón horario
+
+Finalmente se calcula la media y la mediana de O3 para cada hora del día. Esta revisión permitirá identificar si existe una estructura diaria suficientemente marcada como para justificar el uso de variables horarias en el modelo.
+
+```{r}
+#| label: patron-horario-o3
+o3_por_hora <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  group_by(Hora) |>
+  summarise(
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_hora |>
+    mutate(
+      Media = round(Media, 2),
+      Mediana = round(Mediana, 2)
+    ),
+  caption = "Concentración de O3 por hora del día"
+)
+```
+
+```{r}
+#| label: grafica-patron-horario-o3
+#| fig-cap: "Patrón horario de O3"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_por_hora |>
+  pivot_longer(
+    cols = c(Media, Mediana),
+    names_to = "Estadistico",
+    values_to = "O3"
+  ) |>
+  ggplot(aes(x = Hora, y = O3, linetype = Estadistico)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    x = "Hora del día",
+    y = "O3",
+    linetype = NULL
+  ) +
+  theme_minimal()
+```
+
+La interpretación de estas tablas y figuras se realizará con los resultados obtenidos al ejecutar el reporte antes de continuar con los patrones mensuales y la relación de O3 con las variables meteorológicas.
 
 ## Relación con variables meteorológicas y contaminantes
 
