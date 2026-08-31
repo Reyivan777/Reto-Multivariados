@@ -822,7 +822,73 @@ knitr::kable(
 )
 ```
 
-En este punto todavía no se modifica `datos_base_modelado`. Después de revisar esta última tabla se decidirá el tratamiento de los valores fuera de rango y se construirá la base limpia para continuar con las variables temporales y el análisis exploratorio.
+Los valores fuera de rango de `RH` están casi totalmente concentrados en la estación `NO`: 256 de los 260 casos provienen de esa estación. En 2022 aparecen 151 registros fuera del intervalo 0-100 %, incluyendo un máximo de 714.2 %, por lo que se consideran mediciones inválidas. Los cuatro casos restantes corresponden a `NTE` en 2024.
+
+En `SR` también se observa un problema localizado. De los 656 casos fuera de rango, 604 corresponden a `NTE` durante 2022. El resto se distribuye en cantidades pequeñas entre otras estaciones y años. Algunos valores cercanos a cero aparecen redondeados como 0.00 en la tabla aunque son ligeramente negativos y, por lo tanto, quedan fuera del límite inferior correspondiente.
+
+Dado que estos casos representan una proporción pequeña de la base y que varios corresponden a valores físicamente imposibles o incompatibles con los límites de validación establecidos, se conservarán las filas completas y únicamente se sustituirá por `NA` la medición inválida.
+
+### Construcción de la base limpia
+
+Se aplican los límites específicos de cada año a todas las variables de medición. Cuando una observación cae fuera de su intervalo permitido, solo esa celda se convierte a `NA`; no se elimina el registro horario completo.
+
+```{r}
+#| label: limpieza-valores-fuera-rango
+datos_limpios <- datos_base_modelado
+
+for (i in seq_len(nrow(limites_modelado))) {
+  anio_i <- limites_modelado$Año[i]
+  variable_i <- limites_modelado$Variable[i]
+  min_i <- limites_modelado$Min_permitido[i]
+  max_i <- limites_modelado$Max_permitido[i]
+
+  invalido <-
+    datos_limpios$Año == anio_i &
+    !is.na(datos_limpios[[variable_i]]) &
+    (
+      datos_limpios[[variable_i]] < min_i |
+      datos_limpios[[variable_i]] > max_i
+    )
+
+  datos_limpios[[variable_i]][invalido] <- NA_real_
+}
+```
+
+Después de la transformación se vuelve a comprobar que no permanezcan valores fuera de los límites utilizados.
+
+```{r}
+#| label: verificacion-datos-limpios
+verificacion_rangos <- pmap_dfr(
+  limites_modelado,
+  function(Año, Variable, Min_permitido, Max_permitido) {
+    x <- datos_limpios[[Variable]]
+    seleccion <- datos_limpios$Año == Año
+
+    tibble(
+      Año = Año,
+      Variable = Variable,
+      Fuera_de_rango = sum(
+        seleccion &
+          !is.na(x) &
+          (x < Min_permitido | x > Max_permitido)
+      )
+    )
+  }
+)
+
+resumen_limpieza <- tibble(
+  Registros = nrow(datos_limpios),
+  Valores_convertidos_a_NA = sum(datos_extremos$Fuera_de_rango),
+  Fuera_de_rango_restantes = sum(verificacion_rangos$Fuera_de_rango)
+)
+
+knitr::kable(
+  resumen_limpieza,
+  caption = "Verificación de la base limpia"
+)
+```
+
+`datos_limpios` mantiene los 157,616 registros del periodo 2021-2025. La limpieza no elimina horas completas: únicamente transforma a `NA` las mediciones inválidas detectadas. Los valores extremos que permanecen dentro de los límites se conservan porque pueden corresponder a episodios reales y resultar relevantes para el modelado.
 
 ## Variables temporales y espaciales
 
