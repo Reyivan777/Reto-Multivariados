@@ -497,9 +497,9 @@ No se encontraron registros duplicados para una misma combinación de estación 
 
 Antes de imputar o eliminar valores faltantes conviene revisar su distribución por año y estación. Un porcentaje global de 24.30 % en `O3`, por ejemplo, puede corresponder a ausencias relativamente uniformes o estar concentrado en periodos y estaciones específicos; ambas situaciones requieren decisiones de modelado distintas.
 
-### Distribución de faltantes de O3
+### Disponibilidad de O3 y selección del periodo
 
-Como `O3` es la variable objetivo, primero se revisa su disponibilidad por estación y año. En esta variable no se encontraron banderas `-9999`, por lo que sus ausencias corresponden directamente a valores `NA` después de la conversión.
+Como `O3` es la variable objetivo, se revisa directamente su porcentaje de ausencia por estación y año. En esta variable no se encontraron banderas `-9999`, por lo que sus faltantes corresponden a valores `NA` después de la conversión.
 
 ```{r}
 #| label: faltantes-o3-estacion-anio
@@ -526,60 +526,13 @@ knitr::kable(
 )
 ```
 
-Además del comportamiento anual, se resume la cobertura total de O3 de cada estación durante todo el periodo.
+La tabla muestra que la falta de O3 está concentrada principalmente en **2020**. Ese año faltan 99.90 % de las mediciones en `NE`, 98.44 % en `NO`, 99.99 % en `NTE` y 93.33 % en `NTE2`, por lo que prácticamente no existe información de la variable objetivo para entrenar o evaluar un modelo supervisado. A partir de 2021 la cobertura mejora de manera considerable; aunque todavía existen faltantes, entre 2022 y 2024 los porcentajes son generalmente inferiores a 11 % y no se observa una estación cuya cobertura justifique eliminarla del análisis.
 
-```{r}
-#| label: faltantes-o3-por-estacion
-o3_por_estacion <- datos_tipos |>
-  group_by(Estacion) |>
-  summarise(
-    Registros = n(),
-    O3_disponibles = sum(!is.na(O3)),
-    O3_faltantes = sum(is.na(O3)),
-    Porcentaje_faltante = round(mean(is.na(O3)) * 100, 2),
-    .groups = "drop"
-  )
+Con base en esta evidencia, **2020 se conserva únicamente como parte de la fuente histórica original y se excluye del periodo de modelado**. El periodo útil queda definido entre 2021 y 2025, con 2021-2023 para entrenamiento, 2024 para validación y 2025 para prueba final.
 
-knitr::kable(
-  o3_por_estacion,
-  caption = "Disponibilidad total de O3 por estación"
-)
-```
+### Continuidad y tratamiento de los faltantes de O3 desde 2021
 
-Los resultados muestran que el problema de disponibilidad de O3 está concentrado principalmente en el **año 2020**, no en una estación específica. Durante 2020 faltan 99.90 % de las mediciones de `NE`, 98.44 % de `NO`, 99.99 % de `NTE` y 93.33 % de `NTE2`. Con esta cobertura, 2020 aporta muy pocas observaciones de la variable objetivo y no resulta útil para entrenar ni evaluar un modelo supervisado de O3.
-
-A partir de 2021 la situación mejora de forma considerable. Ese año todavía presenta porcentajes relevantes de ausencia, especialmente en `NO` (20.34 %), `NTE` (18.52 %) y `NE` (16.03 %), mientras que `NTE2` presenta 9.49 %. Entre 2022 y 2024 la disponibilidad es mucho más estable, con porcentajes generalmente inferiores a 11 %. En 2025 destaca `NE`, con 19.31 % de faltantes, mientras que las otras tres estaciones mantienen una cobertura mayor.
-
-Los porcentajes acumulados por estación son similares: varían entre 20.93 % en `NTE2` y 26.39 % en `NO`. Esta similitud se debe en gran medida a que las cuatro estaciones comparten la falta casi total de O3 en 2020. Por ello, **no hay evidencia en esta revisión para eliminar alguna de las cuatro estaciones por falta de cobertura**.
-
-Para cuantificar la disponibilidad del periodo que sí puede utilizarse para el modelado, se calcula nuevamente el porcentaje de faltantes por estación excluyendo 2020.
-
-```{r}
-#| label: disponibilidad-o3-desde-2021
-o3_desde_2021 <- datos_tipos |>
-  filter(Año >= 2021) |>
-  group_by(Estacion) |>
-  summarise(
-    Registros = n(),
-    O3_disponibles = sum(!is.na(O3)),
-    O3_faltantes = sum(is.na(O3)),
-    Porcentaje_faltante = round(mean(is.na(O3)) * 100, 2),
-    .groups = "drop"
-  )
-
-knitr::kable(
-  o3_desde_2021,
-  caption = "Disponibilidad de O3 por estación desde 2021"
-)
-```
-
-Al excluir 2020, la proporción de O3 faltante disminuye de forma importante: `NTE2` queda en 4.81 %, `NTE` en 8.02 %, `NE` en 8.47 % y `NO` en 10.33 %. Esto confirma que la mayor parte del 24.30 % global estaba concentrada en 2020 y que las cuatro estaciones conservan una cantidad considerable de O3 observado durante el periodo útil para modelado.
-
-Con base en estos resultados, **2020 se conservará en los objetos de datos como parte de la fuente original, pero se excluirá del periodo destinado al modelado de O3**. La separación temporal de referencia pasa a ser 2021-2023 para entrenamiento, 2024 para validación y 2025 para prueba final. Antes de cerrar el tratamiento de los faltantes todavía falta revisar si las ausencias de O3 desde 2021 aparecen aisladas o forman bloques consecutivos largos.
-
-### Continuidad de los faltantes de O3 desde 2021
-
-Para un modelo con rezagos y horizonte de 24 horas no basta con conocer el porcentaje de O3 faltante. También importa saber si las ausencias aparecen como horas aisladas o como interrupciones prolongadas. Por ello se reconstruye una secuencia horaria completa para cada estación desde 2021; si alguna hora completa no aparece en la base, también se considera como una hora sin O3.
+Para decidir si los valores faltantes pueden imputarse no basta con conocer su porcentaje. En un problema temporal también importa saber si aparecen como horas aisladas o como interrupciones prolongadas. Por ello se reconstruye una secuencia horaria completa por estación desde 2021 y se identifican los bloques consecutivos sin O3.
 
 ```{r}
 #| label: bloques-faltantes-o3
@@ -621,29 +574,6 @@ bloques_o3 <- serie_o3_horaria |>
     .groups = "drop"
   )
 
-resumen_bloques_o3 <- bloques_o3 |>
-  group_by(Estacion) |>
-  summarise(
-    Numero_bloques = n(),
-    Bloque_mas_largo_h = max(Horas),
-    Mediana_duracion_h = median(Horas),
-    Bloques_mayores_24h = sum(Horas >= 24),
-    Horas_en_bloques_largos = sum(Horas[Horas >= 24]),
-    .groups = "drop"
-  )
-
-knitr::kable(
-  resumen_bloques_o3,
-  caption = "Continuidad de los faltantes de O3 desde 2021"
-)
-```
-
-La mayoría de las interrupciones son cortas: la mediana es de 1 hora en `NE`, `NTE` y `NTE2`, y de 2 horas en `NO`. Sin embargo, existen algunos periodos prolongados sin mediciones. `NO` presenta 13 bloques de al menos 24 horas y el bloque más largo alcanza 1,536 horas; `NTE` alcanza 1,296 horas y `NE` 1,284 horas. En `NTE2` el bloque máximo es menor, con 445 horas.
-
-También se muestran los diez bloques faltantes más largos para identificar en qué estaciones y periodos ocurrieron las interrupciones principales.
-
-```{r}
-#| label: bloques-o3-mas-largos
 bloques_o3 |>
   arrange(desc(Horas)) |>
   slice_head(n = 10) |>
@@ -654,17 +584,9 @@ bloques_o3 |>
   )
 ```
 
-Los tres bloques más largos ocurren al inicio de 2021: `NO` no registra O3 durante 1,536 horas, `NTE` durante 1,296 y `NE` durante 1,284 horas. Esto explica una parte importante de los porcentajes elevados de faltantes observados en 2021. Después de ese periodo todavía aparecen interrupciones largas, pero son menos extensas; por ejemplo, se observan bloques de 218 horas en `NTE` durante 2023 y de 163 horas en `NO` durante 2024.
+Los bloques más largos confirman que algunas ausencias no son horas aisladas. Al inicio de 2021, `NO` permanece 1,536 horas consecutivas sin O3, `NTE` 1,296 horas y `NE` 1,284 horas. También existen interrupciones posteriores, aunque de menor duración. Imputar estos periodos implicaría crear semanas de valores sintéticos y podría distorsionar la dinámica real del contaminante.
 
-### Tratamiento de O3 faltante
-
-Como `O3` es la variable que el modelo debe aprender a predecir, **sus valores faltantes no se imputarán para crear artificialmente la variable objetivo**. Una hora cuyo O3 real no fue observado no puede utilizarse como respuesta durante el entrenamiento ni para calcular el error durante la evaluación.
-
-Esta decisión también evita interpolar los bloques largos identificados anteriormente, ya que completar semanas de mediciones ausentes produciría valores sintéticos que podrían distorsionar la dinámica real del contaminante. Las ausencias cortas se conservarán igualmente como `NA` mientras O3 actúe como variable objetivo.
-
-Cuando se construyan los horizontes de pronóstico, cada observación se utilizará únicamente si existe el O3 real correspondiente a la hora que se pretende predecir. Por ejemplo, para evaluar una predicción a 24 horas realizada en el momento $t$, será necesario disponer de $O_3(t+24)$.
-
-El O3 histórico también podrá utilizarse como predictor mediante rezagos. En ese caso, si un rezago requerido cae dentro de una hora faltante, esa entrada permanecerá ausente; no se rellenarán automáticamente bloques largos. Más adelante se cuantificará cuántas observaciones quedan disponibles con los rezagos seleccionados antes de decidir si conviene tratar algunos faltantes de las variables predictoras.
+Por ello, **O3 no se imputará cuando funcione como variable objetivo**. Las horas sin una medición real de O3 no se utilizarán como respuesta durante el entrenamiento ni para calcular el error de evaluación. Si O3 se utiliza posteriormente como predictor mediante rezagos, sus faltantes también se conservarán como `NA` y se cuantificará cuántas observaciones permanecen disponibles con los rezagos seleccionados.
 
 A partir de este punto se define una base preliminar para el modelado con los años 2021-2025. Las pocas banderas `-9999` detectadas en otras variables se convierten a `NA`, pero todavía no se eliminan registros ni se imputan mediciones.
 
