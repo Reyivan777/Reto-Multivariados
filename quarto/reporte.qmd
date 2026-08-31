@@ -654,7 +654,7 @@ bloques_o3 |>
   )
 ```
 
-Los tres bloques más largos ocurren al inicio de 2021: `NO` no registra O3 durante 1,536 horas, `NTE` durante 1,296 y `NE` durante 1,284. Esto explica una parte importante de los porcentajes elevados de faltantes observados en 2021. Después de ese periodo todavía aparecen interrupciones largas, pero son menos extensas; por ejemplo, se observan bloques de 218 horas en `NTE` durante 2023 y de 163 horas en `NO` durante 2024.
+Los tres bloques más largos ocurren al inicio de 2021: `NO` no registra O3 durante 1,536 horas, `NTE` durante 1,296 y `NE` durante 1,284 horas. Esto explica una parte importante de los porcentajes elevados de faltantes observados en 2021. Después de ese periodo todavía aparecen interrupciones largas, pero son menos extensas; por ejemplo, se observan bloques de 218 horas en `NTE` durante 2023 y de 163 horas en `NO` durante 2024.
 
 ### Tratamiento de O3 faltante
 
@@ -1210,16 +1210,10 @@ o3_mes_anio |>
 #| fig-width: 7
 #| fig-height: 4.5
 o3_mes_anio |>
-  ggplot(
-    aes(
-      x = Mes,
-      y = Media,
-      group = factor(Año),
-      linetype = factor(Año)
-    )
-  ) +
-  geom_line(linewidth = 0.8) +
-  geom_point() +
+  mutate(Año = factor(Año)) |>
+  ggplot(aes(x = Mes, y = Media, color = Año, group = Año)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2) +
   scale_x_continuous(
     breaks = 1:12,
     labels = c(
@@ -1230,16 +1224,123 @@ o3_mes_anio |>
   labs(
     x = "Mes",
     y = "O3 medio",
-    linetype = "Año"
+    color = "Año"
   ) +
   theme_minimal()
 ```
 
-La comparación entre años permitirá comprobar si el aumento de primavera y la disminución hacia el invierno se repiten de forma consistente o si el patrón agregado está dominado por algún año particular. La interpretación se realizará con los resultados obtenidos antes de avanzar hacia las variables meteorológicas.
+El patrón mensual no es idéntico entre años, pero conserva una estructura general. En los cuatro años se observa un aumento entre el invierno y la primavera, concentraciones relativamente altas durante parte de la primavera y el verano, y una disminución marcada hacia noviembre y diciembre. Existen variaciones interanuales: 2021 comienza con concentraciones especialmente bajas y 2023 presenta sus niveles más altos más tarde, entre junio y septiembre. Estas diferencias no eliminan la señal estacional, por lo que `Mes_sin` y `Mes_cos` siguen siendo variables razonables para representar el ciclo anual en el modelo.
 
 ## Relación con variables meteorológicas y contaminantes
 
-Pendiente de reconstruir el análisis de asociación concentrándolo únicamente en las variables relevantes para la predicción de O3.
+### Variables meteorológicas
+
+El siguiente paso es cuantificar la asociación lineal entre O3 y las principales variables meteorológicas. Se consideran `TEMP`, `RH`, `SR`, `WS`, `BP` y `RAINF` y se calcula el coeficiente de correlación de Pearson utilizando, para cada par, únicamente las horas donde ambas mediciones están disponibles.
+
+`WD` no se incluye directamente en esta correlación porque la dirección del viento es circular: valores cercanos a 0° y 360° representan direcciones similares aunque numéricamente se encuentren en extremos opuestos. Su tratamiento se realizará por separado.
+
+```{r}
+#| label: correlacion-o3-meteorologia
+variables_meteorologicas <- c("TEMP", "RH", "SR", "WS", "BP", "RAINF")
+
+correlaciones_o3_meteo <- map_dfr(
+  variables_meteorologicas,
+  function(variable) {
+    pares <- tibble(
+      O3 = datos_preparados$O3,
+      X = datos_preparados[[variable]]
+    ) |>
+      drop_na()
+
+    tibble(
+      Variable = variable,
+      Observaciones = nrow(pares),
+      Correlacion = cor(
+        pares$O3,
+        pares$X,
+        method = "pearson"
+      )
+    )
+  }
+) |>
+  arrange(desc(abs(Correlacion)))
+
+knitr::kable(
+  correlaciones_o3_meteo |>
+    mutate(Correlacion = round(Correlacion, 3)),
+  caption = "Correlación de Pearson entre O3 y variables meteorológicas"
+)
+```
+
+La magnitud y el signo de las correlaciones se visualizan para identificar rápidamente qué variables presentan una asociación lineal más clara con O3.
+
+```{r}
+#| label: grafica-correlacion-o3-meteorologia
+#| fig-cap: "Correlación de O3 con variables meteorológicas"
+#| fig-width: 7
+#| fig-height: 4.5
+correlaciones_o3_meteo |>
+  mutate(
+    Variable = forcats::fct_reorder(Variable, abs(Correlacion))
+  ) |>
+  ggplot(aes(x = Variable, y = Correlacion)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Correlación de Pearson"
+  ) +
+  theme_minimal()
+```
+
+Para revisar la forma de las relaciones se muestran además las tres variables con mayor correlación absoluta. Debido al tamaño de la base, la gráfica utiliza una muestra aleatoria de 10,000 observaciones únicamente para facilitar la visualización; las correlaciones de la tabla anterior se calculan con todos los pares disponibles.
+
+```{r}
+#| label: relaciones-o3-meteorologia
+#| fig-cap: "Relación de O3 con las variables meteorológicas de mayor correlación"
+#| fig-width: 8
+#| fig-height: 5
+variables_meteo_principales <- correlaciones_o3_meteo |>
+  slice_max(
+    order_by = abs(Correlacion),
+    n = 3,
+    with_ties = FALSE
+  ) |>
+  pull(Variable)
+
+set.seed(123)
+
+muestra_meteorologia <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  slice_sample(n = 10000) |>
+  select(O3, all_of(variables_meteo_principales)) |>
+  pivot_longer(
+    cols = all_of(variables_meteo_principales),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  filter(!is.na(Valor))
+
+ggplot(
+  muestra_meteorologia,
+  aes(x = Valor, y = O3)
+) +
+  geom_point(alpha = 0.08, size = 0.5) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8
+  ) +
+  facet_wrap(~Variable, scales = "free_x") +
+  labs(
+    x = NULL,
+    y = "O3"
+  ) +
+  theme_minimal()
+```
+
+La interpretación de estas relaciones se realizará con los resultados obtenidos antes de analizar la dirección del viento y los demás contaminantes.
 
 # Preparación para modelado
 
