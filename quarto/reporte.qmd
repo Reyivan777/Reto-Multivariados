@@ -573,6 +573,8 @@ knitr::kable(
 )
 ```
 
+Al excluir 2020, la proporción de O3 faltante disminuye de forma importante: `NTE2` queda en 4.81 %, `NTE` en 8.02 %, `NE` en 8.47 % y `NO` en 10.33 %. Esto confirma que la mayor parte del 24.30 % global estaba concentrada en 2020 y que las cuatro estaciones conservan una cantidad considerable de O3 observado durante el periodo útil para modelado.
+
 Con base en estos resultados, **2020 se conservará en los objetos de datos como parte de la fuente original, pero se excluirá del periodo destinado al modelado de O3**. La separación temporal de referencia pasa a ser 2021-2023 para entrenamiento, 2024 para validación y 2025 para prueba final. Antes de cerrar el tratamiento de los faltantes todavía falta revisar si las ausencias de O3 desde 2021 aparecen aisladas o forman bloques consecutivos largos.
 
 ### Continuidad de los faltantes de O3 desde 2021
@@ -581,22 +583,31 @@ Para un modelo con rezagos y horizonte de 24 horas no basta con conocer el porce
 
 ```{r}
 #| label: bloques-faltantes-o3
-serie_o3_horaria <- datos_tipos |>
-  filter(Año >= 2021) |>
-  select(Estacion, fecha_hora, O3) |>
-  group_by(Estacion) |>
-  complete(
-    fecha_hora = seq(
-      min(fecha_hora),
-      max(fecha_hora),
-      by = "hour"
-    )
+datos_o3_2021 <- datos_tipos |>
+  filter(Año >= 2021, !is.na(fecha_hora)) |>
+  select(Estacion, fecha_hora, O3)
+
+horas_completas <- seq(
+  min(datos_o3_2021$fecha_hora, na.rm = TRUE),
+  max(datos_o3_2021$fecha_hora, na.rm = TRUE),
+  by = "hour"
+)
+
+serie_o3_horaria <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_completas
+) |>
+  left_join(
+    datos_o3_2021,
+    by = c("Estacion", "fecha_hora")
   ) |>
   arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
   mutate(
     faltante = is.na(O3),
-    nuevo_bloque = faltante != lag(faltante, default = first(faltante)),
-    bloque = cumsum(nuevo_bloque)
+    bloque = cumsum(
+      faltante != lag(faltante, default = FALSE)
+    )
   ) |>
   ungroup()
 
