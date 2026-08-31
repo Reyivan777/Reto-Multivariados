@@ -624,11 +624,11 @@ bloques_o3 <- serie_o3_horaria |>
 resumen_bloques_o3 <- bloques_o3 |>
   group_by(Estacion) |>
   summarise(
-    Bloques_faltantes = n(),
-    Bloque_max_horas = max(Horas),
-    Mediana_horas = median(Horas),
-    Bloques_24h_o_mas = sum(Horas >= 24),
-    Horas_en_bloques_24h_o_mas = sum(Horas[Horas >= 24]),
+    Numero_bloques = n(),
+    Bloque_mas_largo_h = max(Horas),
+    Mediana_duracion_h = median(Horas),
+    Bloques_mayores_24h = sum(Horas >= 24),
+    Horas_en_bloques_largos = sum(Horas[Horas >= 24]),
     .groups = "drop"
   )
 
@@ -637,6 +637,8 @@ knitr::kable(
   caption = "Continuidad de los faltantes de O3 desde 2021"
 )
 ```
+
+La mayoría de las interrupciones son cortas: la mediana es de 1 hora en `NE`, `NTE` y `NTE2`, y de 2 horas en `NO`. Sin embargo, existen algunos periodos prolongados sin mediciones. `NO` presenta 13 bloques de al menos 24 horas y el bloque más largo alcanza 1,536 horas; `NTE` alcanza 1,296 horas y `NE` 1,284 horas. En `NTE2` el bloque máximo es menor, con 445 horas.
 
 También se muestran los diez bloques faltantes más largos para identificar en qué estaciones y periodos ocurrieron las interrupciones principales.
 
@@ -651,6 +653,47 @@ bloques_o3 |>
     caption = "Diez bloques consecutivos de O3 faltante más largos desde 2021"
   )
 ```
+
+Los tres bloques más largos ocurren al inicio de 2021: `NO` no registra O3 durante 1,536 horas, `NTE` durante 1,296 y `NE` durante 1,284. Esto explica una parte importante de los porcentajes elevados de faltantes observados en 2021. Después de ese periodo todavía aparecen interrupciones largas, pero son menos extensas; por ejemplo, se observan bloques de 218 horas en `NTE` durante 2023 y de 163 horas en `NO` durante 2024.
+
+### Tratamiento de O3 faltante
+
+Como `O3` es la variable que el modelo debe aprender a predecir, **sus valores faltantes no se imputarán para crear artificialmente la variable objetivo**. Una hora cuyo O3 real no fue observado no puede utilizarse como respuesta durante el entrenamiento ni para calcular el error durante la evaluación.
+
+Esta decisión también evita interpolar los bloques largos identificados anteriormente, ya que completar semanas de mediciones ausentes produciría valores sintéticos que podrían distorsionar la dinámica real del contaminante. Las ausencias cortas se conservarán igualmente como `NA` mientras O3 actúe como variable objetivo.
+
+Cuando se construyan los horizontes de pronóstico, cada observación se utilizará únicamente si existe el O3 real correspondiente a la hora que se pretende predecir. Por ejemplo, para evaluar una predicción a 24 horas realizada en el momento $t$, será necesario disponer de $O_3(t+24)$.
+
+El O3 histórico también podrá utilizarse como predictor mediante rezagos. En ese caso, si un rezago requerido cae dentro de una hora faltante, esa entrada permanecerá ausente; no se rellenarán automáticamente bloques largos. Más adelante se cuantificará cuántas observaciones quedan disponibles con los rezagos seleccionados antes de decidir si conviene tratar algunos faltantes de las variables predictoras.
+
+A partir de este punto se define una base preliminar para el modelado con los años 2021-2025. Las pocas banderas `-9999` detectadas en otras variables se convierten a `NA`, pero todavía no se eliminan registros ni se imputan mediciones.
+
+```{r}
+#| label: base-preliminar-modelado
+datos_base_modelado <- datos_tipos |>
+  filter(Año >= 2021) |>
+  mutate(
+    across(
+      all_of(variables_medicion),
+      ~ na_if(.x, -9999)
+    )
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+resumen_base_modelado <- tibble(
+  Registros = nrow(datos_base_modelado),
+  Desde = min(datos_base_modelado$fecha_hora, na.rm = TRUE),
+  Hasta = max(datos_base_modelado$fecha_hora, na.rm = TRUE),
+  Estaciones = n_distinct(datos_base_modelado$Estacion)
+)
+
+knitr::kable(
+  resumen_base_modelado,
+  caption = "Base preliminar para el modelado de O3"
+)
+```
+
+`datos_base_modelado` conserva la estructura original del periodo útil y mantiene explícitamente los faltantes. Todavía no se considera un conjunto limpio definitivo: faltan revisar los valores físicamente inválidos o extremos y definir el tratamiento de las variables predictoras antes de construir los rezagos.
 
 ## Valores extremos
 
