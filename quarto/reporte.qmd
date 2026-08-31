@@ -104,13 +104,7 @@ El proyecto seguirá una secuencia orientada directamente al problema predictivo
 4. **Modelado.** Construir primero una referencia simple y posteriormente comparar modelos estadísticos y modelos más flexibles. Entre los candidatos se consideran la regresión lineal múltiple y métodos no lineales como Random Forest o Gradient Boosting.
 5. **Evaluación.** Medir el error sobre periodos posteriores a los utilizados para el entrenamiento y analizar los resultados por estación y horizonte de predicción.
 
-Debido a la naturaleza temporal del problema, los datos **no se dividirán aleatoriamente**. La separación inicial propuesta es:
-
-- **2020-2023:** entrenamiento.
-- **2024:** validación y selección de modelos.
-- **2025:** prueba final sobre datos no utilizados durante la construcción del modelo.
-
-Esta separación podrá ajustarse si la disponibilidad de O3 o de alguna variable predictora genera periodos con cobertura insuficiente, pero siempre se conservará el orden temporal para evitar fuga de información del futuro hacia el entrenamiento.
+Debido a la naturaleza temporal del problema, los datos **no se dividirán aleatoriamente**. La separación de modelado se definirá después de revisar la disponibilidad real de O3 en cada año, conservando siempre el orden temporal para evitar fuga de información del futuro hacia el entrenamiento.
 
 Como referencia mínima se incluirá un modelo base de persistencia, que supone que el comportamiento reciente del O3 es una aproximación de su comportamiento próximo. Los modelos desarrollados deberán superar esta referencia para demostrar que las variables adicionales aportan capacidad predictiva.
 
@@ -552,7 +546,34 @@ knitr::kable(
 )
 ```
 
-Estas dos tablas permitirán distinguir si el 24.30 % global de O3 faltante se distribuye de manera parecida entre las cuatro estaciones o si está concentrado en estaciones y años específicos. La decisión sobre qué periodos conservar, excluir o tratar se tomará después de revisar estos resultados.
+Los resultados muestran que el problema de disponibilidad de O3 está concentrado principalmente en el **año 2020**, no en una estación específica. Durante 2020 faltan 99.90 % de las mediciones de `NE`, 98.44 % de `NO`, 99.99 % de `NTE` y 93.33 % de `NTE2`. Con esta cobertura, 2020 aporta muy pocas observaciones de la variable objetivo y no resulta útil para entrenar ni evaluar un modelo supervisado de O3.
+
+A partir de 2021 la situación mejora de forma considerable. Ese año todavía presenta porcentajes relevantes de ausencia, especialmente en `NO` (20.34 %), `NTE` (18.52 %) y `NE` (16.03 %), mientras que `NTE2` presenta 9.49 %. Entre 2022 y 2024 la disponibilidad es mucho más estable, con porcentajes generalmente inferiores a 11 %. En 2025 destaca `NE`, con 19.31 % de faltantes, mientras que las otras tres estaciones mantienen una cobertura mayor.
+
+Los porcentajes acumulados por estación son similares: varían entre 20.93 % en `NTE2` y 26.39 % en `NO`. Esta similitud se debe en gran medida a que las cuatro estaciones comparten la falta casi total de O3 en 2020. Por ello, **no hay evidencia en esta revisión para eliminar alguna de las cuatro estaciones por falta de cobertura**.
+
+Para cuantificar la disponibilidad del periodo que sí puede utilizarse para el modelado, se calcula nuevamente el porcentaje de faltantes por estación excluyendo 2020.
+
+```{r}
+#| label: disponibilidad-o3-desde-2021
+o3_desde_2021 <- datos_tipos |>
+  filter(Año >= 2021) |>
+  group_by(Estacion) |>
+  summarise(
+    Registros = n(),
+    O3_disponibles = sum(!is.na(O3)),
+    O3_faltantes = sum(is.na(O3)),
+    Porcentaje_faltante = round(mean(is.na(O3)) * 100, 2),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_desde_2021,
+  caption = "Disponibilidad de O3 por estación desde 2021"
+)
+```
+
+Con base en estos resultados, **2020 se conservará en los objetos de datos como parte de la fuente original, pero se excluirá del periodo destinado al modelado de O3**. La separación temporal de referencia pasa a ser 2021-2023 para entrenamiento, 2024 para validación y 2025 para prueba final. Antes de cerrar el tratamiento de los faltantes todavía falta revisar si las ausencias de O3 desde 2021 aparecen aisladas o forman bloques consecutivos largos.
 
 ## Valores extremos
 
@@ -584,7 +605,13 @@ Pendiente de definir qué información histórica estará disponible para cada p
 
 ## Separación cronológica
 
-Se utilizará como punto de partida 2020-2023 para entrenamiento, 2024 para validación y 2025 para prueba final.
+La disponibilidad de O3 en 2020 es insuficiente para utilizar ese año en un modelo supervisado. Por ello, la separación temporal de referencia será:
+
+- **2021-2023:** entrenamiento.
+- **2024:** validación y selección de modelos.
+- **2025:** prueba final sobre datos no utilizados durante la construcción del modelo.
+
+El año 2020 se conserva en las bases de trabajo como parte del registro histórico, pero no formará parte del conjunto utilizado para ajustar o evaluar los modelos de O3.
 
 ## Conjunto final de predictores
 
