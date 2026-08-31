@@ -737,7 +737,7 @@ limites_modelado <- tribble(
 )
 
 datos_extremos <- datos_base_modelado |>
-  select(Año, all_of(variables_medicion)) |>
+  select(Año, Estacion, all_of(variables_medicion)) |>
   pivot_longer(
     cols = all_of(variables_medicion),
     names_to = "Variable",
@@ -795,7 +795,34 @@ knitr::kable(
 )
 ```
 
-En este punto todavía no se modifica `datos_base_modelado`. Los resultados de estas tablas se revisarán antes de decidir cuáles valores deben convertirse a `NA` y cuáles deben conservarse como extremos válidos.
+`SR` y `RH` concentran la mayor cantidad de observaciones fuera de los límites utilizados. `SR` presenta 656 casos, equivalentes aproximadamente al 0.42 % de la base de modelado, y 617 de ellos corresponden a 2022. `RH` presenta 260 casos, cerca del 0.16 % de la base, concentrados principalmente en 2022, 2023 y 2024. Aunque estas proporciones son pequeñas respecto al total de registros, conviene identificar si proceden de una estación específica antes de aplicar la limpieza.
+
+Para ello se revisan únicamente los valores fuera de rango de `SR` y `RH` por año y estación, incluyendo el mínimo y máximo observados entre los casos inválidos.
+
+```{r}
+#| label: extremos-sr-rh-estacion
+extremos_sr_rh_estacion <- datos_extremos |>
+  filter(
+    Variable %in% c("SR", "RH"),
+    Fuera_de_rango
+  ) |>
+  group_by(Año, Estacion, Variable) |>
+  summarise(
+    Casos = n(),
+    Min_fuera = min(Valor),
+    Max_fuera = max(Valor),
+    .groups = "drop"
+  ) |>
+  arrange(Variable, Año, desc(Casos))
+
+knitr::kable(
+  extremos_sr_rh_estacion,
+  digits = 2,
+  caption = "Valores fuera de rango de SR y RH por año y estación"
+)
+```
+
+En este punto todavía no se modifica `datos_base_modelado`. Después de revisar esta última tabla se decidirá el tratamiento de los valores fuera de rango y se construirá la base limpia para continuar con las variables temporales y el análisis exploratorio.
 
 ## Variables temporales y espaciales
 
