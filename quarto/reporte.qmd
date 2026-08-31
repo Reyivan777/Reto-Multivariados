@@ -575,6 +575,72 @@ knitr::kable(
 
 Con base en estos resultados, **2020 se conservará en los objetos de datos como parte de la fuente original, pero se excluirá del periodo destinado al modelado de O3**. La separación temporal de referencia pasa a ser 2021-2023 para entrenamiento, 2024 para validación y 2025 para prueba final. Antes de cerrar el tratamiento de los faltantes todavía falta revisar si las ausencias de O3 desde 2021 aparecen aisladas o forman bloques consecutivos largos.
 
+### Continuidad de los faltantes de O3 desde 2021
+
+Para un modelo con rezagos y horizonte de 24 horas no basta con conocer el porcentaje de O3 faltante. También importa saber si las ausencias aparecen como horas aisladas o como interrupciones prolongadas. Por ello se reconstruye una secuencia horaria completa para cada estación desde 2021; si alguna hora completa no aparece en la base, también se considera como una hora sin O3.
+
+```{r}
+#| label: bloques-faltantes-o3
+serie_o3_horaria <- datos_tipos |>
+  filter(Año >= 2021) |>
+  select(Estacion, fecha_hora, O3) |>
+  group_by(Estacion) |>
+  complete(
+    fecha_hora = seq(
+      min(fecha_hora),
+      max(fecha_hora),
+      by = "hour"
+    )
+  ) |>
+  arrange(Estacion, fecha_hora) |>
+  mutate(
+    faltante = is.na(O3),
+    nuevo_bloque = faltante != lag(faltante, default = first(faltante)),
+    bloque = cumsum(nuevo_bloque)
+  ) |>
+  ungroup()
+
+bloques_o3 <- serie_o3_horaria |>
+  filter(faltante) |>
+  group_by(Estacion, bloque) |>
+  summarise(
+    Inicio = min(fecha_hora),
+    Fin = max(fecha_hora),
+    Horas = n(),
+    .groups = "drop"
+  )
+
+resumen_bloques_o3 <- bloques_o3 |>
+  group_by(Estacion) |>
+  summarise(
+    Bloques_faltantes = n(),
+    Bloque_max_horas = max(Horas),
+    Mediana_horas = median(Horas),
+    Bloques_24h_o_mas = sum(Horas >= 24),
+    Horas_en_bloques_24h_o_mas = sum(Horas[Horas >= 24]),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  resumen_bloques_o3,
+  caption = "Continuidad de los faltantes de O3 desde 2021"
+)
+```
+
+También se muestran los diez bloques faltantes más largos para identificar en qué estaciones y periodos ocurrieron las interrupciones principales.
+
+```{r}
+#| label: bloques-o3-mas-largos
+bloques_o3 |>
+  arrange(desc(Horas)) |>
+  slice_head(n = 10) |>
+  mutate(Año = lubridate::year(Inicio)) |>
+  select(Estacion, Año, Inicio, Fin, Horas) |>
+  knitr::kable(
+    caption = "Diez bloques consecutivos de O3 faltante más largos desde 2021"
+  )
+```
+
 ## Valores extremos
 
 Pendiente de diferenciar entre errores de medición y episodios reales de concentraciones elevadas antes de decidir cualquier eliminación.
