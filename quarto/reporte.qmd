@@ -1172,7 +1172,70 @@ o3_por_mes |>
   theme_minimal()
 ```
 
-La interpretación del patrón mensual se realizará después de ejecutar estas tablas y figuras, antes de continuar con la relación de O3 con las variables meteorológicas y otros contaminantes.
+El patrón mensual también es claro. Las concentraciones son menores durante el invierno, con medias de 18.78 en diciembre y 20.96 en enero. A partir de febrero aumentan y permanecen elevadas durante la primavera, alcanzando la media mensual más alta en mayo (33.06). Posteriormente disminuyen durante junio y julio, aparece un segundo incremento hacia septiembre (29.07) y vuelven a descender durante octubre, noviembre y diciembre. La media permanece por encima de la mediana en todos los meses, consistente con la asimetría hacia valores altos observada previamente.
+
+Este comportamiento muestra una asociación importante entre la época del año y la concentración de O3, por lo que la representación cíclica del mes puede aportar información predictiva. Sin embargo, el mes no se interpreta como una causa directa: puede estar representando cambios estacionales en temperatura, radiación solar, humedad, viento y otras condiciones atmosféricas que se analizarán posteriormente.
+
+### Estabilidad del patrón mensual entre años
+
+Antes de asumir que el ciclo mensual es estable, se compara por separado entre los años completos 2021, 2022, 2023 y 2024. El año 2025 no se incluye en esta comparación porque solo contiene datos hasta junio.
+
+```{r}
+#| label: patron-mensual-o3-por-anio
+o3_mes_anio <- datos_preparados |>
+  filter(
+    Año %in% 2021:2024,
+    !is.na(O3)
+  ) |>
+  group_by(Año, Mes) |>
+  summarise(
+    Media = mean(O3),
+    .groups = "drop"
+  )
+
+o3_mes_anio |>
+  mutate(Media = round(Media, 2)) |>
+  pivot_wider(
+    names_from = Año,
+    values_from = Media
+  ) |>
+  knitr::kable(
+    caption = "Concentración media mensual de O3 por año"
+  )
+```
+
+```{r}
+#| label: grafica-patron-mensual-o3-por-anio
+#| fig-cap: "Patrón mensual de O3 en los años completos 2021-2024"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_mes_anio |>
+  ggplot(
+    aes(
+      x = Mes,
+      y = Media,
+      group = factor(Año),
+      linetype = factor(Año)
+    )
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = c(
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    )
+  ) +
+  labs(
+    x = "Mes",
+    y = "O3 medio",
+    linetype = "Año"
+  ) +
+  theme_minimal()
+```
+
+La comparación entre años permitirá comprobar si el aumento de primavera y la disminución hacia el invierno se repiten de forma consistente o si el patrón agregado está dominado por algún año particular. La interpretación se realizará con los resultados obtenidos antes de avanzar hacia las variables meteorológicas.
 
 ## Relación con variables meteorológicas y contaminantes
 
