@@ -697,7 +697,105 @@ knitr::kable(
 
 ## Valores extremos
 
-Pendiente de diferenciar entre errores de medición y episodios reales de concentraciones elevadas antes de decidir cualquier eliminación.
+El análisis anterior cierra por ahora la revisión específica de **disponibilidad y continuidad de O3**. El comportamiento del contaminante todavía se estudiará más adelante en el análisis exploratorio, pero ya quedó definido qué periodo se utilizará y cómo se tratarán sus valores faltantes cuando funcione como variable objetivo.
+
+Antes de considerar la base como limpia se revisan los valores extremos de todas las variables. Para ello se retoman los límites de validación por año utilizados previamente en el proyecto. Estos límites se emplean únicamente para detectar mediciones fuera del rango aceptado; un valor estadísticamente extremo que permanezca dentro de ellos no se eliminará automáticamente, ya que puede representar un episodio real.
+
+```{r}
+#| label: diagnostico-valores-extremos
+limites_modelado <- tribble(
+  ~Año, ~Variable, ~Min_permitido, ~Max_permitido,
+  2021, "PM10", 0, 800,   2021, "PM2.5", 0, 325, 2021, "O3", 0, 175,
+  2021, "NO", 0, 350,     2021, "NO2", 0, 100,    2021, "NOX", 0, 400,
+  2021, "SO2", 0, 300,    2021, "CO", 0, 10,      2021, "RH", 0, 100,
+  2021, "WS", 0, 40,      2021, "TEMP", -6.5, 45, 2021, "SR", 0, 1,
+  2021, "BP", 690, 740,   2021, "WD", 0, 360,     2021, "RAINF", 0, 80,
+
+  2022, "PM10", 0, 999,   2022, "PM2.5", 0, 450, 2022, "O3", 0, 160,
+  2022, "NO", 0, 400,     2022, "NO2", 0, 175,    2022, "NOX", 0, 420,
+  2022, "SO2", 0, 200,    2022, "CO", 0, 8,       2022, "RH", 0, 100,
+  2022, "WS", 0, 35,      2022, "TEMP", -5, 45,   2022, "SR", 0, 1.25,
+  2022, "BP", 700, 740,   2022, "WD", 0, 360,     2022, "RAINF", 0, 25,
+
+  2023, "PM10", 0, 900,   2023, "PM2.5", 0, 800, 2023, "O3", 0, 175,
+  2023, "NO", 0, 500,     2023, "NO2", 0, 175,    2023, "NOX", 0, 500,
+  2023, "SO2", 0, 250,    2023, "CO", 0, 14,      2023, "RH", 0, 100,
+  2023, "WS", 0, 40,      2023, "TEMP", 0, 45,    2023, "SR", 0, 1,
+  2023, "BP", 690, 740,   2023, "WD", 0, 360,     2023, "RAINF", 0, 70,
+
+  2024, "PM10", 0, 999,   2024, "PM2.5", 0, 999, 2024, "O3", 0, 180,
+  2024, "NO", 0, 400,     2024, "NO2", 0, 130,    2024, "NOX", 0, 500,
+  2024, "SO2", 0, 150,    2024, "CO", 0, 18,      2024, "RH", 0, 100,
+  2024, "WS", 0, 38,      2024, "TEMP", -4, 45.5, 2024, "SR", 0, 1.26,
+  2024, "BP", 687.5, 740, 2024, "WD", 0, 360,     2024, "RAINF", 0, 50,
+
+  2025, "PM10", 0, 820,   2025, "PM2.5", 0, 350, 2025, "O3", 0, 185,
+  2025, "NO", 0, 350,     2025, "NO2", 0, 175,    2025, "NOX", 0, 400,
+  2025, "SO2", 0, 405,    2025, "CO", 0, 10,      2025, "RH", 0, 100,
+  2025, "WS", 0, 40,      2025, "TEMP", -4.5, 45, 2025, "SR", 0, 1.2,
+  2025, "BP", 688, 740,   2025, "WD", 0, 360,     2025, "RAINF", 0, 25
+)
+
+datos_extremos <- datos_base_modelado |>
+  select(Año, all_of(variables_medicion)) |>
+  pivot_longer(
+    cols = all_of(variables_medicion),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  left_join(
+    limites_modelado,
+    by = c("Año", "Variable")
+  ) |>
+  mutate(
+    Fuera_de_rango = !is.na(Valor) &
+      (Valor < Min_permitido | Valor > Max_permitido)
+  )
+
+resumen_extremos <- datos_extremos |>
+  group_by(Variable) |>
+  summarise(
+    Min_observado = min(Valor, na.rm = TRUE),
+    P01 = quantile(Valor, 0.01, na.rm = TRUE),
+    Mediana = median(Valor, na.rm = TRUE),
+    P99 = quantile(Valor, 0.99, na.rm = TRUE),
+    Max_observado = max(Valor, na.rm = TRUE),
+    Fuera_de_rango = sum(Fuera_de_rango),
+    .groups = "drop"
+  ) |>
+  mutate(
+    across(
+      c(Min_observado, P01, Mediana, P99, Max_observado),
+      ~ round(.x, 2)
+    )
+  )
+
+knitr::kable(
+  resumen_extremos,
+  caption = "Diagnóstico de valores extremos en la base de modelado"
+)
+```
+
+Para saber en qué años se concentran las posibles mediciones inválidas se muestran únicamente las combinaciones año-variable que contienen al menos un valor fuera del rango correspondiente.
+
+```{r}
+#| label: extremos-fuera-rango-anio
+fuera_rango_anio <- datos_extremos |>
+  group_by(Año, Variable) |>
+  summarise(
+    Fuera_de_rango = sum(Fuera_de_rango),
+    .groups = "drop"
+  ) |>
+  filter(Fuera_de_rango > 0) |>
+  arrange(desc(Fuera_de_rango), Año, Variable)
+
+knitr::kable(
+  fuera_rango_anio,
+  caption = "Valores fuera de rango por año y variable"
+)
+```
+
+En este punto todavía no se modifica `datos_base_modelado`. Los resultados de estas tablas se revisarán antes de decidir cuáles valores deben convertirse a `NA` y cuáles deben conservarse como extremos válidos.
 
 ## Variables temporales y espaciales
 
