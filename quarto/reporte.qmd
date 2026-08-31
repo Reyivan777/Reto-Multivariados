@@ -1018,6 +1018,8 @@ datos_preparados |>
   theme_minimal()
 ```
 
+Entre 2021 y junio de 2025 se conservan 145,151 mediciones válidas de O3. La media es 27.12 y la mediana 23, mientras que el 50 % central de las observaciones se encuentra entre 13 y 37. El histograma muestra una distribución asimétrica hacia la derecha: la mayoría de las concentraciones se agrupa en valores relativamente bajos y existe una cola prolongada hacia valores altos, con un máximo observado de 173. Por ello, la distribución marginal de O3 no presenta una forma aproximadamente normal. Esto no impide utilizar posteriormente modelos de regresión lineal; en ese caso los supuestos se revisarán sobre los residuos del modelo y no sobre la normalidad de O3 por sí sola.
+
 ## Diferencias entre estaciones
 
 Se comparan las mediciones de O3 de `NTE`, `NTE2`, `NO` y `NE` mediante estadísticos descriptivos y su distribución por estación.
@@ -1063,9 +1065,11 @@ datos_preparados |>
   theme_minimal()
 ```
 
+Las cuatro estaciones presentan distribuciones con una forma general similar, aunque existen diferencias en el nivel de concentración. `NO` registra los valores centrales más altos, con media de 29.79 y mediana de 26, mientras que `NTE2` presenta los más bajos, con media de 24.58 y mediana de 20. `NTE` y `NE` se ubican entre ambos casos. Estas diferencias justifican conservar la estación como información potencialmente útil para el modelo, aunque el comportamiento general de O3 es comparable entre los cuatro puntos de monitoreo.
+
 ### Patrón horario
 
-Finalmente se calcula la media y la mediana de O3 para cada hora del día. Esta revisión permitirá identificar si existe una estructura diaria suficientemente marcada como para justificar el uso de variables horarias en el modelo.
+Finalmente se calcula la media y la mediana de O3 para cada hora del día. Esta revisión permite identificar si existe una estructura diaria suficientemente marcada como para justificar el uso de variables horarias en el modelo.
 
 ```{r}
 #| label: patron-horario-o3
@@ -1111,7 +1115,64 @@ o3_por_hora |>
   theme_minimal()
 ```
 
-La interpretación de estas tablas y figuras se realizará con los resultados obtenidos al ejecutar el reporte antes de continuar con los patrones mensuales y la relación de O3 con las variables meteorológicas.
+El patrón horario es marcado. Las concentraciones disminuyen durante la madrugada y alcanzan su nivel más bajo alrededor de las 7:00. A partir de la mañana aumentan rápidamente y alcanzan sus valores medios más altos aproximadamente entre las 14:00 y 16:00, cercanos a 50, para después disminuir durante la tarde y la noche. La similitud entre la media y la mediana a lo largo del día indica que este patrón no depende únicamente de unas pocas observaciones extremas. La hora del día, por tanto, contiene una señal clara que conviene incorporar al modelado mediante `Hora_sin` y `Hora_cos`.
+
+### Patrón mensual
+
+Después del ciclo diario se revisa si el O3 también presenta cambios sistemáticos a lo largo del año. Se calcula la media y la mediana para cada mes utilizando todas las mediciones válidas disponibles. Debido a que la base de 2025 termina en junio, los meses de enero a junio incluyen datos de cinco años, mientras que julio a diciembre contienen únicamente información de 2021 a 2024.
+
+```{r}
+#| label: patron-mensual-o3
+o3_por_mes <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  group_by(Mes) |>
+  summarise(
+    Observaciones = n(),
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_mes |>
+    mutate(
+      Media = round(Media, 2),
+      Mediana = round(Mediana, 2)
+    ),
+  caption = "Concentración de O3 por mes"
+)
+```
+
+```{r}
+#| label: grafica-patron-mensual-o3
+#| fig-cap: "Patrón mensual de O3"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_por_mes |>
+  pivot_longer(
+    cols = c(Media, Mediana),
+    names_to = "Estadistico",
+    values_to = "O3"
+  ) |>
+  ggplot(aes(x = Mes, y = O3, linetype = Estadistico)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = c(
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    )
+  ) +
+  labs(
+    x = "Mes",
+    y = "O3",
+    linetype = NULL
+  ) +
+  theme_minimal()
+```
+
+La interpretación del patrón mensual se realizará después de ejecutar estas tablas y figuras, antes de continuar con la relación de O3 con las variables meteorológicas y otros contaminantes.
 
 ## Relación con variables meteorológicas y contaminantes
 
