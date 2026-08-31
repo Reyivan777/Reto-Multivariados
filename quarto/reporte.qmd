@@ -1413,11 +1413,118 @@ o3_por_direccion |>
   theme_minimal()
 ```
 
-La interpretación de la dirección del viento se realizará después de ejecutar esta tabla y figura. Con ello quedará cerrada la revisión inicial de meteorología antes de pasar a las asociaciones entre O3 y los demás contaminantes.
+La dirección del viento muestra diferencias claras en la concentración de O3. Los valores medios más altos aparecen cuando el viento proviene del sureste (`SE`, 32.42), este (`E`, 31.42) y sur (`S`, 29.75). En contraste, las concentraciones son considerablemente menores con viento del oeste (`O`, 13.79), noroeste (`NO`, 15.92) y suroeste (`SO`, 17.40). Las medianas siguen el mismo patrón, por lo que la diferencia no parece depender únicamente de observaciones extremas.
+
+Este resultado indica que la dirección del viento contiene información potencialmente útil para la predicción. Sin embargo, la comparación es descriptiva y no implica que la dirección por sí sola cause las diferencias de O3; parte del patrón puede estar asociada con la estación, la hora del día, la temporada u otras condiciones meteorológicas. Para el modelado se conservarán `WD_sin` y `WD_cos`, que representan la dirección sin romper su naturaleza circular.
 
 ### Otros contaminantes
 
-Pendiente de analizar `CO`, `NO`, `NO2`, `NOX`, `PM10`, `PM2.5` y `SO2` y comparar su asociación con O3.
+Después de la meteorología se revisa la asociación contemporánea entre O3 y los demás contaminantes disponibles: `CO`, `NO`, `NO2`, `NOX`, `PM10`, `PM2.5` y `SO2`. Igual que en el bloque meteorológico, se calcula Pearson utilizando únicamente los pares de horas donde ambas variables están disponibles.
+
+```{r}
+#| label: correlacion-o3-contaminantes
+variables_contaminantes <- c(
+  "CO", "NO", "NO2", "NOX", "PM10", "PM2.5", "SO2"
+)
+
+correlaciones_o3_contaminantes <- map_dfr(
+  variables_contaminantes,
+  function(variable) {
+    pares <- tibble(
+      O3 = datos_preparados$O3,
+      X = datos_preparados[[variable]]
+    ) |>
+      drop_na()
+
+    tibble(
+      Variable = variable,
+      Observaciones = nrow(pares),
+      Correlacion = cor(
+        pares$O3,
+        pares$X,
+        method = "pearson"
+      )
+    )
+  }
+) |>
+  arrange(desc(abs(Correlacion)))
+
+knitr::kable(
+  correlaciones_o3_contaminantes |>
+    mutate(Correlacion = round(Correlacion, 3)),
+  caption = "Correlación de Pearson entre O3 y otros contaminantes"
+)
+```
+
+La magnitud y el signo de las asociaciones se muestran también de forma gráfica.
+
+```{r}
+#| label: grafica-correlacion-o3-contaminantes
+#| fig-cap: "Correlación de O3 con otros contaminantes"
+#| fig-width: 7
+#| fig-height: 4.5
+correlaciones_o3_contaminantes |>
+  mutate(
+    Variable = forcats::fct_reorder(Variable, abs(Correlacion))
+  ) |>
+  ggplot(aes(x = Variable, y = Correlacion)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Correlación de Pearson"
+  ) +
+  theme_minimal()
+```
+
+Para las tres asociaciones de mayor magnitud se revisa además la forma de la relación mediante una muestra de 10,000 registros. La tabla de correlaciones anterior continúa utilizando todos los pares válidos disponibles.
+
+```{r}
+#| label: relaciones-o3-contaminantes
+#| fig-cap: "Relación de O3 con los contaminantes de mayor correlación"
+#| fig-width: 8
+#| fig-height: 5
+contaminantes_principales <- correlaciones_o3_contaminantes |>
+  slice_max(
+    order_by = abs(Correlacion),
+    n = 3,
+    with_ties = FALSE
+  ) |>
+  pull(Variable)
+
+set.seed(123)
+
+muestra_contaminantes <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  slice_sample(n = 10000) |>
+  select(O3, all_of(contaminantes_principales)) |>
+  pivot_longer(
+    cols = all_of(contaminantes_principales),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  filter(!is.na(Valor))
+
+ggplot(
+  muestra_contaminantes,
+  aes(x = Valor, y = O3)
+) +
+  geom_point(alpha = 0.08, size = 0.5) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8
+  ) +
+  facet_wrap(~Variable, scales = "free_x") +
+  labs(
+    x = NULL,
+    y = "O3"
+  ) +
+  theme_minimal()
+```
+
+Estas correlaciones siguen describiendo relaciones de la misma hora y todavía no determinan qué contaminantes entrarán al modelo. Además de la magnitud de la asociación con O3, la selección deberá considerar la cantidad de datos faltantes y la posible redundancia entre variables relacionadas, especialmente `NO`, `NO2` y `NOX`. La interpretación concreta se realizará después de ejecutar los resultados.
 
 # Preparación para modelado
 
