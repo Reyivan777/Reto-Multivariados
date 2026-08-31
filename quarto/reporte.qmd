@@ -888,11 +888,87 @@ knitr::kable(
 )
 ```
 
-`datos_limpios` mantiene los 157,616 registros del periodo 2021-2025. La limpieza no elimina horas completas: únicamente transforma a `NA` las mediciones inválidas detectadas. Los valores extremos que permanecen dentro de los límites se conservan porque pueden corresponder a episodios reales y resultar relevantes para el modelado.
+`datos_limpios` mantiene los 157,616 registros del periodo 2021-2025. Se convirtieron 1,062 mediciones fuera de rango a `NA` y la verificación posterior confirmó que no quedan valores fuera de los límites establecidos. La limpieza no elimina horas completas; los valores extremos que permanecen dentro de los límites se conservan porque pueden corresponder a episodios reales y resultar relevantes para el modelado.
 
 ## Variables temporales y espaciales
 
-Pendiente de construir la representación definitiva de fecha, hora, estacionalidad y estación de monitoreo.
+La concentración de O3 presenta una dinámica horaria y estacional, por lo que la fecha y hora original se descompone en variables que permitan estudiar esos patrones sin perder el orden temporal. También se prepara la estación de monitoreo como una variable categórica para representar diferencias entre ubicaciones.
+
+Se conservan `fecha_hora` y `Año` como referencias temporales. A partir de `fecha_hora` se crean `Fecha`, `Hora`, `Dia_semana` y `Mes`. Las variables `Hora` y `Mes` también se representan mediante componentes seno y coseno porque son cíclicas: las 23:00 y las 00:00 son horas cercanas, igual que diciembre y enero, aunque sus valores numéricos simples se encuentren en extremos opuestos de la escala.
+
+```{r}
+#| label: variables-temporales-espaciales
+datos_preparados <- datos_limpios |>
+  mutate(
+    Fecha = as.Date(fecha_hora),
+    Hora = lubridate::hour(fecha_hora),
+    Mes = lubridate::month(fecha_hora),
+    Dia_semana_num = lubridate::wday(fecha_hora, week_start = 1),
+    Dia_semana = factor(
+      Dia_semana_num,
+      levels = 1:7,
+      labels = c(
+        "Lunes", "Martes", "Miercoles", "Jueves",
+        "Viernes", "Sabado", "Domingo"
+      )
+    ),
+    Estacion = factor(
+      Estacion,
+      levels = estaciones_interes
+    ),
+    Hora_sin = sin(2 * pi * Hora / 24),
+    Hora_cos = cos(2 * pi * Hora / 24),
+    Mes_sin = sin(2 * pi * (Mes - 1) / 12),
+    Mes_cos = cos(2 * pi * (Mes - 1) / 12)
+  ) |>
+  select(-Dia_semana_num) |>
+  arrange(Estacion, fecha_hora)
+```
+
+`Fecha`, `Hora`, `Dia_semana` y `Mes` se conservarán porque son fáciles de interpretar y serán útiles durante el análisis exploratorio. Las parejas `Hora_sin`-`Hora_cos` y `Mes_sin`-`Mes_cos` quedan disponibles para modelos que necesiten representar de manera continua los ciclos diario y anual.
+
+```{r}
+#| label: verificacion-variables-temporales
+resumen_variables_contexto <- tibble(
+  Variable = c(
+    "Fecha",
+    "Hora",
+    "Dia_semana",
+    "Mes",
+    "Estacion",
+    "Hora_sin / Hora_cos",
+    "Mes_sin / Mes_cos"
+  ),
+  Resultado = c(
+    paste(
+      min(datos_preparados$Fecha, na.rm = TRUE),
+      "a",
+      max(datos_preparados$Fecha, na.rm = TRUE)
+    ),
+    paste0(
+      min(datos_preparados$Hora, na.rm = TRUE),
+      "-",
+      max(datos_preparados$Hora, na.rm = TRUE)
+    ),
+    paste(levels(datos_preparados$Dia_semana), collapse = ", "),
+    paste0(
+      min(datos_preparados$Mes, na.rm = TRUE),
+      "-",
+      max(datos_preparados$Mes, na.rm = TRUE)
+    ),
+    paste(levels(datos_preparados$Estacion), collapse = ", "),
+    "Representacion ciclica de 24 horas",
+    "Representacion ciclica de 12 meses"
+  )
+)
+
+knitr::kable(
+  resumen_variables_contexto,
+  caption = "Variables temporales y espaciales preparadas"
+)
+```
+
+La variable `Fecha` servirá principalmente para ordenar y visualizar la serie temporal, mientras que `Año` se utilizará para mantener la separación cronológica entre entrenamiento, validación y prueba. La estación de monitoreo se conserva como factor con cuatro niveles (`NTE`, `NTE2`, `NO` y `NE`). Todavía no se decide cuáles de estas variables entrarán en cada modelo; esa selección se realizará después del análisis exploratorio y junto con la construcción de rezagos.
 
 # Análisis exploratorio
 
