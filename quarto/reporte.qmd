@@ -1340,7 +1340,84 @@ ggplot(
   theme_minimal()
 ```
 
-La interpretación de estas relaciones se realizará con los resultados obtenidos antes de analizar la dirección del viento y los demás contaminantes.
+Las asociaciones más claras se observan con `SR`, `RH` y `TEMP`. La radiación solar presenta la mayor correlación positiva con O3 ($r = 0.571$), seguida de la temperatura ($r = 0.501$). En sentido contrario, la humedad relativa muestra una correlación negativa de magnitud similar ($r = -0.525$): las concentraciones de O3 tienden a ser menores cuando aumenta la humedad. La velocidad del viento presenta una asociación positiva moderada ($r = 0.378$), mientras que la presión atmosférica tiene una relación lineal débil y negativa ($r = -0.161$). La precipitación prácticamente no presenta asociación lineal contemporánea con O3 ($r \approx 0$).
+
+Los diagramas de dispersión confirman las tendencias generales de `SR`, `RH` y `TEMP`, aunque también muestran una dispersión considerable alrededor de las rectas. Por ello, estas variables aportan información relevante, pero ninguna explica por sí sola el comportamiento del O3 y es razonable esperar que el modelo necesite combinar meteorología, patrones temporales y antecedentes del propio contaminante.
+
+Estas correlaciones describen mediciones tomadas en la misma hora. Para el pronóstico no se utilizarán valores meteorológicos futuros que no estén disponibles al momento de generar la predicción; durante la construcción de rezagos se conservará únicamente información conocida hasta el instante $t$.
+
+### Dirección del viento
+
+La dirección del viento se analiza por separado porque una correlación lineal directa con los grados no representa correctamente su naturaleza circular. Para facilitar la interpretación, los grados se agrupan en ocho sectores cardinales. Además, se crean las componentes `WD_sin` y `WD_cos`, que permitirán conservar la dirección como variable continua y circular durante el modelado.
+
+```{r}
+#| label: preparacion-direccion-viento
+datos_preparados <- datos_preparados |>
+  mutate(
+    WD_sin = sin(2 * pi * WD / 360),
+    WD_cos = cos(2 * pi * WD / 360),
+    Sector_viento = case_when(
+      is.na(WD) ~ NA_character_,
+      WD >= 337.5 | WD < 22.5 ~ "N",
+      WD < 67.5 ~ "NE",
+      WD < 112.5 ~ "E",
+      WD < 157.5 ~ "SE",
+      WD < 202.5 ~ "S",
+      WD < 247.5 ~ "SO",
+      WD < 292.5 ~ "O",
+      TRUE ~ "NO"
+    ),
+    Sector_viento = factor(
+      Sector_viento,
+      levels = c("N", "NE", "E", "SE", "S", "SO", "O", "NO")
+    )
+  )
+```
+
+Se compara la concentración de O3 entre los ocho sectores utilizando la media y la mediana de las horas con información válida de O3 y dirección del viento.
+
+```{r}
+#| label: o3-por-direccion-viento
+o3_por_direccion <- datos_preparados |>
+  filter(!is.na(O3), !is.na(Sector_viento)) |>
+  group_by(Sector_viento) |>
+  summarise(
+    Observaciones = n(),
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_direccion |>
+    mutate(
+      Media = round(Media, 2),
+      Mediana = round(Mediana, 2)
+    ),
+  caption = "Concentración de O3 según la dirección del viento"
+)
+```
+
+```{r}
+#| label: grafica-o3-direccion-viento
+#| fig-cap: "Concentración media de O3 según la dirección del viento"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_por_direccion |>
+  ggplot(aes(x = Sector_viento, y = Media)) +
+  geom_col() +
+  labs(
+    x = "Dirección del viento",
+    y = "O3 medio"
+  ) +
+  theme_minimal()
+```
+
+La interpretación de la dirección del viento se realizará después de ejecutar esta tabla y figura. Con ello quedará cerrada la revisión inicial de meteorología antes de pasar a las asociaciones entre O3 y los demás contaminantes.
+
+### Otros contaminantes
+
+Pendiente de analizar `CO`, `NO`, `NO2`, `NOX`, `PM10`, `PM2.5` y `SO2` y comparar su asociación con O3.
 
 # Preparación para modelado
 
