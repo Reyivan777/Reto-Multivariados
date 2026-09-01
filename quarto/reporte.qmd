@@ -116,13 +116,6 @@ Los datos utilizados provienen del Sistema Integral de Monitoreo Ambiental (SIMA
 
 El reporte conservará los datos originales sin modificar como fuente de referencia y generará conjuntos derivados para limpieza, análisis y modelado. Las decisiones de exclusión, transformación o imputación se documentarán en las siguientes secciones y deberán responder directamente a las necesidades del problema de predicción de O3.
 
-<!--
-La estructura técnica de las etapas anteriores se reconstruirá a partir de aquí.
-El código previo permanece disponible en el historial de Git y se reincorporará únicamente
-cuando aporte información necesaria para el objetivo actual, evitando arrastrar secciones
-que respondían al objetivo anterior más amplio.
--->
-
 # Datos
 
 ## Archivos fuente
@@ -148,25 +141,15 @@ options(scipen = 999)
 estaciones_interes <- c("NTE", "NTE2", "NO", "NE")
 
 archivos <- tibble(Año = 2020:2025) |>
-  mutate(
-    Archivo = here("data", paste0("BD ", Año, ".xlsx"))
-  )
+  mutate(Archivo = here("data", paste0("BD ", Año, ".xlsx")))
 
 leer_anio_bruto <- function(archivo, anio) {
   hojas_disponibles <- excel_sheets(archivo)
   hojas_interes <- intersect(estaciones_interes, hojas_disponibles)
 
   map_dfr(hojas_interes, function(hoja) {
-    read_excel(
-      archivo,
-      sheet = hoja,
-      col_types = "text"
-    ) |>
-      mutate(
-        Año = anio,
-        Estacion = hoja,
-        .before = 1
-      )
+    read_excel(archivo, sheet = hoja, col_types = "text") |>
+      mutate(Año = anio, Estacion = hoja, .before = 1)
   })
 }
 
@@ -181,8 +164,6 @@ datos_brutos <- map2_dfr(
 
 ## Estructura y disponibilidad inicial
 
-Primero se revisa cuántos registros aporta cada estación en cada año.
-
 ```{r}
 #| label: disponibilidad-registros
 registros_por_estacion <- expand_grid(
@@ -190,25 +171,19 @@ registros_por_estacion <- expand_grid(
   Estacion = estaciones_interes
 ) |>
   left_join(
-    datos_brutos |>
-      count(Año, Estacion, name = "Registros"),
+    datos_brutos |> count(Año, Estacion, name = "Registros"),
     by = c("Año", "Estacion")
   ) |>
   mutate(Registros = replace_na(Registros, 0L))
 
 registros_por_estacion |>
-  pivot_wider(
-    names_from = Estacion,
-    values_from = Registros
-  ) |>
+  pivot_wider(names_from = Estacion, values_from = Registros) |>
   knitr::kable(
     caption = "Cantidad de registros por año y estación seleccionada"
   )
 ```
 
 Las cuatro estaciones tienen cobertura durante los seis años. Entre 2020 y 2024 cada estación aporta aproximadamente 8,760 registros por año, consistente con mediciones horarias durante prácticamente todo el año. En 2025 se observan alrededor de 4,344 registros por estación porque la base disponible termina en junio.
-
-También se resume la estructura resultante antes de homologar los nombres de las variables.
 
 ```{r}
 #| label: estructura-inicial
@@ -229,8 +204,6 @@ El conjunto reúne 192,723 registros de las cuatro estaciones seleccionadas. Ant
 
 ## Homologación de la estructura
 
-Al comparar los encabezados de los seis archivos se identificaron algunas variables que cambian de nombre según el año. Estas equivalencias ya habían aparecido en el código anterior del proyecto y se conservaron porque corresponden a diferencias reales observadas en los archivos originales.
-
 ```{r}
 #| label: equivalencias-nombres
 equivalencias_nombres <- tribble(
@@ -247,8 +220,6 @@ knitr::kable(
   caption = "Equivalencias utilizadas para homologar la estructura"
 )
 ```
-
-Además, algunos encabezados contienen unidades entre paréntesis o saltos de línea. La función siguiente normaliza esas diferencias de formato y después combina las columnas equivalentes bajo un único nombre.
 
 ```{r}
 #| label: homologacion-estructura
@@ -299,8 +270,6 @@ datos_homologados <- datos_brutos |>
   )
 ```
 
-El resultado conserva una sola columna por variable y mantiene todavía las mediciones como texto.
-
 ```{r}
 #| label: verificacion-homologacion
 variables_esperadas <- c(
@@ -330,10 +299,6 @@ Después de la homologación se conservan los mismos 192,723 registros en 18 col
 # Preparación de los datos
 
 ## Conversión de tipos
-
-La estructura ya está homologada, pero las mediciones todavía se encuentran almacenadas como texto. En este paso se convierte `fecha_hora` a un formato de fecha y hora y las 15 variables de medición a tipo numérico. `Año` se mantiene como entero y `Estacion` como identificador de texto.
-
-La columna temporal aparece en dos formatos dentro de los archivos: algunos registros se almacenan como números seriales de Excel y otros como texto con fecha y hora. La función siguiente contempla ambos casos sin modificar el orden temporal de las observaciones.
 
 ```{r}
 #| label: conversion-tipos
@@ -377,10 +342,6 @@ datos_tipos <- datos_homologados |>
   )
 ```
 
-La zona horaria se fija como `UTC` únicamente para conservar una representación uniforme de fecha y hora; no se realiza una conversión del horario registrado por SIMA.
-
-Antes de continuar con la limpieza se verifica que la transformación haya producido los tipos esperados y se cuantifican las fechas no vacías que no pudieron interpretarse.
-
 ```{r}
 #| label: verificacion-tipos
 fechas_no_convertidas <- sum(
@@ -390,12 +351,7 @@ fechas_no_convertidas <- sum(
 )
 
 resumen_tipos <- tibble(
-  Elemento = c(
-    "Año",
-    "Estacion",
-    "fecha_hora",
-    "Variables de medición"
-  ),
+  Elemento = c("Año", "Estacion", "fecha_hora", "Variables de medición"),
   Resultado = c(
     class(datos_tipos$Año)[1],
     class(datos_tipos$Estacion)[1],
@@ -430,8 +386,6 @@ La conversión produjo las 15 variables de medición en formato numérico y `fec
 
 ## Valores faltantes y registros inválidos
 
-Antes de reemplazar o eliminar valores se cuantifican los problemas presentes en cada variable. Esta revisión distingue tres situaciones: valores que ya están ausentes (`NA`), valores no vacíos que no pudieron convertirse a número y la bandera `-9999`, utilizada en los archivos para indicar mediciones no válidas en algunas variables.
-
 ```{r}
 #| label: diagnostico-faltantes-banderas
 resumen_faltantes <- map_dfr(
@@ -442,9 +396,7 @@ resumen_faltantes <- map_dfr(
     texto <- str_squish(original)
 
     no_numericos <- sum(
-      !is.na(original) &
-        texto != "" &
-        is.na(numerico)
+      !is.na(original) & texto != "" & is.na(numerico)
     )
     bandera_9999 <- sum(numerico == -9999, na.rm = TRUE)
 
@@ -470,11 +422,7 @@ knitr::kable(
 
 Los faltantes representan un problema importante para varias variables. `SO2` presenta 24.49 % de ausencia, `NO2` 23.66 %, `NOX` 23.37 % y `NO` 20.42 %. Si estas variables se incorporan como predictoras sin un tratamiento específico, podrían reducir considerablemente la cantidad de observaciones disponibles para entrenar los modelos.
 
-El caso más importante para el objetivo del proyecto es `O3`: faltan 46,839 de los 192,723 registros, equivalentes al 24.30 %. Esto deja 145,884 mediciones observadas de la variable que se desea predecir. Los momentos donde el valor objetivo no está disponible no podrán utilizarse directamente para entrenar o evaluar una predicción de esa hora, por lo que antes de construir los horizontes de pronóstico será necesario revisar cómo se distribuyen estas ausencias entre años y estaciones.
-
-La disponibilidad es considerablemente mayor en variables como `SR` (3.68 % de faltantes), `PM10` (5.51 %), `RAINF` (7.47 %) y `BP` (8.11 %). Las banderas `-9999` son poco frecuentes: aparecen únicamente en `RH` (2 casos), `SR` (1) y `TEMP` (1), por lo que no explican los porcentajes elevados de ausencia. También aparecen cuatro valores no numéricos en varias variables, una cantidad mínima respecto al tamaño total de la base, aunque deberán identificarse antes de cerrar la limpieza.
-
-También se verifica que no existan dos registros para la misma estación y la misma fecha-hora.
+El caso más importante para el objetivo del proyecto es `O3`: faltan 46,839 de los 192,723 registros, equivalentes al 24.30 %. Esto deja 145,884 mediciones observadas de la variable que se desea predecir.
 
 ```{r}
 #| label: diagnostico-duplicados
@@ -493,13 +441,9 @@ knitr::kable(
 )
 ```
 
-No se encontraron registros duplicados para una misma combinación de estación y fecha-hora, por lo que no es necesario eliminar observaciones por este motivo.
-
-Antes de imputar o eliminar valores faltantes conviene revisar su distribución por año y estación. Un porcentaje global de 24.30 % en `O3`, por ejemplo, puede corresponder a ausencias relativamente uniformes o estar concentrado en periodos y estaciones específicos; ambas situaciones requieren decisiones de modelado distintas.
+No se encontraron registros duplicados para una misma combinación de estación y fecha-hora.
 
 ### Disponibilidad de O3 y selección del periodo
-
-Como `O3` es la variable objetivo, se revisa directamente su porcentaje de ausencia por estación y año. En esta variable no se encontraron banderas `-9999`, por lo que sus faltantes corresponden a valores `NA` después de la conversión.
 
 ```{r}
 #| label: faltantes-o3-estacion-anio
@@ -515,10 +459,7 @@ o3_estacion_anio <- datos_tipos |>
 
 porcentaje_o3_estacion_anio <- o3_estacion_anio |>
   select(Año, Estacion, Porcentaje_faltante) |>
-  pivot_wider(
-    names_from = Estacion,
-    values_from = Porcentaje_faltante
-  )
+  pivot_wider(names_from = Estacion, values_from = Porcentaje_faltante)
 
 knitr::kable(
   porcentaje_o3_estacion_anio,
@@ -526,13 +467,11 @@ knitr::kable(
 )
 ```
 
-La tabla muestra que la falta de O3 está concentrada principalmente en **2020**. Ese año faltan 99.90 % de las mediciones en `NE`, 98.44 % en `NO`, 99.99 % en `NTE` y 93.33 % en `NTE2`, por lo que prácticamente no existe información de la variable objetivo para entrenar o evaluar un modelo supervisado. A partir de 2021 la cobertura mejora de manera considerable; aunque todavía existen faltantes, entre 2022 y 2024 los porcentajes son generalmente inferiores a 11 % y no se observa una estación cuya cobertura justifique eliminarla del análisis.
+La tabla muestra que la falta de O3 está concentrada principalmente en **2020**. Ese año faltan 99.90 % de las mediciones en `NE`, 98.44 % en `NO`, 99.99 % en `NTE` y 93.33 % en `NTE2`, por lo que prácticamente no existe información de la variable objetivo para entrenar o evaluar un modelo supervisado. A partir de 2021 la cobertura mejora de manera considerable.
 
 Con base en esta evidencia, **2020 se conserva únicamente como parte de la fuente histórica original y se excluye del periodo de modelado**. El periodo útil queda definido entre 2021 y 2025, con 2021-2023 para entrenamiento, 2024 para validación y 2025 para prueba final.
 
 ### Continuidad y tratamiento de los faltantes de O3 desde 2021
-
-Para decidir si los valores faltantes pueden imputarse no basta con conocer su porcentaje. En un problema temporal también importa saber si aparecen como horas aisladas o como interrupciones prolongadas. Por ello se reconstruye una secuencia horaria completa por estación desde 2021 y se identifican los bloques consecutivos sin O3.
 
 ```{r}
 #| label: bloques-faltantes-o3
@@ -558,9 +497,7 @@ serie_o3_horaria <- expand_grid(
   group_by(Estacion) |>
   mutate(
     faltante = is.na(O3),
-    bloque = cumsum(
-      faltante != lag(faltante, default = FALSE)
-    )
+    bloque = cumsum(faltante != lag(faltante, default = FALSE))
   ) |>
   ungroup()
 
@@ -584,11 +521,7 @@ bloques_o3 |>
   )
 ```
 
-Los bloques más largos confirman que algunas ausencias no son horas aisladas. Al inicio de 2021, `NO` permanece 1,536 horas consecutivas sin O3, `NTE` 1,296 horas y `NE` 1,284 horas. También existen interrupciones posteriores, aunque de menor duración. Imputar estos periodos implicaría crear semanas de valores sintéticos y podría distorsionar la dinámica real del contaminante.
-
-Por ello, **O3 no se imputará cuando funcione como variable objetivo**. Las horas sin una medición real de O3 no se utilizarán como respuesta durante el entrenamiento ni para calcular el error de evaluación. Si O3 se utiliza posteriormente como predictor mediante rezagos, sus faltantes también se conservarán como `NA` y se cuantificará cuántas observaciones permanecen disponibles con los rezagos seleccionados.
-
-A partir de este punto se define una base preliminar para el modelado con los años 2021-2025. Las pocas banderas `-9999` detectadas en otras variables se convierten a `NA`, pero todavía no se eliminan registros ni se imputan mediciones.
+Los bloques más largos confirman que algunas ausencias no son horas aisladas. Al inicio de 2021, `NO` permanece 1,536 horas consecutivas sin O3, `NTE` 1,296 horas y `NE` 1,284 horas. Por ello, **O3 no se imputará cuando funcione como variable objetivo**.
 
 ```{r}
 #| label: base-preliminar-modelado
@@ -615,13 +548,7 @@ knitr::kable(
 )
 ```
 
-`datos_base_modelado` conserva la estructura original del periodo útil y mantiene explícitamente los faltantes. Todavía no se considera un conjunto limpio definitivo: faltan revisar los valores físicamente inválidos o extremos y definir el tratamiento de las variables predictoras antes de construir los rezagos.
-
 ## Valores extremos
-
-El análisis anterior cierra por ahora la revisión específica de **disponibilidad y continuidad de O3**. El comportamiento del contaminante todavía se estudiará más adelante en el análisis exploratorio, pero ya quedó definido qué periodo se utilizará y cómo se tratarán sus valores faltantes cuando funcione como variable objetivo.
-
-Antes de considerar la base como limpia se revisan los valores extremos de todas las variables. Para ello se retoman los límites de validación por año utilizados previamente en el proyecto. Estos límites se emplean únicamente para detectar mediciones fuera del rango aceptado; un valor estadísticamente extremo que permanezca dentro de ellos no se eliminará automáticamente, ya que puede representar un episodio real.
 
 ```{r}
 #| label: diagnostico-valores-extremos
@@ -698,8 +625,6 @@ knitr::kable(
 )
 ```
 
-Para saber en qué años se concentran las posibles mediciones inválidas se muestran únicamente las combinaciones año-variable que contienen al menos un valor fuera del rango correspondiente.
-
 ```{r}
 #| label: extremos-fuera-rango-anio
 fuera_rango_anio <- datos_extremos |>
@@ -716,10 +641,6 @@ knitr::kable(
   caption = "Valores fuera de rango por año y variable"
 )
 ```
-
-`SR` y `RH` concentran la mayor cantidad de observaciones fuera de los límites utilizados. `SR` presenta 656 casos, equivalentes aproximadamente al 0.42 % de la base de modelado, y 617 de ellos corresponden a 2022. `RH` presenta 260 casos, cerca del 0.16 % de la base, concentrados principalmente en 2022, 2023 y 2024. Aunque estas proporciones son pequeñas respecto al total de registros, conviene identificar si proceden de una estación específica antes de aplicar la limpieza.
-
-Para ello se revisan únicamente los valores fuera de rango de `SR` y `RH` por año y estación, incluyendo el mínimo y máximo observados entre los casos inválidos.
 
 ```{r}
 #| label: extremos-sr-rh-estacion
@@ -744,15 +665,9 @@ knitr::kable(
 )
 ```
 
-Los valores fuera de rango de `RH` están casi totalmente concentrados en la estación `NO`: 256 de los 260 casos provienen de esa estación. En 2022 aparecen 151 registros fuera del intervalo 0-100 %, incluyendo un máximo de 714.2 %, por lo que se consideran mediciones inválidas. Los cuatro casos restantes corresponden a `NTE` en 2024.
-
-En `SR` también se observa un problema localizado. De los 656 casos fuera de rango, 604 corresponden a `NTE` durante 2022. El resto se distribuye en cantidades pequeñas entre otras estaciones y años. Algunos valores cercanos a cero aparecen redondeados como 0.00 en la tabla aunque son ligeramente negativos y, por lo tanto, quedan fuera del límite inferior correspondiente.
-
-Dado que estos casos representan una proporción pequeña de la base y que varios corresponden a valores físicamente imposibles o incompatibles con los límites de validación establecidos, se conservarán las filas completas y únicamente se sustituirá por `NA` la medición inválida.
+Los valores fuera de rango de `RH` están casi totalmente concentrados en la estación `NO`: 256 de los 260 casos provienen de esa estación. En `SR`, 604 de los 656 casos corresponden a `NTE` durante 2022. Dado que estos casos representan una proporción pequeña de la base, se conservarán las filas completas y únicamente se sustituirá por `NA` la medición inválida.
 
 ### Construcción de la base limpia
-
-Se aplican los límites específicos de cada año a todas las variables de medición. Cuando una observación cae fuera de su intervalo permitido, solo esa celda se convierte a `NA`; no se elimina el registro horario completo.
 
 ```{r}
 #| label: limpieza-valores-fuera-rango
@@ -775,8 +690,6 @@ for (i in seq_len(nrow(limites_modelado))) {
   datos_limpios[[variable_i]][invalido] <- NA_real_
 }
 ```
-
-Después de la transformación se vuelve a comprobar que no permanezcan valores fuera de los límites utilizados.
 
 ```{r}
 #| label: verificacion-datos-limpios
@@ -810,13 +723,9 @@ knitr::kable(
 )
 ```
 
-`datos_limpios` mantiene los 157,616 registros del periodo 2021-2025. Se convirtieron 1,062 mediciones fuera de rango a `NA` y la verificación posterior confirmó que no quedan valores fuera de los límites establecidos. La limpieza no elimina horas completas; los valores extremos que permanecen dentro de los límites se conservan porque pueden corresponder a episodios reales y resultar relevantes para el modelado.
+`datos_limpios` mantiene los 157,616 registros del periodo 2021-2025. Se convirtieron 1,062 mediciones fuera de rango a `NA` y la verificación posterior confirmó que no quedan valores fuera de los límites establecidos.
 
 ## Variables temporales y espaciales
-
-La concentración de O3 presenta una dinámica horaria y estacional, por lo que la fecha y hora original se descompone en variables que permitan estudiar esos patrones sin perder el orden temporal. También se prepara la estación de monitoreo como una variable categórica para representar diferencias entre ubicaciones.
-
-Se conservan `fecha_hora` y `Año` como referencias temporales. A partir de `fecha_hora` se crean `Fecha`, `Hora`, `Dia_semana` y `Mes`. Las variables `Hora` y `Mes` también se representan mediante componentes seno y coseno porque son cíclicas: las 23:00 y las 00:00 son horas cercanas, igual que diciembre y enero, aunque sus valores numéricos simples se encuentren en extremos opuestos de la escala.
 
 ```{r}
 #| label: variables-temporales-espaciales
@@ -846,8 +755,6 @@ datos_preparados <- datos_limpios |>
   select(-Dia_semana_num) |>
   arrange(Estacion, fecha_hora)
 ```
-
-`Fecha`, `Hora`, `Dia_semana` y `Mes` se conservarán porque son fáciles de interpretar y serán útiles durante el análisis exploratorio. Las parejas `Hora_sin`-`Hora_cos` y `Mes_sin`-`Mes_cos` quedan disponibles para modelos que necesiten representar de manera continua los ciclos diario y anual.
 
 ```{r}
 #| label: verificacion-variables-temporales
@@ -890,13 +797,9 @@ knitr::kable(
 )
 ```
 
-La variable `Fecha` servirá principalmente para ordenar y visualizar la serie temporal, mientras que `Año` se utilizará para mantener la separación cronológica entre entrenamiento, validación y prueba. La estación de monitoreo se conserva como factor con cuatro niveles (`NTE`, `NTE2`, `NO` y `NE`). Todavía no se decide cuáles de estas variables entrarán en cada modelo; esa selección se realizará después del análisis exploratorio y junto con la construcción de rezagos.
-
 # Análisis exploratorio
 
 ## Comportamiento del O3
-
-El análisis exploratorio comienza con la variable objetivo. En este primer bloque se revisa su distribución general, se compara entre las cuatro estaciones y se estudia su patrón promedio a lo largo de las 24 horas del día. Solo se utilizan mediciones válidas de O3; los valores faltantes permanecen fuera de los cálculos descriptivos.
 
 ```{r}
 #| label: resumen-descriptivo-o3
@@ -911,12 +814,7 @@ resumen_o3 <- datos_preparados |>
     Minimo = min(O3, na.rm = TRUE),
     Maximo = max(O3, na.rm = TRUE)
   ) |>
-  mutate(
-    across(
-      -Observaciones,
-      ~ round(.x, 2)
-    )
-  )
+  mutate(across(-Observaciones, ~ round(.x, 2)))
 
 knitr::kable(
   resumen_o3,
@@ -927,24 +825,17 @@ knitr::kable(
 ```{r}
 #| label: distribucion-o3
 #| fig-cap: "Distribución de las concentraciones horarias de O3"
-#| fig-width: 7
-#| fig-height: 4.5
 datos_preparados |>
   filter(!is.na(O3)) |>
   ggplot(aes(x = O3)) +
   geom_histogram(bins = 40) +
-  labs(
-    x = "O3",
-    y = "Frecuencia"
-  ) +
+  labs(x = "O3", y = "Frecuencia") +
   theme_minimal()
 ```
 
-Entre 2021 y junio de 2025 se conservan 145,151 mediciones válidas de O3. La media es 27.12 y la mediana 23, mientras que el 50 % central de las observaciones se encuentra entre 13 y 37. El histograma muestra una distribución asimétrica hacia la derecha: la mayoría de las concentraciones se agrupa en valores relativamente bajos y existe una cola prolongada hacia valores altos, con un máximo observado de 173. Por ello, la distribución marginal de O3 no presenta una forma aproximadamente normal. Esto no impide utilizar posteriormente modelos de regresión lineal; en ese caso los supuestos se revisarán sobre los residuos del modelo y no sobre la normalidad de O3 por sí sola.
+Entre 2021 y junio de 2025 se conservan 145,151 mediciones válidas de O3. La media es 27.12 y la mediana 23. El histograma muestra una distribución asimétrica hacia la derecha.
 
 ## Diferencias entre estaciones
-
-Se comparan las mediciones de O3 de `NTE`, `NTE2`, `NO` y `NE` mediante estadísticos descriptivos y su distribución por estación.
 
 ```{r}
 #| label: resumen-o3-estacion
@@ -958,12 +849,7 @@ resumen_o3_estacion <- datos_preparados |>
     P75 = quantile(O3, 0.75, na.rm = TRUE),
     .groups = "drop"
   ) |>
-  mutate(
-    across(
-      c(Media, Mediana, P25, P75),
-      ~ round(.x, 2)
-    )
-  )
+  mutate(across(c(Media, Mediana, P25, P75), ~ round(.x, 2)))
 
 knitr::kable(
   resumen_o3_estacion,
@@ -973,25 +859,17 @@ knitr::kable(
 
 ```{r}
 #| label: distribucion-o3-estacion
-#| fig-cap: "Distribución de O3 por estación"
-#| fig-width: 7
-#| fig-height: 4.5
 datos_preparados |>
   filter(!is.na(O3)) |>
   ggplot(aes(x = Estacion, y = O3)) +
   geom_boxplot(outlier.alpha = 0.15) +
-  labs(
-    x = "Estación",
-    y = "O3"
-  ) +
+  labs(x = "Estación", y = "O3") +
   theme_minimal()
 ```
 
-Las cuatro estaciones presentan distribuciones con una forma general similar, aunque existen diferencias en el nivel de concentración. `NO` registra los valores centrales más altos, con media de 29.79 y mediana de 26, mientras que `NTE2` presenta los más bajos, con media de 24.58 y mediana de 20. `NTE` y `NE` se ubican entre ambos casos. Estas diferencias justifican conservar la estación como información potencialmente útil para el modelo, aunque el comportamiento general de O3 es comparable entre los cuatro puntos de monitoreo.
+Las cuatro estaciones presentan distribuciones con una forma general similar, aunque `NO` tiende a registrar niveles ligeramente mayores y `NTE2` menores.
 
 ### Patrón horario
-
-Finalmente se calcula la media y la mediana de O3 para cada hora del día. Esta revisión permite identificar si existe una estructura diaria suficientemente marcada como para justificar el uso de variables horarias en el modelo.
 
 ```{r}
 #| label: patron-horario-o3
@@ -1006,19 +884,13 @@ o3_por_hora <- datos_preparados |>
 
 knitr::kable(
   o3_por_hora |>
-    mutate(
-      Media = round(Media, 2),
-      Mediana = round(Mediana, 2)
-    ),
+    mutate(Media = round(Media, 2), Mediana = round(Mediana, 2)),
   caption = "Concentración de O3 por hora del día"
 )
 ```
 
 ```{r}
 #| label: grafica-patron-horario-o3
-#| fig-cap: "Patrón horario de O3"
-#| fig-width: 7
-#| fig-height: 4.5
 o3_por_hora |>
   pivot_longer(
     cols = c(Media, Mediana),
@@ -1029,19 +901,13 @@ o3_por_hora |>
   geom_line(linewidth = 0.9) +
   geom_point() +
   scale_x_continuous(breaks = 0:23) +
-  labs(
-    x = "Hora del día",
-    y = "O3",
-    linetype = NULL
-  ) +
+  labs(x = "Hora del día", y = "O3", linetype = NULL) +
   theme_minimal()
 ```
 
-El patrón horario es marcado. Las concentraciones disminuyen durante la madrugada y alcanzan su nivel más bajo alrededor de las 7:00. A partir de la mañana aumentan rápidamente y alcanzan sus valores medios más altos aproximadamente entre las 14:00 y 16:00, cercanos a 50, para después disminuir durante la tarde y la noche. La similitud entre la media y la mediana a lo largo del día indica que este patrón no depende únicamente de unas pocas observaciones extremas. La hora del día, por tanto, contiene una señal clara que conviene incorporar al modelado mediante `Hora_sin` y `Hora_cos`.
+El patrón horario es marcado. Las concentraciones alcanzan su nivel más bajo alrededor de las 7:00 y sus valores más altos aproximadamente entre las 14:00 y 16:00.
 
 ### Patrón mensual
-
-Después del ciclo diario se revisa si el O3 también presenta cambios sistemáticos a lo largo del año. Se calcula la media y la mediana para cada mes utilizando todas las mediciones válidas disponibles. Debido a que la base de 2025 termina en junio, los meses de enero a junio incluyen datos de cinco años, mientras que julio a diciembre contienen únicamente información de 2021 a 2024.
 
 ```{r}
 #| label: patron-mensual-o3
@@ -1057,19 +923,13 @@ o3_por_mes <- datos_preparados |>
 
 knitr::kable(
   o3_por_mes |>
-    mutate(
-      Media = round(Media, 2),
-      Mediana = round(Mediana, 2)
-    ),
+    mutate(Media = round(Media, 2), Mediana = round(Mediana, 2)),
   caption = "Concentración de O3 por mes"
 )
 ```
 
 ```{r}
 #| label: grafica-patron-mensual-o3
-#| fig-cap: "Patrón mensual de O3"
-#| fig-width: 7
-#| fig-height: 4.5
 o3_por_mes |>
   pivot_longer(
     cols = c(Media, Mediana),
@@ -1086,41 +946,24 @@ o3_por_mes |>
       "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
     )
   ) +
-  labs(
-    x = "Mes",
-    y = "O3",
-    linetype = NULL
-  ) +
+  labs(x = "Mes", y = "O3", linetype = NULL) +
   theme_minimal()
 ```
 
-El patrón mensual también es claro. Las concentraciones son menores durante el invierno, con medias de 18.78 en diciembre y 20.96 en enero. A partir de febrero aumentan y permanecen elevadas durante la primavera, alcanzando la media mensual más alta en mayo (33.06). Posteriormente disminuyen durante junio y julio, aparece un segundo incremento hacia septiembre (29.07) y vuelven a descender durante octubre, noviembre y diciembre. La media permanece por encima de la mediana en todos los meses, consistente con la asimetría hacia valores altos observada previamente.
-
-Este comportamiento muestra una asociación importante entre la época del año y la concentración de O3, por lo que la representación cíclica del mes puede aportar información predictiva. Sin embargo, el mes no se interpreta como una causa directa: puede estar representando cambios estacionales en temperatura, radiación solar, humedad, viento y otras condiciones atmosféricas que se analizarán posteriormente.
+El patrón mensual también es claro: las concentraciones son menores en invierno, aumentan durante la primavera y alcanzan su mayor media mensual en mayo.
 
 ### Estabilidad del patrón mensual entre años
-
-Antes de asumir que el ciclo mensual es estable, se compara por separado entre los años completos 2021, 2022, 2023 y 2024. El año 2025 no se incluye en esta comparación porque solo contiene datos hasta junio.
 
 ```{r}
 #| label: patron-mensual-o3-por-anio
 o3_mes_anio <- datos_preparados |>
-  filter(
-    Año %in% 2021:2024,
-    !is.na(O3)
-  ) |>
+  filter(Año %in% 2021:2024, !is.na(O3)) |>
   group_by(Año, Mes) |>
-  summarise(
-    Media = mean(O3),
-    .groups = "drop"
-  )
+  summarise(Media = mean(O3), .groups = "drop")
 
 o3_mes_anio |>
   mutate(Media = round(Media, 2)) |>
-  pivot_wider(
-    names_from = Año,
-    values_from = Media
-  ) |>
+  pivot_wider(names_from = Año, values_from = Media) |>
   knitr::kable(
     caption = "Concentración media mensual de O3 por año"
   )
@@ -1128,9 +971,6 @@ o3_mes_anio |>
 
 ```{r}
 #| label: grafica-patron-mensual-o3-por-anio
-#| fig-cap: "Patrón mensual de O3 en los años completos 2021-2024"
-#| fig-width: 7
-#| fig-height: 4.5
 o3_mes_anio |>
   mutate(Año = factor(Año)) |>
   ggplot(aes(x = Mes, y = Media, color = Año, group = Año)) +
@@ -1143,23 +983,15 @@ o3_mes_anio |>
       "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
     )
   ) +
-  labs(
-    x = "Mes",
-    y = "O3 medio",
-    color = "Año"
-  ) +
+  labs(x = "Mes", y = "O3 medio", color = "Año") +
   theme_minimal()
 ```
 
-El patrón mensual no es idéntico entre años, pero conserva una estructura general. En los cuatro años se observa un aumento entre el invierno y la primavera, concentraciones relativamente altas durante parte de la primavera y el verano, y una disminución marcada hacia noviembre y diciembre. Existen variaciones interanuales: 2021 comienza con concentraciones especialmente bajas y 2023 presenta sus niveles más altos más tarde, entre junio y septiembre. Estas diferencias no eliminan la señal estacional, por lo que `Mes_sin` y `Mes_cos` siguen siendo variables razonables para representar el ciclo anual en el modelo.
+El patrón mensual no es idéntico entre años, pero conserva una estructura estacional general.
 
 ## Relación con variables meteorológicas y contaminantes
 
 ### Variables meteorológicas
-
-El siguiente paso es cuantificar la asociación lineal entre O3 y las principales variables meteorológicas. Se consideran `TEMP`, `RH`, `SR`, `WS`, `BP` y `RAINF` y se calcula el coeficiente de correlación de Pearson utilizando, para cada par, únicamente las horas donde ambas mediciones están disponibles.
-
-`WD` no se incluye directamente en esta correlación porque la dirección del viento es circular: valores cercanos a 0° y 360° representan direcciones similares aunque numéricamente se encuentren en extremos opuestos. Su tratamiento se realizará por separado.
 
 ```{r}
 #| label: correlacion-o3-meteorologia
@@ -1177,11 +1009,7 @@ correlaciones_o3_meteo <- map_dfr(
     tibble(
       Variable = variable,
       Observaciones = nrow(pares),
-      Correlacion = cor(
-        pares$O3,
-        pares$X,
-        method = "pearson"
-      )
+      Correlacion = cor(pares$O3, pares$X, method = "pearson")
     )
   }
 ) |>
@@ -1194,83 +1022,21 @@ knitr::kable(
 )
 ```
 
-La magnitud y el signo de las correlaciones se visualizan para identificar rápidamente qué variables presentan una asociación lineal más clara con O3.
-
 ```{r}
 #| label: grafica-correlacion-o3-meteorologia
-#| fig-cap: "Correlación de O3 con variables meteorológicas"
-#| fig-width: 7
-#| fig-height: 4.5
 correlaciones_o3_meteo |>
-  mutate(
-    Variable = forcats::fct_reorder(Variable, abs(Correlacion))
-  ) |>
+  mutate(Variable = forcats::fct_reorder(Variable, abs(Correlacion))) |>
   ggplot(aes(x = Variable, y = Correlacion)) +
   geom_col() +
   geom_hline(yintercept = 0, linewidth = 0.4) +
   coord_flip() +
-  labs(
-    x = NULL,
-    y = "Correlación de Pearson"
-  ) +
+  labs(x = NULL, y = "Correlación de Pearson") +
   theme_minimal()
 ```
 
-Para revisar la forma de las relaciones se muestran además las tres variables con mayor correlación absoluta. Debido al tamaño de la base, la gráfica utiliza una muestra aleatoria de 10,000 observaciones únicamente para facilitar la visualización; las correlaciones de la tabla anterior se calculan con todos los pares disponibles.
-
-```{r}
-#| label: relaciones-o3-meteorologia
-#| fig-cap: "Relación de O3 con las variables meteorológicas de mayor correlación"
-#| fig-width: 8
-#| fig-height: 5
-variables_meteo_principales <- correlaciones_o3_meteo |>
-  slice_max(
-    order_by = abs(Correlacion),
-    n = 3,
-    with_ties = FALSE
-  ) |>
-  pull(Variable)
-
-set.seed(123)
-
-muestra_meteorologia <- datos_preparados |>
-  filter(!is.na(O3)) |>
-  slice_sample(n = 10000) |>
-  select(O3, all_of(variables_meteo_principales)) |>
-  pivot_longer(
-    cols = all_of(variables_meteo_principales),
-    names_to = "Variable",
-    values_to = "Valor"
-  ) |>
-  filter(!is.na(Valor))
-
-ggplot(
-  muestra_meteorologia,
-  aes(x = Valor, y = O3)
-) +
-  geom_point(alpha = 0.08, size = 0.5) +
-  geom_smooth(
-    method = "lm",
-    se = FALSE,
-    linewidth = 0.8
-  ) +
-  facet_wrap(~Variable, scales = "free_x") +
-  labs(
-    x = NULL,
-    y = "O3"
-  ) +
-  theme_minimal()
-```
-
-Las asociaciones más claras se observan con `SR`, `RH` y `TEMP`. La radiación solar presenta la mayor correlación positiva con O3 ($r = 0.571$), seguida de la temperatura ($r = 0.501$). En sentido contrario, la humedad relativa muestra una correlación negativa de magnitud similar ($r = -0.525$): las concentraciones de O3 tienden a ser menores cuando aumenta la humedad. La velocidad del viento presenta una asociación positiva moderada ($r = 0.378$), mientras que la presión atmosférica tiene una relación lineal débil y negativa ($r = -0.161$). La precipitación prácticamente no presenta asociación lineal contemporánea con O3 ($r \approx 0$).
-
-Los diagramas de dispersión confirman las tendencias generales de `SR`, `RH` y `TEMP`, aunque también muestran una dispersión considerable alrededor de las rectas. Por ello, estas variables aportan información relevante, pero ninguna explica por sí sola el comportamiento del O3 y es razonable esperar que el modelo necesite combinar meteorología, patrones temporales y antecedentes del propio contaminante.
-
-Estas correlaciones describen mediciones tomadas en la misma hora. Para el pronóstico no se utilizarán valores meteorológicos futuros que no estén disponibles al momento de generar la predicción; durante la construcción de rezagos se conservará únicamente información conocida hasta el instante $t$.
+Las asociaciones más claras se observan con `SR` ($r = 0.571$), `RH` ($r = -0.525$) y `TEMP` ($r = 0.501$). `WS` presenta una asociación positiva moderada ($r = 0.378$), mientras que `BP` es débil y `RAINF` prácticamente nula.
 
 ### Dirección del viento
-
-La dirección del viento se analiza por separado porque una correlación lineal directa con los grados no representa correctamente su naturaleza circular. Para facilitar la interpretación, los grados se agrupan en ocho sectores cardinales. Además, se crean las componentes `WD_sin` y `WD_cos`, que permitirán conservar la dirección como variable continua y circular durante el modelado.
 
 ```{r}
 #| label: preparacion-direccion-viento
@@ -1296,8 +1062,6 @@ datos_preparados <- datos_preparados |>
   )
 ```
 
-Se compara la concentración de O3 entre los ocho sectores utilizando la media y la mediana de las horas con información válida de O3 y dirección del viento.
-
 ```{r}
 #| label: o3-por-direccion-viento
 o3_por_direccion <- datos_preparados |>
@@ -1312,36 +1076,23 @@ o3_por_direccion <- datos_preparados |>
 
 knitr::kable(
   o3_por_direccion |>
-    mutate(
-      Media = round(Media, 2),
-      Mediana = round(Mediana, 2)
-    ),
+    mutate(Media = round(Media, 2), Mediana = round(Mediana, 2)),
   caption = "Concentración de O3 según la dirección del viento"
 )
 ```
 
 ```{r}
 #| label: grafica-o3-direccion-viento
-#| fig-cap: "Concentración media de O3 según la dirección del viento"
-#| fig-width: 7
-#| fig-height: 4.5
 o3_por_direccion |>
   ggplot(aes(x = Sector_viento, y = Media)) +
   geom_col() +
-  labs(
-    x = "Dirección del viento",
-    y = "O3 medio"
-  ) +
+  labs(x = "Dirección del viento", y = "O3 medio") +
   theme_minimal()
 ```
 
-La dirección del viento muestra diferencias claras en la concentración de O3. Los valores medios más altos aparecen cuando el viento proviene del sureste (`SE`, 32.42), este (`E`, 31.42) y sur (`S`, 29.75). En contraste, las concentraciones son considerablemente menores con viento del oeste (`O`, 13.79), noroeste (`NO`, 15.92) y suroeste (`SO`, 17.40). Las medianas siguen el mismo patrón, por lo que la diferencia no parece depender únicamente de observaciones extremas.
-
-Este resultado indica que la dirección del viento contiene información potencialmente útil para la predicción. Sin embargo, la comparación es descriptiva y no implica que la dirección por sí sola cause las diferencias de O3; parte del patrón puede estar asociada con la estación, la hora del día, la temporada u otras condiciones meteorológicas. Para el modelado se conservarán `WD_sin` y `WD_cos`, que representan la dirección sin romper su naturaleza circular.
+Los valores medios más altos aparecen con viento del sureste, este y sur, mientras que las concentraciones son menores con viento del oeste, noroeste y suroeste. Para el modelado se conservarán `WD_sin` y `WD_cos`.
 
 ### Otros contaminantes
-
-Después de la meteorología se revisa la asociación contemporánea entre O3 y los demás contaminantes disponibles: `CO`, `NO`, `NO2`, `NOX`, `PM10`, `PM2.5` y `SO2`. Igual que en el bloque meteorológico, se calcula Pearson utilizando únicamente los pares de horas donde ambas variables están disponibles.
 
 ```{r}
 #| label: correlacion-o3-contaminantes
@@ -1361,11 +1112,7 @@ correlaciones_o3_contaminantes <- map_dfr(
     tibble(
       Variable = variable,
       Observaciones = nrow(pares),
-      Correlacion = cor(
-        pares$O3,
-        pares$X,
-        method = "pearson"
-      )
+      Correlacion = cor(pares$O3, pares$X, method = "pearson")
     )
   }
 ) |>
@@ -1378,85 +1125,27 @@ knitr::kable(
 )
 ```
 
-La magnitud y el signo de las asociaciones se muestran también de forma gráfica.
-
 ```{r}
 #| label: grafica-correlacion-o3-contaminantes
-#| fig-cap: "Correlación de O3 con otros contaminantes"
-#| fig-width: 7
-#| fig-height: 4.5
 correlaciones_o3_contaminantes |>
-  mutate(
-    Variable = forcats::fct_reorder(Variable, abs(Correlacion))
-  ) |>
+  mutate(Variable = forcats::fct_reorder(Variable, abs(Correlacion))) |>
   ggplot(aes(x = Variable, y = Correlacion)) +
   geom_col() +
   geom_hline(yintercept = 0, linewidth = 0.4) +
   coord_flip() +
-  labs(
-    x = NULL,
-    y = "Correlación de Pearson"
-  ) +
+  labs(x = NULL, y = "Correlación de Pearson") +
   theme_minimal()
 ```
 
-Para las tres asociaciones de mayor magnitud se revisa además la forma de la relación mediante una muestra de 10,000 registros. La tabla de correlaciones anterior continúa utilizando todos los pares válidos disponibles.
+Las asociaciones contemporáneas con los demás contaminantes son más débiles que las observadas con las principales variables meteorológicas. `NOX` presenta la mayor magnitud ($r = -0.363$), seguido de `NO` ($r = -0.337$) y `NO2` ($r = -0.306$). `SO2` muestra una asociación positiva débil ($r = 0.193$), mientras que `CO`, `PM10` y `PM2.5` presentan relaciones lineales muy pequeñas.
 
-```{r}
-#| label: relaciones-o3-contaminantes
-#| fig-cap: "Relación de O3 con los contaminantes de mayor correlación"
-#| fig-width: 8
-#| fig-height: 5
-contaminantes_principales <- correlaciones_o3_contaminantes |>
-  slice_max(
-    order_by = abs(Correlacion),
-    n = 3,
-    with_ties = FALSE
-  ) |>
-  pull(Variable)
-
-set.seed(123)
-
-muestra_contaminantes <- datos_preparados |>
-  filter(!is.na(O3)) |>
-  slice_sample(n = 10000) |>
-  select(O3, all_of(contaminantes_principales)) |>
-  pivot_longer(
-    cols = all_of(contaminantes_principales),
-    names_to = "Variable",
-    values_to = "Valor"
-  ) |>
-  filter(!is.na(Valor))
-
-ggplot(
-  muestra_contaminantes,
-  aes(x = Valor, y = O3)
-) +
-  geom_point(alpha = 0.08, size = 0.5) +
-  geom_smooth(
-    method = "lm",
-    se = FALSE,
-    linewidth = 0.8
-  ) +
-  facet_wrap(~Variable, scales = "free_x") +
-  labs(
-    x = NULL,
-    y = "O3"
-  ) +
-  theme_minimal()
-```
-
-Las asociaciones contemporáneas con los demás contaminantes son más débiles que las observadas con las principales variables meteorológicas. `NOX` presenta la mayor magnitud ($r = -0.363$), seguido de `NO` ($r = -0.337$) y `NO2` ($r = -0.306$); en los tres casos la relación es negativa. `SO2` muestra una asociación positiva débil ($r = 0.193$), mientras que `CO` ($r = -0.089$), `PM10` ($r = -0.036$) y `PM2.5` ($r = -0.028$) presentan relaciones lineales muy pequeñas.
-
-Los diagramas de dispersión de `NO`, `NO2` y `NOX` muestran una tendencia descendente, pero con una dispersión considerable. La recta de ajuste incluso puede extrapolar valores negativos de O3 para concentraciones muy altas de NO o NOX; esto no representa una concentración física posible y confirma que la línea se utiliza únicamente como resumen de la tendencia lineal, no como modelo definitivo de la relación.
-
-Estas correlaciones describen contaminantes medidos en la misma hora y no son suficientes para descartar variables de cara al pronóstico. Un contaminante con asociación contemporánea débil podría aportar información cuando se utilicen sus valores previos. Además, la selección final deberá considerar los faltantes y la redundancia entre `NO`, `NO2` y `NOX`, que representan procesos relacionados y no necesariamente conviene incorporar simultáneamente en una regresión lineal.
+Estas correlaciones describen contaminantes medidos en la misma hora y no son suficientes para descartarlos de cara al pronóstico. Un contaminante con asociación contemporánea débil podría aportar información cuando se utilicen sus valores previos. La selección final también deberá considerar los faltantes y la redundancia entre `NO`, `NO2` y `NOX`.
 
 # Preparación para modelado
 
 ## Construcción de rezagos
 
-El análisis anterior estudió relaciones entre variables observadas en la misma hora. Para un pronóstico real, sin embargo, el modelo solo podrá utilizar información disponible hasta el momento en que se genera la predicción. Por ello, el siguiente paso es estudiar cuánto aporta el comportamiento reciente del propio O3.
+El análisis anterior estudió relaciones entre variables observadas en la misma hora. Para un pronóstico real, el modelo solo podrá utilizar información disponible hasta el momento en que se genera la predicción. Por ello, primero se estudia cuánto aporta el comportamiento reciente del propio O3.
 
 Un rezago de $h$ horas representa la concentración observada $h$ horas antes:
 
@@ -1464,9 +1153,7 @@ $$
 O_3(t-h)
 $$
 
-Primero se calcula la relación entre $O_3(t)$ y los valores observados entre 1 y 24 horas antes. Esta separación temporal es equivalente a estudiar cuánto puede aportar $O_3(t)$ para anticipar $O_3(t+h)$ a la misma distancia de tiempo.
-
-Para evitar que la selección de rezagos dependa de los periodos reservados para validación y prueba, este diagnóstico utiliza únicamente **2021-2023**, que corresponde al conjunto de entrenamiento. Además, se reconstruye una secuencia horaria completa por estación antes de aplicar `lag()`. De esta forma, si falta por completo una hora en la base, un rezago de 1 hora sigue representando exactamente una hora anterior y no simplemente la fila previa disponible.
+Para evitar que la selección de rezagos dependa de los periodos reservados para validación y prueba, este diagnóstico utiliza únicamente **2021-2023**. Además, se reconstruye una secuencia horaria completa por estación antes de aplicar `lag()`.
 
 ```{r}
 #| label: serie-o3-rezagos-entrenamiento
@@ -1519,8 +1206,6 @@ serie_o3_entrenamiento <- expand_grid(
   ungroup()
 ```
 
-A continuación se calcula, para cada separación de 1 a 24 horas, la correlación entre el O3 actual y su valor rezagado. Los pares con alguna de las dos mediciones ausentes no participan en el cálculo.
-
 ```{r}
 #| label: correlacion-rezagos-o3
 correlaciones_rezagos_o3 <- map_dfr(
@@ -1553,9 +1238,6 @@ knitr::kable(
 
 ```{r}
 #| label: grafica-correlacion-rezagos-o3
-#| fig-cap: "Persistencia temporal del O3 entre 1 y 24 horas"
-#| fig-width: 7
-#| fig-height: 4.5
 correlaciones_rezagos_o3 |>
   ggplot(aes(x = Rezago_h, y = Correlacion)) +
   geom_line(linewidth = 0.9) +
@@ -1567,8 +1249,6 @@ correlaciones_rezagos_o3 |>
   ) +
   theme_minimal()
 ```
-
-También se calcula el mismo patrón por estación. Esto permite comprobar si la persistencia temporal es semejante en `NTE`, `NTE2`, `NO` y `NE` o si algún punto de monitoreo presenta una dinámica distinta.
 
 ```{r}
 #| label: correlacion-rezagos-o3-estacion
@@ -1614,7 +1294,118 @@ correlaciones_rezagos_estacion |>
   theme_minimal()
 ```
 
-Este diagnóstico todavía no selecciona los rezagos definitivos ni construye las variables objetivo futuras. Primero se revisará cómo disminuye o se recupera la correlación a lo largo de las 24 horas y si el patrón es consistente entre estaciones. A partir de esos resultados se decidirá qué rezagos del propio O3 vale la pena conservar antes de repetir el análisis con las variables meteorológicas y contaminantes más prometedoras.
+El O3 presenta una dependencia temporal muy marcada. La correlación con la hora inmediatamente anterior es de 0.916 y continúa siendo alta a dos horas (0.762) y tres horas (0.579), lo que muestra una fuerte persistencia de corto plazo. A medida que aumenta el rezago, la relación disminuye y se vuelve negativa entre aproximadamente 7 y 17 horas, alcanzando su valor más bajo cerca de 12 horas ($r = -0.208$). Este cambio de signo es consistente con el ciclo diario observado previamente: un intervalo cercano a 12 horas suele comparar momentos opuestos del patrón diario, por ejemplo la madrugada con las horas de mayor concentración de la tarde.
+
+Después de ese punto la correlación vuelve a aumentar y alcanza 0.741 a las 24 horas. Esto indica una segunda señal temporal importante: la concentración observada a una hora determinada suele parecerse a la registrada a la misma hora del día anterior. Las cuatro estaciones presentan prácticamente la misma forma de curva, por lo que la persistencia de corto plazo y la periodicidad diaria no parecen depender de una estación específica.
+
+Estos resultados no implican que deban incorporarse los 24 rezagos al modelo. Los rezagos consecutivos contienen información muy similar entre sí y podrían introducir redundancia, especialmente en una regresión lineal. Como punto de partida, los rezagos de 1 a 3 horas y el de 24 horas son candidatos naturales, aunque la selección definitiva se realizará mediante validación.
+
+### Predictores meteorológicos y O3 futuro
+
+El análisis anterior utilizó únicamente el propio O3. El siguiente paso es estudiar directamente si las condiciones meteorológicas conocidas en el momento $t$ contienen información sobre el O3 que se observará después. Para cada variable se calcula:
+
+$$
+Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24
+$$
+
+De esta manera, un horizonte de 6 horas indica qué tan relacionada está una medición meteorológica disponible ahora con el O3 observado seis horas después. Igual que en el análisis de rezagos, solo se utiliza 2021-2023 y se conserva una secuencia horaria completa por estación.
+
+Se incluyen `TEMP`, `RH`, `SR`, `WS`, `BP` y `RAINF`. Para la dirección del viento se utilizan `WD_sin` y `WD_cos`, ya que los grados no deben tratarse como una variable lineal.
+
+```{r}
+#| label: correlacion-meteorologia-o3-futuro
+variables_meteo_horizonte <- c(
+  "TEMP", "RH", "SR", "WS", "BP", "RAINF", "WD_sin", "WD_cos"
+)
+
+datos_meteo_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    O3,
+    across(all_of(variables_meteo_horizonte))
+  )
+
+serie_meteo_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_meteo_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+correlaciones_meteo_futuro <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- serie_meteo_entrenamiento |>
+      group_by(Estacion) |>
+      mutate(O3_futuro = lead(O3, h)) |>
+      ungroup()
+
+    map_dfr(
+      variables_meteo_horizonte,
+      function(variable) {
+        pares <- base_h |>
+          select(O3_futuro, all_of(variable)) |>
+          drop_na()
+
+        tibble(
+          Horizonte_h = h,
+          Variable = variable,
+          Observaciones = nrow(pares),
+          Correlacion = cor(
+            pares$O3_futuro,
+            pares[[variable]],
+            method = "pearson"
+          )
+        )
+      }
+    )
+  }
+)
+```
+
+Para mantener el reporte compacto, la tabla muestra algunos horizontes representativos, mientras que la figura conserva las 24 horas completas.
+
+```{r}
+#| label: tabla-meteorologia-o3-futuro
+correlaciones_meteo_futuro |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(Horizonte_h, Variable, Correlacion) |>
+  mutate(Correlacion = round(Correlacion, 3)) |>
+  pivot_wider(
+    names_from = Horizonte_h,
+    values_from = Correlacion,
+    names_prefix = "h_"
+  ) |>
+  knitr::kable(
+    caption = "Correlación de variables meteorológicas actuales con O3 futuro"
+  )
+```
+
+```{r}
+#| label: grafica-meteorologia-o3-futuro
+#| fig-cap: "Relación de las variables meteorológicas actuales con O3 a distintos horizontes"
+#| fig-width: 8
+#| fig-height: 7
+correlaciones_meteo_futuro |>
+  ggplot(aes(x = Horizonte_h, y = Correlacion)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  facet_wrap(~Variable, ncol = 2) +
+  scale_x_continuous(breaks = c(1, 6, 12, 18, 24)) +
+  labs(
+    x = "Horizonte de predicción (horas)",
+    y = "Correlación con O3 futuro"
+  ) +
+  theme_minimal()
+```
+
+La interpretación de estas curvas se realizará después de ejecutar los resultados. El objetivo es distinguir qué variables mantienen información útil conforme aumenta el horizonte antes de repetir el mismo análisis con los contaminantes.
 
 ## Separación cronológica
 
@@ -1623,8 +1414,6 @@ La disponibilidad de O3 en 2020 es insuficiente para utilizar ese año en un mod
 - **2021-2023:** entrenamiento.
 - **2024:** validación y selección de modelos.
 - **2025:** prueba final sobre datos no utilizados durante la construcción del modelo.
-
-El año 2020 se conserva en las bases de trabajo como parte del registro histórico, pero no formará parte del conjunto utilizado para ajustar o evaluar los modelos de O3.
 
 ## Conjunto final de predictores
 
