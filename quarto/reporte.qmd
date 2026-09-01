@@ -1823,7 +1823,11 @@ correlaciones_contaminantes_futuro |>
   theme_minimal()
 ```
 
-La interpretación se realizará después de ejecutar estos resultados. En particular, se revisará si `NO`, `NO2` y `NOX`, que fueron los contaminantes contemporáneos más relacionados con O3, mantienen información útil en horizontes futuros y si su posible aporte compensa sus porcentajes elevados de valores faltantes.
+Los contaminantes actuales aportan una señal predictiva más débil que las principales variables meteorológicas y que los rezagos del propio O3. A una hora, las asociaciones de mayor magnitud son negativas y corresponden a `NOX` ($r = -0.297$), `NO` ($r = -0.272$) y `NO2` ($r = -0.252$). `SO2` presenta una asociación positiva débil ($r = 0.179$), mientras que `CO`, `PM10` y `PM2.5` se mantienen cerca de cero.
+
+A seis y doce horas, prácticamente todas las correlaciones se acercan a cero. Hacia las 24 horas, `NOX`, `NO` y `NO2` recuperan una asociación negativa moderada, con valores de -0.246, -0.230 y -0.204, respectivamente. Al igual que en el análisis meteorológico, esta recuperación puede reflejar en parte la periodicidad diaria compartida y no debe interpretarse como un efecto directo del contaminante actual sobre el O3 del día siguiente.
+
+En términos de selección de variables, `NOX`, `NO` y `NO2` son los únicos contaminantes que muestran una señal suficientemente consistente para justificar una evaluación posterior. Sin embargo, sus porcentajes elevados de valores faltantes y la redundancia entre ellos hacen poco conveniente incorporarlos automáticamente a los tres. Como punto de partida, se evaluará al menos uno de estos indicadores, probablemente `NOX`, y se comprobará mediante validación si mejora el modelo lo suficiente para compensar la pérdida de observaciones. `CO`, `PM10` y `PM2.5` quedan como candidatos de baja prioridad por su escasa asociación lineal con el O3 futuro.
 
 ## Separación cronológica
 
