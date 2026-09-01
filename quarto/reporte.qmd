@@ -1446,13 +1446,175 @@ ggplot(
   theme_minimal()
 ```
 
-Estas correlaciones siguen describiendo relaciones de la misma hora y todavía no determinan qué contaminantes entrarán al modelo. Además de la magnitud de la asociación con O3, la selección deberá considerar la cantidad de datos faltantes y la posible redundancia entre variables relacionadas, especialmente `NO`, `NO2` y `NOX`. La interpretación concreta se realizará después de ejecutar los resultados.
+Las asociaciones contemporáneas con los demás contaminantes son más débiles que las observadas con las principales variables meteorológicas. `NOX` presenta la mayor magnitud ($r = -0.363$), seguido de `NO` ($r = -0.337$) y `NO2` ($r = -0.306$); en los tres casos la relación es negativa. `SO2` muestra una asociación positiva débil ($r = 0.193$), mientras que `CO` ($r = -0.089$), `PM10` ($r = -0.036$) y `PM2.5` ($r = -0.028$) presentan relaciones lineales muy pequeñas.
+
+Los diagramas de dispersión de `NO`, `NO2` y `NOX` muestran una tendencia descendente, pero con una dispersión considerable. La recta de ajuste incluso puede extrapolar valores negativos de O3 para concentraciones muy altas de NO o NOX; esto no representa una concentración física posible y confirma que la línea se utiliza únicamente como resumen de la tendencia lineal, no como modelo definitivo de la relación.
+
+Estas correlaciones describen contaminantes medidos en la misma hora y no son suficientes para descartar variables de cara al pronóstico. Un contaminante con asociación contemporánea débil podría aportar información cuando se utilicen sus valores previos. Además, la selección final deberá considerar los faltantes y la redundancia entre `NO`, `NO2` y `NOX`, que representan procesos relacionados y no necesariamente conviene incorporar simultáneamente en una regresión lineal.
 
 # Preparación para modelado
 
 ## Construcción de rezagos
 
-Pendiente de definir qué información histórica estará disponible para cada pronóstico.
+El análisis anterior estudió relaciones entre variables observadas en la misma hora. Para un pronóstico real, sin embargo, el modelo solo podrá utilizar información disponible hasta el momento en que se genera la predicción. Por ello, el siguiente paso es estudiar cuánto aporta el comportamiento reciente del propio O3.
+
+Un rezago de $h$ horas representa la concentración observada $h$ horas antes:
+
+$$
+O_3(t-h)
+$$
+
+Primero se calcula la relación entre $O_3(t)$ y los valores observados entre 1 y 24 horas antes. Esta separación temporal es equivalente a estudiar cuánto puede aportar $O_3(t)$ para anticipar $O_3(t+h)$ a la misma distancia de tiempo.
+
+Para evitar que la selección de rezagos dependa de los periodos reservados para validación y prueba, este diagnóstico utiliza únicamente **2021-2023**, que corresponde al conjunto de entrenamiento. Además, se reconstruye una secuencia horaria completa por estación antes de aplicar `lag()`. De esta forma, si falta por completo una hora en la base, un rezago de 1 hora sigue representando exactamente una hora anterior y no simplemente la fila previa disponible.
+
+```{r}
+#| label: serie-o3-rezagos-entrenamiento
+datos_o3_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  select(Estacion, fecha_hora, O3)
+
+horas_entrenamiento <- seq(
+  as.POSIXct("2021-01-01 00:00:00", tz = "UTC"),
+  as.POSIXct("2023-12-31 23:00:00", tz = "UTC"),
+  by = "hour"
+)
+
+serie_o3_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_o3_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_lag_1 = lag(O3, 1),
+    O3_lag_2 = lag(O3, 2),
+    O3_lag_3 = lag(O3, 3),
+    O3_lag_4 = lag(O3, 4),
+    O3_lag_5 = lag(O3, 5),
+    O3_lag_6 = lag(O3, 6),
+    O3_lag_7 = lag(O3, 7),
+    O3_lag_8 = lag(O3, 8),
+    O3_lag_9 = lag(O3, 9),
+    O3_lag_10 = lag(O3, 10),
+    O3_lag_11 = lag(O3, 11),
+    O3_lag_12 = lag(O3, 12),
+    O3_lag_13 = lag(O3, 13),
+    O3_lag_14 = lag(O3, 14),
+    O3_lag_15 = lag(O3, 15),
+    O3_lag_16 = lag(O3, 16),
+    O3_lag_17 = lag(O3, 17),
+    O3_lag_18 = lag(O3, 18),
+    O3_lag_19 = lag(O3, 19),
+    O3_lag_20 = lag(O3, 20),
+    O3_lag_21 = lag(O3, 21),
+    O3_lag_22 = lag(O3, 22),
+    O3_lag_23 = lag(O3, 23),
+    O3_lag_24 = lag(O3, 24)
+  ) |>
+  ungroup()
+```
+
+A continuación se calcula, para cada separación de 1 a 24 horas, la correlación entre el O3 actual y su valor rezagado. Los pares con alguna de las dos mediciones ausentes no participan en el cálculo.
+
+```{r}
+#| label: correlacion-rezagos-o3
+correlaciones_rezagos_o3 <- map_dfr(
+  1:24,
+  function(h) {
+    columna <- paste0("O3_lag_", h)
+
+    pares <- serie_o3_entrenamiento |>
+      select(O3, all_of(columna)) |>
+      drop_na()
+
+    tibble(
+      Rezago_h = h,
+      Observaciones = nrow(pares),
+      Correlacion = cor(
+        pares$O3,
+        pares[[columna]],
+        method = "pearson"
+      )
+    )
+  }
+)
+
+knitr::kable(
+  correlaciones_rezagos_o3 |>
+    mutate(Correlacion = round(Correlacion, 3)),
+  caption = "Correlación de O3 con sus valores de 1 a 24 horas anteriores"
+)
+```
+
+```{r}
+#| label: grafica-correlacion-rezagos-o3
+#| fig-cap: "Persistencia temporal del O3 entre 1 y 24 horas"
+#| fig-width: 7
+#| fig-height: 4.5
+correlaciones_rezagos_o3 |>
+  ggplot(aes(x = Rezago_h, y = Correlacion)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(breaks = 1:24) +
+  labs(
+    x = "Horas de rezago",
+    y = "Correlación con O3 actual"
+  ) +
+  theme_minimal()
+```
+
+También se calcula el mismo patrón por estación. Esto permite comprobar si la persistencia temporal es semejante en `NTE`, `NTE2`, `NO` y `NE` o si algún punto de monitoreo presenta una dinámica distinta.
+
+```{r}
+#| label: correlacion-rezagos-o3-estacion
+correlaciones_rezagos_estacion <- map_dfr(
+  1:24,
+  function(h) {
+    columna <- paste0("O3_lag_", h)
+
+    serie_o3_entrenamiento |>
+      group_by(Estacion) |>
+      summarise(
+        Observaciones = sum(
+          !is.na(O3) & !is.na(.data[[columna]])
+        ),
+        Correlacion = cor(
+          O3,
+          .data[[columna]],
+          use = "complete.obs"
+        ),
+        .groups = "drop"
+      ) |>
+      mutate(Rezago_h = h)
+  }
+)
+
+correlaciones_rezagos_estacion |>
+  ggplot(
+    aes(
+      x = Rezago_h,
+      y = Correlacion,
+      color = Estacion,
+      group = Estacion
+    )
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.4) +
+  scale_x_continuous(breaks = 1:24) +
+  labs(
+    x = "Horas de rezago",
+    y = "Correlación con O3 actual",
+    color = "Estación"
+  ) +
+  theme_minimal()
+```
+
+Este diagnóstico todavía no selecciona los rezagos definitivos ni construye las variables objetivo futuras. Primero se revisará cómo disminuye o se recupera la correlación a lo largo de las 24 horas y si el patrón es consistente entre estaciones. A partir de esos resultados se decidirá qué rezagos del propio O3 vale la pena conservar antes de repetir el análisis con las variables meteorológicas y contaminantes más prometedoras.
 
 ## Separación cronológica
 
