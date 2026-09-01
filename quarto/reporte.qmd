@@ -1839,9 +1839,39 @@ La disponibilidad de O3 en 2020 es insuficiente para utilizar ese año en un mod
 
 El año 2020 se conserva en las bases de trabajo como parte del registro histórico, pero no formará parte del conjunto utilizado para ajustar o evaluar los modelos de O3.
 
-## Conjunto final de predictores
+## Conjunto preliminar de predictores
 
-Pendiente de seleccionar variables según disponibilidad, fundamento físico, análisis exploratorio y desempeño durante la validación.
+Con los resultados anteriores ya es posible definir un primer conjunto de variables para construir los modelos. Esta selección es **preliminar**: su objetivo es reducir el número de variables a candidatas con una justificación clara y después comprobar su utilidad real durante la validación de 2024. Una correlación alta no garantiza que una variable mejore el modelo cuando se combina con las demás, y una variable con señal moderada puede dejar de aportar información si es redundante.
+
+La regla central será utilizar únicamente información disponible en el momento de emitir el pronóstico. Si el origen del pronóstico es $t$, ninguna medición posterior a $t$ podrá entrar como predictor.
+
+```{r}
+#| label: seleccion-preliminar-predictores
+seleccion_predictores <- tribble(
+  ~Grupo, ~Variables, ~Decision, ~Justificacion,
+  "Temporal", "Hora_sin, Hora_cos, Mes_sin, Mes_cos", "Incluir", "O3 presenta ciclos diario y anual marcados",
+  "Espacial", "Estacion", "Incluir", "Existen diferencias sistematicas entre estaciones",
+  "Historia de O3", "O3(t), O3(t-1), O3(t-2), O3(t-3), O3(t-24)", "Incluir y validar", "Fuerte persistencia de corto plazo y señal diaria a 24 h",
+  "Meteorologia", "SR, TEMP, RH, WS", "Incluir", "Son las asociaciones meteorologicas mas fuertes con O3 actual y futuro",
+  "Direccion del viento", "WD_sin, WD_cos", "Incluir y validar", "La concentracion de O3 cambia segun la direccion del viento",
+  "Contaminantes", "NOX", "Comparar con y sin", "Es el contaminante con mayor señal, pero tiene muchos faltantes",
+  "Baja prioridad", "BP, RAINF, CO, PM10, PM2.5, SO2", "No incluir inicialmente", "Presentan asociaciones lineales debiles con O3 futuro",
+  "Redundantes con NOX", "NO, NO2", "No incluir inicialmente junto con NOX", "Tienen señal similar y representan procesos relacionados"
+)
+
+knitr::kable(
+  seleccion_predictores,
+  caption = "Selección preliminar de variables para el modelado"
+)
+```
+
+El conjunto principal queda formado por información temporal y espacial, el estado reciente del propio O3 y las variables meteorológicas con mayor señal. `NOX` se tratará de manera distinta: en lugar de hacerlo obligatorio en todos los modelos, se comparará una versión sin contaminantes con otra que lo incluya. De esta forma será posible medir si la mejora predictiva compensa la pérdida de observaciones asociada con sus valores faltantes.
+
+Los rezagos del propio O3 tampoco se consideran definitivos. Aunque los valores recientes aportan mucha información, los rezagos consecutivos están fuertemente relacionados entre sí y pueden introducir multicolinealidad en una regresión lineal. La validación determinará si conviene conservar todos los candidatos o simplificar la historia reciente.
+
+Para las variables cíclicas de hora y mes se hará una precisión al construir el conjunto de modelado: cuando se prediga $O_3(t+h)$, la hora y el mes del instante objetivo $t+h$ son conocidos de antemano y pueden representarse mediante seno y coseno sin utilizar información futura de mediciones. En cambio, las variables meteorológicas y de contaminación serán siempre las disponibles hasta el origen $t$.
+
+El siguiente paso será construir la base de modelado con esta estructura y cuantificar cuántas observaciones completas quedan para cada grupo de predictores y horizonte. Esa revisión permitirá decidir el tratamiento de los faltantes antes de ajustar el modelo base y los modelos multivariados.
 
 # Modelado
 
