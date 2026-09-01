@@ -1614,7 +1614,118 @@ correlaciones_rezagos_estacion |>
   theme_minimal()
 ```
 
-Este diagnóstico todavía no selecciona los rezagos definitivos ni construye las variables objetivo futuras. Primero se revisará cómo disminuye o se recupera la correlación a lo largo de las 24 horas y si el patrón es consistente entre estaciones. A partir de esos resultados se decidirá qué rezagos del propio O3 vale la pena conservar antes de repetir el análisis con las variables meteorológicas y contaminantes más prometedoras.
+El O3 presenta una dependencia temporal muy marcada. La correlación con la hora inmediatamente anterior es de 0.916 y continúa siendo alta a dos horas (0.762) y tres horas (0.579), lo que muestra una fuerte persistencia de corto plazo. A medida que aumenta el rezago, la relación disminuye y se vuelve negativa entre aproximadamente 7 y 17 horas, alcanzando su valor más bajo cerca de 12 horas ($r = -0.208$). Este cambio de signo es consistente con el ciclo diario observado previamente: un intervalo cercano a 12 horas suele comparar momentos opuestos del patrón diario, por ejemplo la madrugada con las horas de mayor concentración de la tarde.
+
+Después de ese punto la correlación vuelve a aumentar y alcanza 0.741 a las 24 horas. Esto indica una segunda señal temporal importante: la concentración observada a una hora determinada suele parecerse a la registrada a la misma hora del día anterior. Las cuatro estaciones presentan prácticamente la misma forma de curva, por lo que la persistencia de corto plazo y la periodicidad diaria no parecen depender de una estación específica.
+
+Estos resultados no implican que deban incorporarse los 24 rezagos al modelo. Los rezagos consecutivos contienen información muy similar entre sí y podrían introducir redundancia, especialmente en una regresión lineal. Como punto de partida, los rezagos de 1 a 3 horas y el de 24 horas son candidatos naturales, aunque la selección definitiva se realizará mediante validación.
+
+### Predictores meteorológicos y O3 futuro
+
+Después de estudiar el propio O3, se analiza directamente si las condiciones meteorológicas conocidas en el momento $t$ contienen información sobre el O3 que se observará después. Para cada variable se calcula:
+
+$$
+Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24
+$$
+
+De esta forma, un horizonte de 6 horas indica qué tan relacionada está una medición meteorológica disponible ahora con el O3 observado seis horas después. Igual que en el análisis anterior, solo se utiliza 2021-2023 y se conserva una secuencia horaria completa por estación.
+
+Se incluyen `TEMP`, `RH`, `SR`, `WS`, `BP` y `RAINF`. Para la dirección del viento se utilizan `WD_sin` y `WD_cos`, ya que los grados no deben tratarse como una variable lineal.
+
+```{r}
+#| label: correlacion-meteorologia-o3-futuro
+variables_meteo_horizonte <- c(
+  "TEMP", "RH", "SR", "WS", "BP", "RAINF", "WD_sin", "WD_cos"
+)
+
+datos_meteo_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    O3,
+    across(all_of(variables_meteo_horizonte))
+  )
+
+serie_meteo_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_meteo_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+correlaciones_meteo_futuro <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- serie_meteo_entrenamiento |>
+      group_by(Estacion) |>
+      mutate(O3_futuro = lead(O3, h)) |>
+      ungroup()
+
+    map_dfr(
+      variables_meteo_horizonte,
+      function(variable) {
+        pares <- base_h |>
+          select(O3_futuro, all_of(variable)) |>
+          drop_na()
+
+        tibble(
+          Horizonte_h = h,
+          Variable = variable,
+          Observaciones = nrow(pares),
+          Correlacion = cor(
+            pares$O3_futuro,
+            pares[[variable]],
+            method = "pearson"
+          )
+        )
+      }
+    )
+  }
+)
+```
+
+Para mantener el reporte compacto, la tabla muestra cuatro horizontes representativos y la figura conserva las 24 horas completas.
+
+```{r}
+#| label: tabla-meteorologia-o3-futuro
+correlaciones_meteo_futuro |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(Horizonte_h, Variable, Correlacion) |>
+  mutate(Correlacion = round(Correlacion, 3)) |>
+  pivot_wider(
+    names_from = Horizonte_h,
+    values_from = Correlacion,
+    names_prefix = "h_"
+  ) |>
+  knitr::kable(
+    caption = "Correlación de variables meteorológicas actuales con O3 futuro"
+  )
+```
+
+```{r}
+#| label: grafica-meteorologia-o3-futuro
+#| fig-cap: "Relación de variables meteorológicas actuales con O3 a distintos horizontes"
+#| fig-width: 8
+#| fig-height: 7
+correlaciones_meteo_futuro |>
+  ggplot(aes(x = Horizonte_h, y = Correlacion)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  facet_wrap(~Variable, ncol = 2) +
+  scale_x_continuous(breaks = c(1, 6, 12, 18, 24)) +
+  labs(
+    x = "Horizonte de predicción (horas)",
+    y = "Correlación con O3 futuro"
+  ) +
+  theme_minimal()
+```
+
+La interpretación de estas curvas se realizará después de ejecutar los resultados. El objetivo es identificar qué condiciones meteorológicas mantienen información útil conforme aumenta el horizonte antes de repetir el mismo análisis con los contaminantes.
 
 ## Separación cronológica
 
