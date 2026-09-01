@@ -1871,7 +1871,197 @@ Los rezagos del propio O3 tampoco se consideran definitivos. Aunque los valores 
 
 Para las variables cíclicas de hora y mes se hará una precisión al construir el conjunto de modelado: cuando se prediga $O_3(t+h)$, la hora y el mes del instante objetivo $t+h$ son conocidos de antemano y pueden representarse mediante seno y coseno sin utilizar información futura de mediciones. En cambio, las variables meteorológicas y de contaminación serán siempre las disponibles hasta el origen $t$.
 
-El siguiente paso será construir la base de modelado con esta estructura y cuantificar cuántas observaciones completas quedan para cada grupo de predictores y horizonte. Esa revisión permitirá decidir el tratamiento de los faltantes antes de ajustar el modelo base y los modelos multivariados.
+## Base formal de modelado
+
+La base de modelado se construye con una fila por estación y hora de origen del pronóstico. Para garantizar que los rezagos representen diferencias horarias reales, se vuelve a utilizar una cuadrícula horaria completa entre 2021 y junio de 2025. Las horas que no aparezcan en los archivos originales se conservan en la cuadrícula con mediciones faltantes.
+
+Para evitar multiplicar innecesariamente el tamaño del objeto en memoria, no se crea una tabla con 24 copias de cada registro. En su lugar se prepara una única base de origen con los predictores disponibles en $t$ y se utiliza una función para generar el objetivo $O_3(t+h)$ únicamente para el horizonte que se vaya a modelar.
+
+```{r}
+#| label: base-origen-modelado
+variables_origen_modelado <- c(
+  "O3", "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+)
+
+datos_origen_modelado <- datos_preparados |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    across(all_of(variables_origen_modelado))
+  )
+
+horas_modelado <- seq(
+  as.POSIXct("2021-01-01 00:00:00", tz = "UTC"),
+  as.POSIXct("2025-06-30 23:00:00", tz = "UTC"),
+  by = "hour"
+)
+
+base_origen_modelado <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_modelado
+) |>
+  left_join(
+    datos_origen_modelado,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_t = O3,
+    O3_lag_1 = lag(O3, 1),
+    O3_lag_2 = lag(O3, 2),
+    O3_lag_3 = lag(O3, 3),
+    O3_lag_24 = lag(O3, 24)
+  ) |>
+  ungroup() |>
+  select(-O3) |>
+  mutate(
+    Estacion = factor(Estacion, levels = estaciones_interes)
+  )
+
+resumen_base_origen <- tibble(
+  Registros = nrow(base_origen_modelado),
+  Estaciones = n_distinct(base_origen_modelado$Estacion),
+  Desde = min(base_origen_modelado$fecha_hora),
+  Hasta = max(base_origen_modelado$fecha_hora)
+)
+
+knitr::kable(
+  resumen_base_origen,
+  caption = "Estructura de la base de origen para el modelado"
+)
+```
+
+Los predictores principales se definen de forma explícita. La hora y el mes que se incorporarán al modelo corresponden al instante objetivo $t+h$, no al origen $t$, porque esas características del calendario son conocidas de antemano.
+
+```{r}
+#| label: funcion-base-por-horizonte
+predictores_principales <- c(
+  "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "Hora_sin_obj", "Hora_cos_obj", "Mes_sin_obj", "Mes_cos_obj"
+)
+
+construir_base_horizonte <- function(h, incluir_nox = FALSE) {
+  base_h <- base_origen_modelado |>
+    group_by(Estacion) |>
+    mutate(
+      O3_objetivo = lead(O3_t, h)
+    ) |>
+    ungroup() |>
+    mutate(
+      Horizonte_h = h,
+      fecha_objetivo = fecha_hora + lubridate::hours(h),
+      Año_objetivo = lubridate::year(fecha_objetivo),
+      Hora_objetivo = lubridate::hour(fecha_objetivo),
+      Mes_objetivo = lubridate::month(fecha_objetivo),
+      Hora_sin_obj = sin(2 * pi * Hora_objetivo / 24),
+      Hora_cos_obj = cos(2 * pi * Hora_objetivo / 24),
+      Mes_sin_obj = sin(2 * pi * (Mes_objetivo - 1) / 12),
+      Mes_cos_obj = cos(2 * pi * (Mes_objetivo - 1) / 12),
+      Periodo = case_when(
+        Año_objetivo %in% 2021:2023 ~ "Entrenamiento",
+        Año_objetivo == 2024 ~ "Validacion",
+        Año_objetivo == 2025 ~ "Prueba",
+        TRUE ~ NA_character_
+      )
+    ) |>
+    filter(!is.na(Periodo))
+
+  variables_modelo <- predictores_principales
+
+  if (incluir_nox) {
+    variables_modelo <- c(variables_modelo, "NOX")
+  }
+
+  base_h |>
+    select(
+      Periodo,
+      Año_objetivo,
+      Estacion,
+      fecha_hora,
+      fecha_objetivo,
+      Horizonte_h,
+      O3_objetivo,
+      all_of(variables_modelo)
+    )
+}
+```
+
+La separación entre entrenamiento, validación y prueba se asigna con el **año de la hora objetivo**. De esta manera, por ejemplo, una predicción emitida al final de 2023 cuyo objetivo cae en 2024 pertenece a validación y no se filtra accidentalmente dentro del entrenamiento.
+
+Antes de decidir cómo tratar los faltantes se cuantifica cuánta información quedaría disponible si se exigieran casos completos. Se comparan dos versiones: el conjunto principal sin otros contaminantes y la misma estructura agregando `NOX`.
+
+```{r}
+#| label: disponibilidad-base-formal
+resumen_disponibilidad_modelado <- expand_grid(
+  Horizonte_h = 1:24,
+  Version = c("Principal", "Con_NOX")
+) |>
+  pmap_dfr(
+    function(Horizonte_h, Version) {
+      incluir_nox <- Version == "Con_NOX"
+      base_h <- construir_base_horizonte(
+        Horizonte_h,
+        incluir_nox = incluir_nox
+      )
+
+      variables_requeridas <- predictores_principales
+      if (incluir_nox) {
+        variables_requeridas <- c(variables_requeridas, "NOX")
+      }
+
+      base_h |>
+        mutate(
+          Caso_completo = if_all(
+            all_of(c("O3_objetivo", variables_requeridas)),
+            ~ !is.na(.x)
+          )
+        ) |>
+        group_by(Periodo) |>
+        summarise(
+          Objetivos_disponibles = sum(!is.na(O3_objetivo)),
+          Casos_completos = sum(Caso_completo),
+          Cobertura_pct = round(
+            100 * Casos_completos / Objetivos_disponibles,
+            1
+          ),
+          .groups = "drop"
+        ) |>
+        mutate(
+          Horizonte_h = Horizonte_h,
+          Version = Version
+        )
+    }
+  )
+```
+
+Para mantener el reporte legible se muestran los horizontes de 1, 6, 12 y 24 horas. El objeto anterior conserva los resultados para las 24 horas y podrá utilizarse posteriormente para revisar cualquier horizonte específico.
+
+```{r}
+#| label: tabla-disponibilidad-base-formal
+resumen_disponibilidad_modelado |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(
+    Periodo,
+    Horizonte_h,
+    Version,
+    Objetivos_disponibles,
+    Casos_completos,
+    Cobertura_pct
+  ) |>
+  pivot_wider(
+    names_from = Version,
+    values_from = c(Casos_completos, Cobertura_pct),
+    names_sep = "_"
+  ) |>
+  arrange(Periodo, Horizonte_h) |>
+  knitr::kable(
+    caption = "Disponibilidad de casos completos en la base formal de modelado"
+  )
+```
+
+En este punto todavía **no se imputan predictores ni se eliminan filas de forma definitiva**. La tabla permitirá medir primero cuánto se pierde por exigir información completa y, en particular, cuánto reduce la muestra la incorporación de `NOX`. Con esos resultados se decidirá si el conjunto principal puede trabajarse mediante casos completos o si conviene aplicar un tratamiento específico de faltantes antes del modelado.
 
 # Modelado
 
