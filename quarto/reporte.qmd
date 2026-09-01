@@ -116,13 +116,6 @@ Los datos utilizados provienen del Sistema Integral de Monitoreo Ambiental (SIMA
 
 El reporte conservará los datos originales sin modificar como fuente de referencia y generará conjuntos derivados para limpieza, análisis y modelado. Las decisiones de exclusión, transformación o imputación se documentarán en las siguientes secciones y deberán responder directamente a las necesidades del problema de predicción de O3.
 
-<!--
-La estructura técnica de las etapas anteriores se reconstruirá a partir de aquí.
-El código previo permanece disponible en el historial de Git y se reincorporará únicamente
-cuando aporte información necesaria para el objetivo actual, evitando arrastrar secciones
-que respondían al objetivo anterior más amplio.
--->
-
 # Datos
 
 ## Archivos fuente
@@ -1725,7 +1718,112 @@ correlaciones_meteo_futuro |>
   theme_minimal()
 ```
 
-La interpretación de estas curvas se realizará después de ejecutar los resultados. El objetivo es identificar qué condiciones meteorológicas mantienen información útil conforme aumenta el horizonte antes de repetir el mismo análisis con los contaminantes.
+Las condiciones meteorológicas actuales aportan información principalmente en horizontes cortos. `SR` presenta la asociación más fuerte con el O3 de una hora después ($r = 0.624$), seguida de `TEMP` ($r = 0.472$) y `RH` ($r = -0.470$). `WS` también muestra una relación positiva, aunque menor ($r = 0.293$). A seis horas estas asociaciones se debilitan de manera importante y alrededor de 12 horas varias cambian de signo.
+
+La forma de las curvas vuelve a reflejar el ciclo diario observado previamente. Cerca de 12 horas se comparan condiciones actuales con una fase aproximadamente opuesta del día, mientras que a 24 horas se recuperan correlaciones relativamente altas: `SR` alcanza 0.521, `TEMP` 0.462 y `RH` -0.451. Esta recuperación no debe interpretarse como que la meteorología actual determina por sí sola el O3 del día siguiente; parte de la asociación puede deberse a que ambas variables comparten una periodicidad de 24 horas.
+
+`BP` mantiene asociaciones débiles en todos los horizontes y `RAINF` permanece prácticamente en cero. Las componentes de dirección del viento y `WS` presentan señales menores pero no despreciables. En conjunto, `SR`, `TEMP` y `RH` quedan como las variables meteorológicas más prometedoras, con `WS` como candidata adicional. Su aporte real deberá comprobarse mediante validación junto con las variables temporales y los rezagos del propio O3.
+
+### Otros contaminantes y O3 futuro
+
+Se repite el mismo análisis con los demás contaminantes. Para cada variable medida en el momento $t$ se calcula su correlación con el O3 observado entre 1 y 24 horas después:
+
+$$
+Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24
+$$
+
+Se utilizan `CO`, `NO`, `NO2`, `NOX`, `PM10`, `PM2.5` y `SO2`. El cálculo se mantiene restringido a 2021-2023 y conserva la secuencia horaria completa de cada estación.
+
+```{r}
+#| label: correlacion-contaminantes-o3-futuro
+datos_contaminantes_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    O3,
+    across(all_of(variables_contaminantes))
+  )
+
+serie_contaminantes_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_contaminantes_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+correlaciones_contaminantes_futuro <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- serie_contaminantes_entrenamiento |>
+      group_by(Estacion) |>
+      mutate(O3_futuro = lead(O3, h)) |>
+      ungroup()
+
+    map_dfr(
+      variables_contaminantes,
+      function(variable) {
+        pares <- base_h |>
+          select(O3_futuro, all_of(variable)) |>
+          drop_na()
+
+        tibble(
+          Horizonte_h = h,
+          Variable = variable,
+          Observaciones = nrow(pares),
+          Correlacion = cor(
+            pares$O3_futuro,
+            pares[[variable]],
+            method = "pearson"
+          )
+        )
+      }
+    )
+  }
+)
+```
+
+La tabla resume los mismos cuatro horizontes representativos utilizados en meteorología.
+
+```{r}
+#| label: tabla-contaminantes-o3-futuro
+correlaciones_contaminantes_futuro |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(Horizonte_h, Variable, Correlacion) |>
+  mutate(Correlacion = round(Correlacion, 3)) |>
+  pivot_wider(
+    names_from = Horizonte_h,
+    values_from = Correlacion,
+    names_prefix = "h_"
+  ) |>
+  knitr::kable(
+    caption = "Correlación de contaminantes actuales con O3 futuro"
+  )
+```
+
+```{r}
+#| label: grafica-contaminantes-o3-futuro
+#| fig-cap: "Relación de contaminantes actuales con O3 a distintos horizontes"
+#| fig-width: 8
+#| fig-height: 7
+correlaciones_contaminantes_futuro |>
+  ggplot(aes(x = Horizonte_h, y = Correlacion)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  facet_wrap(~Variable, ncol = 2) +
+  scale_x_continuous(breaks = c(1, 6, 12, 18, 24)) +
+  labs(
+    x = "Horizonte de predicción (horas)",
+    y = "Correlación con O3 futuro"
+  ) +
+  theme_minimal()
+```
+
+La interpretación se realizará después de ejecutar estos resultados. En particular, se revisará si `NO`, `NO2` y `NOX`, que fueron los contaminantes contemporáneos más relacionados con O3, mantienen información útil en horizontes futuros y si su posible aporte compensa sus porcentajes elevados de valores faltantes.
 
 ## Separación cronológica
 
