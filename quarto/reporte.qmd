@@ -1032,6 +1032,57 @@ o3_por_hora |>
 
 El patrón horario es marcado. Las concentraciones disminuyen durante la madrugada y alcanzan su nivel más bajo alrededor de las 7:00. A partir de la mañana aumentan rápidamente y alcanzan sus valores medios más altos aproximadamente entre las 14:00 y 16:00, cercanos a 50, para después disminuir durante la tarde y la noche. La similitud entre la media y la mediana a lo largo del día indica que este patrón no depende únicamente de unas pocas observaciones extremas. La hora del día, por tanto, contiene una señal clara que conviene incorporar al modelado mediante `Hora_sin` y `Hora_cos`.
 
+### Estabilidad del patrón horario entre años
+
+Antes de decidir si el modelo debe evaluar las 24 horas del día o concentrarse únicamente en un periodo diurno, se comprueba si el ciclo horario anterior se repite de forma consistente entre años. Para esta comparación se utilizan los años completos 2021-2024; 2025 se deja fuera porque termina en junio y su promedio horario podría quedar influido por la mezcla incompleta de meses.
+
+```{r}
+#| label: patron-horario-o3-por-anio
+o3_hora_anio <- datos_preparados |>
+  filter(
+    Año %in% 2021:2024,
+    !is.na(O3)
+  ) |>
+  group_by(Año, Hora) |>
+  summarise(
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+o3_hora_anio |>
+  select(Año, Hora, Media) |>
+  mutate(Media = round(Media, 2)) |>
+  pivot_wider(
+    names_from = Año,
+    values_from = Media
+  ) |>
+  knitr::kable(
+    caption = "Concentración media de O3 por hora y año"
+  )
+```
+
+```{r}
+#| label: grafica-patron-horario-o3-por-anio
+#| fig-cap: "Patrón horario de O3 en los años completos 2021-2024"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_hora_anio |>
+  mutate(Año = factor(Año)) |>
+  ggplot(aes(x = Hora, y = Media, color = Año, group = Año)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.8) +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    x = "Hora del día",
+    y = "O3 medio",
+    color = "Año"
+  ) +
+  theme_minimal()
+```
+
+Esta comparación se utilizará para decidir el alcance horario del problema antes de continuar con el modelado. No se fija todavía una ventana diurna de manera arbitraria: primero se revisará si las horas de baja concentración nocturna y las horas de mayor actividad diurna se mantienen en años distintos. Si se decide restringir el objetivo a un intervalo diurno, la disponibilidad de casos completos de la base formal se volverá a calcular para ese conjunto de horas.
+
 ### Patrón mensual
 
 Después del ciclo diario se revisa si el O3 también presenta cambios sistemáticos a lo largo del año. Se calcula la media y la mediana para cada mes utilizando todas las mediciones válidas disponibles. Debido a que la base de 2025 termina en junio, los meses de enero a junio incluyen datos de cinco años, mientras que julio a diciembre contienen únicamente información de 2021 a 2024.
