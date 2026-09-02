@@ -1030,7 +1030,9 @@ o3_por_hora |>
   theme_minimal()
 ```
 
-El patrón horario es marcado. Las concentraciones disminuyen durante la madrugada y alcanzan su nivel más bajo alrededor de las 7:00. A partir de la mañana aumentan rápidamente y alcanzan sus valores medios más altos aproximadamente entre las 14:00 y 16:00, cercanos a 50, para después disminuir durante la tarde y la noche. La similitud entre la media y la mediana a lo largo del día indica que este patrón no depende únicamente de unas pocas observaciones extremas. La hora del día, por tanto, contiene una señal clara que conviene incorporar al modelado mediante `Hora_sin` y `Hora_cos`.
+El patrón horario es marcado. Las concentraciones disminuyen desde la medianoche hasta alcanzar el mínimo diario alrededor de las 7:00, con una media de 11.27 y una mediana de 9. A partir de las 9:00 comienza un aumento claro y entre las 11:00 y las 19:00 se concentra la parte más elevada del ciclo. El máximo medio aparece alrededor de las 15:00, con valores cercanos a 50, y después el O3 disminuye de nuevo durante la tarde y la noche. La similitud entre la media y la mediana a lo largo del día indica que este patrón no depende únicamente de unas pocas observaciones extremas.
+
+Este comportamiento plantea una decisión importante para el modelado. Las horas nocturnas no se eliminarán de la base porque pueden aportar información histórica para construir rezagos y otros predictores. Sin embargo, sí conviene evaluar si el **objetivo del modelo** debe restringirse a las horas donde el O3 presenta su incremento y sus niveles más altos, ya que incluir muchas horas nocturnas de concentración baja podría hacer que las métricas globales aparenten un desempeño mejor sin reflejar adecuadamente la capacidad para anticipar los periodos más relevantes.
 
 ### Estabilidad del patrón horario entre años
 
@@ -1081,7 +1083,118 @@ o3_hora_anio |>
   theme_minimal()
 ```
 
-Esta comparación se utilizará para decidir el alcance horario del problema antes de continuar con el modelado. No se fija todavía una ventana diurna de manera arbitraria: primero se revisará si las horas de baja concentración nocturna y las horas de mayor actividad diurna se mantienen en años distintos. Si se decide restringir el objetivo a un intervalo diurno, la disponibilidad de casos completos de la base formal se volverá a calcular para ese conjunto de horas.
+La comparación por año confirma que el ciclo horario es estable. Aunque cambian ligeramente los niveles medios entre 2021, 2022, 2023 y 2024, los cuatro años muestran la misma estructura general: descenso durante la madrugada, mínimo alrededor de las 7:00, aumento rápido durante la mañana, máximo durante la tarde y disminución posterior. Por lo tanto, la diferencia entre horas nocturnas y diurnas no parece ser consecuencia de un año particular, sino una característica recurrente del comportamiento del O3 en las estaciones analizadas.
+
+### Concentración de valores altos de O3 por hora
+
+Para apoyar la decisión sobre el intervalo horario del objetivo se revisa en qué horas se concentran las observaciones relativamente altas de O3. Como referencia descriptiva se utiliza el tercer cuartil de la distribución completa, es decir, el valor que deja por debajo al 75 % de las mediciones válidas. En la base actual este umbral es cercano a 37.
+
+Esta referencia no representa un límite normativo de calidad del aire; se utiliza únicamente para identificar las horas donde se concentra la parte superior de la distribución observada y comparar posibles ventanas de modelado.
+
+```{r}
+#| label: o3-alto-por-hora
+umbral_o3_alto <- quantile(
+  datos_preparados$O3,
+  0.75,
+  na.rm = TRUE
+)
+
+total_o3_altos <- datos_preparados |>
+  filter(!is.na(O3), O3 > umbral_o3_alto) |>
+  nrow()
+
+o3_alto_por_hora <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  group_by(Hora) |>
+  summarise(
+    Observaciones = n(),
+    O3_altos = sum(O3 > umbral_o3_alto),
+    Porcentaje_alto_en_hora = round(
+      mean(O3 > umbral_o3_alto) * 100,
+      1
+    ),
+    Participacion_del_total_alto = round(
+      O3_altos / total_o3_altos * 100,
+      1
+    ),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_alto_por_hora,
+  caption = paste0(
+    "Concentraciones superiores al tercer cuartil de O3 por hora (umbral = ",
+    round(umbral_o3_alto, 2),
+    ")"
+  )
+)
+```
+
+```{r}
+#| label: grafica-o3-alto-por-hora
+#| fig-cap: "Porcentaje de mediciones de O3 por encima del tercer cuartil según la hora"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_alto_por_hora |>
+  ggplot(aes(x = Hora, y = Porcentaje_alto_en_hora)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    x = "Hora del día",
+    y = "% de mediciones por encima de P75"
+  ) +
+  theme_minimal()
+```
+
+Además se comparan algunas ventanas horarias candidatas. Para cada una se calcula qué porcentaje de todas las observaciones altas queda incluido y qué proporción de las mediciones válidas de O3 sería utilizada como objetivo. Esto permite valorar el equilibrio entre concentrarse en las horas relevantes y conservar suficiente información para el modelado.
+
+```{r}
+#| label: comparacion-ventanas-diurnas
+ventanas_candidatas <- tribble(
+  ~Ventana, ~Hora_inicio, ~Hora_fin,
+  "09:00-20:00", 9, 20,
+  "10:00-20:00", 10, 20,
+  "10:00-19:00", 10, 19,
+  "11:00-19:00", 11, 19
+)
+
+resumen_ventanas <- pmap_dfr(
+  ventanas_candidatas,
+  function(Ventana, Hora_inicio, Hora_fin) {
+    dentro <- datos_preparados |>
+      filter(
+        !is.na(O3),
+        Hora >= Hora_inicio,
+        Hora <= Hora_fin
+      )
+
+    tibble(
+      Ventana = Ventana,
+      Horas_incluidas = Hora_fin - Hora_inicio + 1,
+      Observaciones_objetivo = nrow(dentro),
+      Porcentaje_datos_conservados = round(
+        100 * nrow(dentro) /
+          sum(!is.na(datos_preparados$O3)),
+        1
+      ),
+      O3_altos_incluidos = sum(dentro$O3 > umbral_o3_alto),
+      Cobertura_de_O3_altos = round(
+        100 * sum(dentro$O3 > umbral_o3_alto) /
+          total_o3_altos,
+        1
+      )
+    )
+  }
+)
+
+knitr::kable(
+  resumen_ventanas,
+  caption = "Comparación de ventanas candidatas para el objetivo diurno"
+)
+```
+
+La decisión final sobre la ventana horaria se tomará después de revisar estos resultados. Independientemente del intervalo seleccionado, las mediciones de las 24 horas se conservarán en la base como información histórica; la posible restricción afectaría únicamente a las horas utilizadas como **objetivo y evaluación** del pronóstico.
 
 ### Patrón mensual
 
