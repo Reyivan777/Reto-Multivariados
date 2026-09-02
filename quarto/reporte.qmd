@@ -37,13 +37,13 @@ El análisis se enfocará inicialmente en las estaciones `NTE`, `NTE2`, `NO` y `
 
 ## Pregunta de investigación
 
-**¿Con qué precisión puede predecirse la concentración horaria de O3 con un horizonte de hasta 24 horas en las estaciones NTE, NTE2, NO y NE, utilizando los registros históricos de contaminantes, variables meteorológicas y variables temporales proporcionados por SIMA entre 2020 y 2025?**
+**¿Con qué precisión puede predecirse la concentración horaria diurna de O3, entre las 10:00 y 20:00, con un horizonte de hasta 24 horas en las estaciones NTE, NTE2, NO y NE, utilizando los registros históricos de contaminantes, variables meteorológicas y variables temporales proporcionados por SIMA entre 2020 y 2025?**
 
 Esta pregunta transforma el reto en un problema de predicción temporal claramente evaluable: existe una variable objetivo definida, un horizonte de pronóstico específico y un conjunto delimitado de datos con el cual entrenar y evaluar los modelos.
 
 ## Objetivo general
 
-Desarrollar y evaluar modelos capaces de **predecir la concentración horaria de ozono (O3) con un horizonte de hasta 24 horas** en las estaciones `NTE`, `NTE2`, `NO` y `NE` de la Zona Metropolitana de Monterrey, utilizando información histórica de contaminantes, variables meteorológicas y características temporales registradas por SIMA durante el periodo 2020-2025.
+Desarrollar y evaluar modelos capaces de **predecir la concentración horaria diurna de ozono (O3), entre las 10:00 y 20:00, con un horizonte de hasta 24 horas** en las estaciones `NTE`, `NTE2`, `NO` y `NE` de la Zona Metropolitana de Monterrey, utilizando información histórica de contaminantes, variables meteorológicas y características temporales registradas por SIMA durante el periodo 2020-2025.
 
 ## Objetivos específicos
 
@@ -78,6 +78,8 @@ $$
 Cuando exista una nueva medición, esa información podrá incorporarse para generar nuevamente el pronóstico de las siguientes 24 horas. Esta estructura evita utilizar información futura durante la predicción y permite evaluar el desempeño del modelo de forma semejante a como se utilizaría posteriormente con nuevos datos.
 
 El horizonte de 24 horas se utilizará como máximo de evaluación. Durante el modelado se analizará si el error aumenta conforme crece la distancia entre el momento de observación y la hora pronosticada.
+
+El análisis exploratorio mostró que las concentraciones elevadas de O3 se concentran principalmente durante el día. Por ello, el objetivo principal del modelado se restringe a horas objetivo entre **10:00 y 20:00**. Las mediciones de las 24 horas no se eliminan: se conservan como información histórica para construir rezagos y predictores disponibles antes de cada pronóstico. La restricción se aplica únicamente a las horas que se utilizan como respuesta y para evaluar el desempeño del modelo.
 
 ## Variables consideradas
 
@@ -1194,7 +1196,9 @@ knitr::kable(
 )
 ```
 
-La decisión final sobre la ventana horaria se tomará después de revisar estos resultados. Independientemente del intervalo seleccionado, las mediciones de las 24 horas se conservarán en la base como información histórica; la posible restricción afectaría únicamente a las horas utilizadas como **objetivo y evaluación** del pronóstico.
+Con base en los patrones horarios y la comparación de ventanas, se define **10:00-20:00 como la ventana objetivo del modelado**. Esta opción conserva 68,124 mediciones válidas de O3, equivalentes al 46.9 % de los datos disponibles, y contiene 32,779 observaciones superiores al tercer cuartil. Ampliar el intervalo hasta las 9:00 agregaría 6,078 observaciones, pero únicamente 127 casos adicionales de O3 alto, mientras que excluir las 20:00 eliminaría 874 casos altos. La ventana seleccionada mantiene el inicio de la subida matutina, el máximo de la tarde y buena parte del descenso posterior.
+
+Las horas fuera de 10:00-20:00 **no se eliminan de la base**. Permanecen disponibles para construir rezagos y otros predictores históricos; la restricción afecta únicamente a las horas utilizadas como variable objetivo y para evaluar los modelos.
 
 ### Patrón mensual
 
@@ -2039,6 +2043,8 @@ Para las variables cíclicas de hora y mes se hará una precisión al construir 
 
 La base de modelado se construye con una fila por estación y hora de origen del pronóstico. Para garantizar que los rezagos representen diferencias horarias reales, se vuelve a utilizar una cuadrícula horaria completa entre 2021 y junio de 2025. Las horas que no aparezcan en los archivos originales se conservan en la cuadrícula con mediciones faltantes.
 
+Las 24 horas del día permanecen disponibles como información de origen. Sin embargo, después de definir la ventana diurna del objetivo, `construir_base_horizonte()` conserva únicamente las filas cuya **hora objetivo** se encuentre entre 10:00 y 20:00. Así, una medición nocturna puede seguir sirviendo como predictor de una hora diurna posterior, pero no se utiliza como respuesta principal del modelo.
+
 Para evitar multiplicar innecesariamente el tamaño del objeto en memoria, no se crea una tabla con 24 copias de cada registro. En su lugar se prepara una única base de origen con los predictores disponibles en $t$ y se utiliza una función para generar el objetivo $O_3(t+h)$ únicamente para el horizonte que se vaya a modelar.
 
 ```{r}
@@ -2130,7 +2136,10 @@ construir_base_horizonte <- function(h, incluir_nox = FALSE) {
         TRUE ~ NA_character_
       )
     ) |>
-    filter(!is.na(Periodo))
+    filter(
+      !is.na(Periodo),
+      between(Hora_objetivo, 10, 20)
+    )
 
   variables_modelo <- predictores_principales
 
@@ -2152,9 +2161,9 @@ construir_base_horizonte <- function(h, incluir_nox = FALSE) {
 }
 ```
 
-La separación entre entrenamiento, validación y prueba se asigna con el **año de la hora objetivo**. De esta manera, por ejemplo, una predicción emitida al final de 2023 cuyo objetivo cae en 2024 pertenece a validación y no se filtra accidentalmente dentro del entrenamiento.
+La separación entre entrenamiento, validación y prueba se asigna con el **año de la hora objetivo**. De esta manera, por ejemplo, una predicción emitida al final de 2023 cuyo objetivo cae en 2024 pertenece a validación y no se filtra accidentalmente dentro del entrenamiento. Además, solo se conservan como objetivo las horas de 10:00 a 20:00.
 
-Antes de decidir cómo tratar los faltantes se cuantifica cuánta información quedaría disponible si se exigieran casos completos. Se comparan dos versiones: el conjunto principal sin otros contaminantes y la misma estructura agregando `NOX`.
+Antes de decidir cómo tratar los faltantes se cuantifica cuánta información queda disponible si se exigen casos completos bajo esta nueva definición diurna. Se comparan dos versiones: el conjunto principal sin otros contaminantes y la misma estructura agregando `NOX`.
 
 ```{r}
 #| label: disponibilidad-base-formal
@@ -2221,11 +2230,11 @@ resumen_disponibilidad_modelado |>
   ) |>
   arrange(Periodo, Horizonte_h) |>
   knitr::kable(
-    caption = "Disponibilidad de casos completos en la base formal de modelado"
+    caption = "Disponibilidad de casos completos para el objetivo diurno de 10:00 a 20:00"
   )
 ```
 
-En este punto todavía **no se imputan predictores ni se eliminan filas de forma definitiva**. La tabla permitirá medir primero cuánto se pierde por exigir información completa y, en particular, cuánto reduce la muestra la incorporación de `NOX`. Con esos resultados se decidirá si el conjunto principal puede trabajarse mediante casos completos o si conviene aplicar un tratamiento específico de faltantes antes del modelado.
+Esta tabla constituye la última comprobación antes de fijar el tratamiento de los faltantes en los predictores. El O3 objetivo seguirá sin imputarse. Si la cobertura mediante casos completos continúa siendo baja, especialmente en validación o prueba, será necesario definir una estrategia para los predictores antes de ajustar los modelos. `NOX` seguirá evaluándose por separado para comprobar si su aporte compensa la pérdida adicional de observaciones.
 
 # Modelado
 
