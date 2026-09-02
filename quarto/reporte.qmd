@@ -2234,7 +2234,159 @@ resumen_disponibilidad_modelado |>
   )
 ```
 
-Esta tabla constituye la última comprobación antes de fijar el tratamiento de los faltantes en los predictores. El O3 objetivo seguirá sin imputarse. Si la cobertura mediante casos completos continúa siendo baja, especialmente en validación o prueba, será necesario definir una estrategia para los predictores antes de ajustar los modelos. `NOX` seguirá evaluándose por separado para comprobar si su aporte compensa la pérdida adicional de observaciones.
+La cobertura mediante casos completos es suficiente para entrenamiento, pero se reduce de manera importante en validación y prueba. Antes de imputar o eliminar predictores conviene identificar qué variables explican principalmente esta pérdida.
+
+### Diagnóstico final de faltantes por predictor
+
+El siguiente diagnóstico se calcula únicamente sobre horas objetivo con una medición real de O3. Para cada predictor se mide qué porcentaje de esas observaciones queda sin información en los 24 horizontes y en cada periodo cronológico. De esta manera se puede distinguir si la pérdida proviene principalmente de los rezagos del propio O3, de la meteorología, de la dirección del viento o de `NOX`.
+
+```{r}
+#| label: diagnostico-faltantes-predictores
+variables_diagnostico <- c(
+  "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+)
+
+diagnostico_faltantes_predictores <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- construir_base_horizonte(
+      h,
+      incluir_nox = TRUE
+    ) |>
+      filter(!is.na(O3_objetivo))
+
+    map_dfr(
+      variables_diagnostico,
+      function(variable) {
+        base_h |>
+          group_by(Periodo) |>
+          summarise(
+            Objetivos_disponibles = n(),
+            Faltantes = sum(is.na(.data[[variable]])),
+            Porcentaje_faltante = round(
+              mean(is.na(.data[[variable]])) * 100,
+              1
+            ),
+            .groups = "drop"
+          ) |>
+          mutate(
+            Horizonte_h = h,
+            Variable = variable
+          )
+      }
+    )
+  }
+)
+
+resumen_faltantes_predictores <- diagnostico_faltantes_predictores |>
+  group_by(Periodo, Variable) |>
+  summarise(
+    Faltante_promedio_pct = round(mean(Porcentaje_faltante), 1),
+    Faltante_min_pct = min(Porcentaje_faltante),
+    Faltante_max_pct = max(Porcentaje_faltante),
+    .groups = "drop"
+  )
+
+resumen_faltantes_predictores |>
+  select(Periodo, Variable, Faltante_promedio_pct) |>
+  pivot_wider(
+    names_from = Periodo,
+    values_from = Faltante_promedio_pct
+  ) |>
+  mutate(
+    Maximo = pmax(
+      Entrenamiento,
+      Validacion,
+      Prueba,
+      na.rm = TRUE
+    )
+  ) |>
+  arrange(desc(Maximo)) |>
+  select(-Maximo) |>
+  knitr::kable(
+    caption = "Porcentaje promedio de faltantes por predictor en los 24 horizontes"
+  )
+```
+
+Además de revisar cada variable por separado, se mide cómo cambia la cobertura cuando los predictores se agregan por grupos. Esto permite detectar en qué paso se produce la caída más fuerte de observaciones completas.
+
+```{r}
+#| label: cobertura-acumulada-predictores
+conjuntos_predictores <- list(
+  "O3 actual" = c("O3_t"),
+  "O3 actual + rezagos 1-3" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3"
+  ),
+  "+ rezago de 24 h" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24"
+  ),
+  "+ meteorologia" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+    "SR", "TEMP", "RH", "WS"
+  ),
+  "+ direccion del viento" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+    "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos"
+  ),
+  "+ NOX" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+    "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+  )
+)
+
+diagnostico_cobertura_grupos <- map_dfr(
+  c(1, 6, 12, 24),
+  function(h) {
+    base_h <- construir_base_horizonte(
+      h,
+      incluir_nox = TRUE
+    ) |>
+      filter(!is.na(O3_objetivo))
+
+    imap_dfr(
+      conjuntos_predictores,
+      function(variables, conjunto) {
+        base_h |>
+          mutate(
+            Caso_completo = if_all(
+              all_of(variables),
+              ~ !is.na(.x)
+            )
+          ) |>
+          group_by(Periodo) |>
+          summarise(
+            Objetivos_disponibles = n(),
+            Casos_completos = sum(Caso_completo),
+            Cobertura_pct = round(
+              100 * Casos_completos / Objetivos_disponibles,
+              1
+            ),
+            .groups = "drop"
+          ) |>
+          mutate(
+            Horizonte_h = h,
+            Conjunto = conjunto
+          )
+      }
+    )
+  }
+)
+
+diagnostico_cobertura_grupos |>
+  filter(Horizonte_h %in% c(1, 12, 24)) |>
+  select(Horizonte_h, Conjunto, Periodo, Cobertura_pct) |>
+  pivot_wider(
+    names_from = Periodo,
+    values_from = Cobertura_pct
+  ) |>
+  arrange(Horizonte_h, factor(Conjunto, levels = names(conjuntos_predictores))) |>
+  knitr::kable(
+    caption = "Cobertura acumulada al agregar grupos de predictores"
+  )
+```
+
+Estas dos tablas se utilizarán para tomar la última decisión de preparación antes del modelado. No se imputará ninguna variable con base únicamente en su porcentaje de ausencia: primero se identificará qué predictor o grupo provoca la reducción de cobertura y se valorará su importancia predictiva frente a la cantidad de información que obliga a descartar.
 
 # Modelado
 
