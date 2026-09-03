@@ -2386,7 +2386,11 @@ diagnostico_cobertura_grupos |>
   )
 ```
 
-Estas dos tablas se utilizarán para tomar la última decisión de preparación antes del modelado. No se imputará ninguna variable con base únicamente en su porcentaje de ausencia: primero se identificará qué predictor o grupo provoca la reducción de cobertura y se valorará su importancia predictiva frente a la cantidad de información que obliga a descartar.
+El diagnóstico muestra que la pérdida de cobertura no proviene principalmente de los rezagos de O3 ni de `NOX`, sino de dos variables meteorológicas. `RH` presenta alrededor de 31.9 % de faltantes en validación y 31.8 % en prueba, frente a 8.1 % en entrenamiento. `TEMP` muestra un patrón similar: 24.2 % de faltantes en validación y 27.3 % en prueba, mientras que en entrenamiento solo alcanza 2.1 %. En contraste, los rezagos del propio O3 se mantienen aproximadamente entre 3 % y 5 %, `NOX` entre 3 % y 6 %, y la dirección del viento cerca de 2 % en validación y prueba.
+
+La cobertura acumulada confirma esta conclusión. Con `O3_t` y sus rezagos todavía se conserva más del 90 % de las observaciones en los horizontes de 1 y 24 horas; incluso a 12 horas la cobertura permanece por encima de 80 %. La caída principal ocurre al agregar `SR`, `TEMP`, `RH` y `WS`: por ejemplo, para una hora de horizonte la cobertura de validación pasa de 93.2 % a 53.6 % y la de prueba de 94.2 % a 45.1 %. Agregar posteriormente la dirección del viento casi no modifica esos porcentajes y `NOX` produce una reducción adicional mucho menor.
+
+Por lo tanto, eliminar automáticamente toda la meteorología para conservar más registros no sería conveniente, ya que `RH` y `TEMP` se encuentran entre las variables con mayor relación predictiva con O3. El problema debe tratarse de forma específica en estas variables. El O3 objetivo continuará sin imputarse y cualquier tratamiento de faltantes en predictores deberá estimarse únicamente con el periodo de entrenamiento para evitar utilizar información de validación o prueba durante la preparación del modelo.
 
 # Modelado
 
