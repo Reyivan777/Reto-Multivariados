@@ -424,8 +424,179 @@ importancia_h1 |>
 
 Este diagnóstico se interpretará junto con el análisis exploratorio. En particular, interesa comprobar si el modelo utiliza de forma importante la historia reciente de O3, las variables meteorológicas y la estructura temporal que previamente mostraron relación con el contaminante. También se revisará si alguna variable aporta muy poco antes de extender el modelo a otros horizontes.
 
+## Comparación en horizontes de 1, 6, 12 y 24 horas
+
+El buen resultado a una hora no garantiza que el modelo conserve el mismo desempeño cuando la predicción se hace con mayor anticipación. Antes de ajustar hiperparámetros se repite el mismo XGBoost inicial en tres horizontes adicionales: 6, 12 y 24 horas.
+
+En esta comparación se mantienen **exactamente los mismos predictores y parámetros iniciales**. De esta forma, la principal diferencia entre los modelos es la distancia entre el instante de origen `t` y la hora objetivo `t + h`. Los modelos continúan entrenándose con 2021-2023 y se evalúan únicamente sobre 2024; 2025 permanece reservado.
+
+El siguiente bloque define una función que construye cada horizonte, entrena el XGBoost con `early stopping` y compara sus predicciones contra persistencia sobre las mismas observaciones de validación.
+
+```{r}
+#| label: funcion-evaluar-horizonte-xgboost
+entrenar_y_evaluar_horizonte <- function(h) {
+  base_h <- construir_base_horizonte(h) |>
+    filter(!is.na(O3_objetivo))
+
+  entrenamiento_h <- base_h |>
+    filter(Periodo == "Entrenamiento")
+
+  validacion_h <- base_h |>
+    filter(Periodo == "Validacion")
+
+  dtrain_h <- xgb.DMatrix(
+    data = crear_matriz_xgb(entrenamiento_h),
+    label = entrenamiento_h$O3_objetivo,
+    missing = NA
+  )
+
+  dval_h <- xgb.DMatrix(
+    data = crear_matriz_xgb(validacion_h),
+    label = validacion_h$O3_objetivo,
+    missing = NA
+  )
+
+  set.seed(123)
+
+  modelo_h <- xgb.train(
+    params = parametros_iniciales,
+    data = dtrain_h,
+    nrounds = 1000,
+    evals = list(
+      entrenamiento = dtrain_h,
+      validacion = dval_h
+    ),
+    early_stopping_rounds = 30,
+    verbose = 0
+  )
+
+  registro_h <- as_tibble(attr(modelo_h, "evaluation_log"))
+
+  columna_rmse_h <- names(registro_h)[
+    str_detect(names(registro_h), "^validacion.*rmse$")
+  ]
+
+  if (length(columna_rmse_h) != 1) {
+    stop("No se pudo identificar la columna de RMSE de validación.")
+  }
+
+  indice_mejor_h <- which.min(registro_h[[columna_rmse_h]])
+
+  predicciones_h <- predict(modelo_h, dval_h)
+  indices_comunes_h <- which(!is.na(validacion_h$O3_t))
+
+  metricas_persistencia_h <- calcular_metricas(
+    validacion_h$O3_objetivo[indices_comunes_h],
+    validacion_h$O3_t[indices_comunes_h]
+  )
+
+  metricas_xgb_h <- calcular_metricas(
+    validacion_h$O3_objetivo[indices_comunes_h],
+    predicciones_h[indices_comunes_h]
+  )
+
+  tibble(
+    Horizonte_h = h,
+    Observaciones = length(indices_comunes_h),
+    Mejor_iteracion = registro_h$iter[indice_mejor_h],
+    MAE_Persistencia = metricas_persistencia_h$MAE,
+    MAE_XGBoost = metricas_xgb_h$MAE,
+    RMSE_Persistencia = metricas_persistencia_h$RMSE,
+    RMSE_XGBoost = metricas_xgb_h$RMSE,
+    Mejora_MAE_pct = 100 *
+      (MAE_Persistencia - MAE_XGBoost) / MAE_Persistencia,
+    Mejora_RMSE_pct = 100 *
+      (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
+  )
+}
+```
+
+Para evitar volver a entrenar innecesariamente el modelo de una hora, su resultado ya calculado se reutiliza. La función se ejecuta únicamente para 6, 12 y 24 horas y después se unen los cuatro horizontes en una sola tabla.
+
+```{r}
+#| label: comparacion-horizontes-xgboost
+resultado_h1 <- tibble(
+  Horizonte_h = 1,
+  Observaciones = metricas_xgb_h1$Observaciones,
+  Mejor_iteracion = mejor_iteracion_h1,
+  MAE_Persistencia = metricas_persistencia_h1$MAE,
+  MAE_XGBoost = metricas_xgb_h1$MAE,
+  RMSE_Persistencia = metricas_persistencia_h1$RMSE,
+  RMSE_XGBoost = metricas_xgb_h1$RMSE,
+  Mejora_MAE_pct = 100 *
+    (MAE_Persistencia - MAE_XGBoost) / MAE_Persistencia,
+  Mejora_RMSE_pct = 100 *
+    (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
+)
+
+resultados_horizontes <- bind_rows(
+  resultado_h1,
+  map_dfr(c(6, 12, 24), entrenar_y_evaluar_horizonte)
+) |>
+  arrange(Horizonte_h)
+
+resultados_horizontes |>
+  mutate(
+    across(
+      c(
+        MAE_Persistencia, MAE_XGBoost,
+        RMSE_Persistencia, RMSE_XGBoost
+      ),
+      ~ round(.x, 3)
+    ),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(
+    caption = "Persistencia y XGBoost inicial en horizontes representativos de 2024"
+  )
+```
+
+Las columnas de mejora expresan el porcentaje de reducción del error de XGBoost respecto a persistencia. Un valor positivo indica que XGBoost mejora la referencia; cuanto mayor sea el porcentaje, mayor es la reducción del error.
+
+La siguiente gráfica resume el RMSE, que penaliza con mayor fuerza los errores grandes, para observar cómo cambia el desempeño conforme aumenta el horizonte de predicción.
+
+```{r}
+#| label: grafica-rmse-horizontes
+#| fig-cap: "RMSE de persistencia y XGBoost según el horizonte de predicción"
+#| fig-width: 7
+#| fig-height: 4.5
+resultados_horizontes |>
+  select(
+    Horizonte_h,
+    Persistencia = RMSE_Persistencia,
+    XGBoost = RMSE_XGBoost
+  ) |>
+  pivot_longer(
+    cols = c(Persistencia, XGBoost),
+    names_to = "Modelo",
+    values_to = "RMSE"
+  ) |>
+  ggplot(
+    aes(
+      x = Horizonte_h,
+      y = RMSE,
+      group = Modelo,
+      linetype = Modelo,
+      shape = Modelo
+    )
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.5) +
+  scale_x_continuous(breaks = c(1, 6, 12, 24)) +
+  labs(
+    x = "Horizonte (horas)",
+    y = "RMSE",
+    linetype = "Modelo",
+    shape = "Modelo"
+  ) +
+  theme_minimal()
+```
+
+Esta comparación todavía no busca seleccionar los hiperparámetros definitivos. Su objetivo es establecer cómo se comporta la configuración inicial a medida que aumenta la anticipación y comprobar en qué horizontes mantiene una ventaja clara sobre persistencia.
+
 # Evaluación
 
-Por ahora solo se evalúa el horizonte de una hora sobre **2024**. Después de comprobar el desempeño inicial y revisar la importancia de variables, el siguiente paso será extender el mismo procedimiento a horizontes representativos de 6, 12 y 24 horas antes de entrenar los 24 modelos.
+La configuración inicial ya se evalúa sobre **2024** en horizontes de 1, 6, 12 y 24 horas. Estos resultados permitirán decidir el siguiente paso de ajuste sin utilizar todavía el conjunto de prueba final.
 
 El conjunto de **2025 permanece reservado** para la prueba final y no debe utilizarse para decidir parámetros, variables ni arquitectura del modelo.
