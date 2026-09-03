@@ -1,0 +1,106 @@
+name: Agregar importancia XGBoost
+
+on:
+  push:
+    branches: [trunk]
+    paths:
+      - ".github/workflows/tmp_importancia_xgb.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  importancia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Agregar importancia de variables
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("quarto/xgboost.qmd")
+          texto = path.read_text(encoding="utf-8")
+
+          bloque = r'''
+## Importancia de variables para h = 1
+
+Después de comprobar que el XGBoost inicial supera al modelo de persistencia, se revisa qué predictores están aportando más información al modelo. Esta revisión no establece causalidad; únicamente resume cuánto contribuyó cada variable a mejorar las divisiones de los árboles durante el entrenamiento.
+
+XGBoost reporta varias medidas de importancia. Para este diagnóstico se utiliza **Gain**, que representa la mejora relativa obtenida en la función de error cuando una variable se utiliza para dividir un árbol. Cuanto mayor sea `Gain`, mayor fue la contribución de esa variable al ajuste del modelo.
+
+El siguiente bloque obtiene la importancia de todas las variables y muestra las 15 con mayor `Gain`.
+
+```{r}
+#| label: importancia-variables-xgboost-h1
+importancia_h1 <- xgb.importance(
+  model = modelo_xgb_h1
+) |>
+  as_tibble() |>
+  arrange(desc(Gain))
+
+importancia_h1 |>
+  slice_head(n = 15) |>
+  mutate(
+    Gain = round(Gain, 4),
+    Cover = round(Cover, 4),
+    Frequency = round(Frequency, 4)
+  ) |>
+  knitr::kable(
+    caption = "Variables con mayor importancia en el XGBoost inicial para h = 1"
+  )
+```
+
+La tabla conserva tres medidas. `Gain` será la principal para interpretar el modelo; `Cover` indica la proporción aproximada de observaciones afectadas por las divisiones donde aparece la variable y `Frequency` indica con qué frecuencia fue utilizada en los árboles. Una variable puede utilizarse muchas veces sin ser necesariamente la que más mejora el error, por lo que la frecuencia no se interpreta por sí sola como importancia predictiva.
+
+Para facilitar la comparación visual, se grafica el `Gain` de las 15 variables principales.
+
+```{r}
+#| label: grafica-importancia-xgboost-h1
+#| fig-cap: "Importancia de variables según Gain para el XGBoost inicial de una hora"
+#| fig-width: 7
+#| fig-height: 5.5
+importancia_h1 |>
+  slice_head(n = 15) |>
+  mutate(
+    Feature = forcats::fct_reorder(Feature, Gain)
+  ) |>
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Gain"
+  ) +
+  theme_minimal()
+```
+
+Este diagnóstico se interpretará junto con el análisis exploratorio. En particular, interesa comprobar si el modelo utiliza de forma importante la historia reciente de O3, las variables meteorológicas y la estructura temporal que previamente mostraron relación con el contaminante. También se revisará si alguna variable aporta muy poco antes de extender el modelo a otros horizontes.
+'''
+
+          marcador = "\n# Evaluación\n"
+          if "#| label: importancia-variables-xgboost-h1" not in texto:
+              if marcador not in texto:
+                  raise RuntimeError("No se encontró la sección Evaluación en xgboost.qmd")
+              texto = texto.replace(marcador, "\n" + bloque.strip() + "\n\n# Evaluación\n", 1)
+              texto = texto.replace(
+                  "Por ahora solo se evalúa el horizonte de una hora sobre **2024**. El siguiente paso será interpretar estos resultados y, si la estructura funciona correctamente, revisar la importancia de variables y extender el procedimiento a otros horizontes representativos antes de entrenar los 24 modelos.",
+                  "Por ahora solo se evalúa el horizonte de una hora sobre **2024**. Después de comprobar el desempeño inicial y revisar la importancia de variables, el siguiente paso será extender el mismo procedimiento a horizontes representativos de 6, 12 y 24 horas antes de entrenar los 24 modelos."
+              )
+              path.write_text(texto, encoding="utf-8")
+
+          Path(".github/workflows/tmp_importancia_xgb.yml").unlink()
+          PY
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add quarto/xgboost.qmd .github/workflows/tmp_importancia_xgb.yml
+          git commit -m "Agrega importancia de variables al XGBoost inicial"
+          git push
