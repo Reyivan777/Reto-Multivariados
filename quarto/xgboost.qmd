@@ -39,14 +39,6 @@ Primero se cargan las librerías necesarias, se fija una semilla para que los re
 library(tidyverse)
 library(here)
 library(lubridate)
-
-if (!requireNamespace("xgboost", quietly = TRUE)) {
-  stop(
-    "El paquete xgboost no está disponible en el entorno. ",
-    "Ejecuta renv::restore() para restaurar las dependencias del proyecto."
-  )
-}
-
 library(xgboost)
 
 options(scipen = 999)
