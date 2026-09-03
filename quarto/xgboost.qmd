@@ -32,6 +32,8 @@ El desarrollo se hará de forma incremental. Primero se construirá un modelo pa
 
 # Carga de la base limpia
 
+Primero se cargan las librerías necesarias, se fija una semilla para que los resultados aleatorios sean reproducibles y se definen las cuatro estaciones del análisis. `xgboost` debe estar registrado en `renv.lock` para que cualquier integrante pueda restaurar el mismo entorno con `renv::restore()`.
+
 ```{r}
 #| label: configuracion
 library(tidyverse)
@@ -40,8 +42,8 @@ library(lubridate)
 
 if (!requireNamespace("xgboost", quietly = TRUE)) {
   stop(
-    "El paquete xgboost no está instalado. Ejecuta una sola vez ",
-    "install.packages('xgboost') y vuelve a renderizar."
+    "El paquete xgboost no está disponible en el entorno. ",
+    "Ejecuta renv::restore() para restaurar las dependencias del proyecto."
   )
 }
 
@@ -52,6 +54,8 @@ set.seed(123)
 
 estaciones_interes <- c("NTE", "NTE2", "NO", "NE")
 ```
+
+A continuación se carga el CSV limpio generado previamente. Este paso evita volver a leer y procesar los seis archivos originales de Excel cada vez que se trabaja con el modelo.
 
 ```{r}
 #| label: carga-base-limpia
@@ -70,7 +74,7 @@ datos_fuente <- read_csv(
 )
 ```
 
-La fecha y hora puede provenir de los archivos originales como texto o como número serial de Excel. Se utiliza la misma lógica temporal del reporte principal para obtener una única variable `fecha_hora` en formato `POSIXct`.
+La fecha y hora puede provenir de los archivos originales como texto o como número serial de Excel. El siguiente bloque la convierte a un único formato `POSIXct` y conserva solo las variables necesarias para XGBoost. También transforma la dirección del viento en seno y coseno para respetar su naturaleza circular.
 
 ```{r}
 #| label: preparacion-minima-modelado
@@ -136,6 +140,8 @@ datos_modelado <- datos_fuente |>
   arrange(Estacion, fecha_hora)
 ```
 
+Antes de construir rezagos se verifica rápidamente que la base tenga el periodo y las cuatro estaciones esperadas.
+
 ```{r}
 #| label: verificacion-base-xgboost
 resumen_base_xgboost <- tibble(
@@ -158,6 +164,8 @@ knitr::kable(
 Para que un rezago de una hora represente realmente una hora anterior y no simplemente la fila previa disponible, primero se construye una cuadrícula horaria completa para cada estación. Las horas que no tienen medición permanecen en la base con valores `NA`.
 
 Se crean los mismos rezagos seleccionados en el reporte principal: O3 actual, 1, 2, 3 y 24 horas anteriores. XGBoost puede trabajar directamente con valores faltantes en los predictores, por lo que estos `NA` no se imputan antes del primer modelo.
+
+El siguiente bloque genera esa cuadrícula y añade los cinco valores históricos de O3 que utilizaremos como predictores.
 
 ```{r}
 #| label: base-temporal
@@ -195,7 +203,7 @@ base_temporal <- expand_grid(
   )
 ```
 
-La función siguiente crea el objetivo para cualquier horizonte `h`. La respuesta corresponde a `O3(t+h)` y solo se conservan objetivos entre las 10:00 y 20:00. La separación entrenamiento-validación-prueba se determina con el año de la hora objetivo.
+Ahora se define una función reutilizable para crear el problema de predicción de cualquier horizonte `h`. La función genera `O3(t+h)`, calcula las variables cíclicas de la hora y el mes objetivo y asigna cada observación a entrenamiento, validación o prueba según el año que se desea predecir.
 
 ```{r}
 #| label: funcion-base-horizonte
@@ -234,6 +242,8 @@ construir_base_horizonte <- function(h) {
 
 Para la primera prueba solo se utiliza `h = 1`. Las filas sin O3 objetivo se eliminan porque no pueden utilizarse para entrenar ni evaluar un modelo supervisado. Los faltantes de los **predictores** sí se conservan.
 
+Este bloque crea la base específica de una hora de anticipación y cuenta cuántas respuestas reales existen en cada periodo.
+
 ```{r}
 #| label: base-h1
 base_h1 <- construir_base_horizonte(1) |>
@@ -262,7 +272,7 @@ $$
 \widehat{O_3}(t+1) = O_3(t)
 $$
 
-La comparación con XGBoost se hará sobre las mismas observaciones de validación donde `O3_t` está disponible, ya que persistencia no puede generar una predicción si falta el O3 actual.
+Primero se define una función pequeña para calcular las dos métricas que utilizaremos en todos los modelos: MAE y RMSE.
 
 ```{r}
 #| label: funciones-metricas
@@ -273,6 +283,8 @@ calcular_metricas <- function(observado, predicho) {
   )
 }
 ```
+
+Después se calcula la predicción de persistencia sobre 2024. Solo puede utilizar las observaciones donde `O3_t` está disponible, porque su predicción es precisamente el último valor observado de O3.
 
 ```{r}
 #| label: persistencia-h1
@@ -309,6 +321,8 @@ Los predictores son:
 
 No se imputan los `NA` de `TEMP`, `RH` u otras variables: XGBoost aprende durante la construcción de los árboles qué ruta utilizar cuando un predictor está ausente.
 
+XGBoost necesita una matriz numérica. El siguiente bloque selecciona los predictores y convierte `Estacion` en cuatro columnas indicadoras, una por estación.
+
 ```{r}
 #| label: predictores-xgboost
 predictores_numericos <- c(
@@ -333,7 +347,7 @@ crear_matriz_xgb <- function(datos) {
 }
 ```
 
-Se ajusta el modelo con 2021-2023 y se utiliza 2024 como conjunto de validación. Los parámetros son deliberadamente conservadores para obtener primero una referencia funcional; todavía no representan una búsqueda final de hiperparámetros.
+El siguiente bloque separa 2021-2023 y 2024, crea las estructuras `DMatrix` que utiliza XGBoost y entrena el primer modelo. Los parámetros son deliberadamente conservadores: en esta etapa buscamos comprobar que el procedimiento funciona antes de realizar un ajuste de hiperparámetros.
 
 ```{r}
 #| label: entrenamiento-xgboost-h1
@@ -379,15 +393,38 @@ modelo_xgb_h1 <- xgb.train(
 )
 ```
 
-`early_stopping_rounds = 30` detiene el entrenamiento si el RMSE de 2024 no mejora durante 30 iteraciones consecutivas. De esta forma no se fija arbitrariamente el número final de árboles.
+`early_stopping_rounds = 30` detiene el entrenamiento si el RMSE de 2024 deja de mejorar durante 30 iteraciones consecutivas. Esto evita seguir agregando árboles cuando el desempeño de validación ya no mejora.
+
+El error anterior aparecía porque algunas versiones recientes de `xgboost` no exponen `best_iteration` y `best_score` como elementos directos del objeto con la misma estructura esperada. Para evitar depender de esa representación interna, el siguiente bloque obtiene la mejor iteración directamente del registro de evaluación que XGBoost genera durante el entrenamiento.
 
 ```{r}
 #| label: resumen-entrenamiento-xgboost-h1
+registro_entrenamiento_h1 <- as_tibble(
+  modelo_xgb_h1$evaluation_log
+)
+
+columna_rmse_validacion <- names(registro_entrenamiento_h1)[
+  str_detect(names(registro_entrenamiento_h1), "^validacion.*rmse$")
+]
+
+if (length(columna_rmse_validacion) != 1) {
+  stop("No se pudo identificar la columna de RMSE de validación en XGBoost.")
+}
+
+indice_mejor_h1 <- which.min(
+  registro_entrenamiento_h1[[columna_rmse_validacion]]
+)
+
+mejor_iteracion_h1 <- registro_entrenamiento_h1$iter[indice_mejor_h1]
+mejor_rmse_validacion_h1 <- registro_entrenamiento_h1[
+  [columna_rmse_validacion]
+][indice_mejor_h1]
+
 resumen_entrenamiento_h1 <- tibble(
   Observaciones_entrenamiento = nrow(entrenamiento_h1),
   Observaciones_validacion = nrow(validacion_h1),
-  Mejor_iteracion = modelo_xgb_h1$best_iteration,
-  Mejor_RMSE_validacion = round(modelo_xgb_h1$best_score, 3)
+  Mejor_iteracion = mejor_iteracion_h1,
+  Mejor_RMSE_validacion = round(mejor_rmse_validacion_h1, 3)
 )
 
 knitr::kable(
@@ -399,6 +436,8 @@ knitr::kable(
 ## Comparación inicial con persistencia
 
 XGBoost puede predecir incluso cuando alguno de sus predictores está ausente, mientras que persistencia necesita `O3_t`. Para que la comparación sea justa, ambas métricas se calculan sobre el subconjunto común de validación donde el O3 actual está disponible.
+
+Este último bloque genera las predicciones de XGBoost para 2024 y calcula MAE y RMSE sobre exactamente las mismas observaciones utilizadas por persistencia.
 
 ```{r}
 #| label: comparacion-persistencia-xgboost-h1
