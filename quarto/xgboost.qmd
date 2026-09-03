@@ -389,12 +389,12 @@ modelo_xgb_h1 <- xgb.train(
 
 `early_stopping_rounds = 30` detiene el entrenamiento si el RMSE de 2024 deja de mejorar durante 30 iteraciones consecutivas. Esto evita seguir agregando árboles cuando el desempeño de validación ya no mejora.
 
-El siguiente bloque utiliza el `evaluation_log` generado durante el entrenamiento para localizar la iteración con el menor RMSE de validación.
+En la versión de `xgboost` utilizada por el proyecto, `evaluation_log` se almacena como un atributo del objeto `xgb.Booster`. Por ello se recupera con `attr()` en lugar de acceder mediante `$`. El historial contiene el RMSE registrado en cada iteración para entrenamiento y validación.
 
 ```{r}
 #| label: resumen-entrenamiento-xgboost-h1
 registro_entrenamiento_h1 <- as_tibble(
-  modelo_xgb_h1$evaluation_log
+  attr(modelo_xgb_h1, "evaluation_log")
 )
 
 columna_rmse_validacion <- names(registro_entrenamiento_h1)[
