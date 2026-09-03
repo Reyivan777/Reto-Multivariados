@@ -2484,3 +2484,645 @@ Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Polluti
 Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
 
 Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations*. International Journal of Public Health, 66, 1604465.
+
+
+a
+```{r}
+
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(tibble)
+library(ggplot2)
+library(keras3)
+
+base_ann <- map_dfr(
+  1:24,
+  ~ construir_base_horizonte(
+    h = .x,
+    incluir_nox = TRUE
+  )
+) |>
+  arrange(
+    Estacion,
+    fecha_hora,
+    Horizonte_h
+  )
+
+variables_imputar <- c(
+  "SR", "TEMP", "RH", "WS",
+  "WD_sin", "WD_cos", "NOX"
+)
+
+origenes_ann <- base_ann |>
+  select(
+    Estacion,
+    fecha_hora,
+    all_of(variables_imputar)
+  ) |>
+  distinct() |>
+  mutate(
+    Año_origen = year(fecha_hora),
+    Mes_origen = month(fecha_hora),
+    Hora_origen = hour(fecha_hora)
+  )
+
+medianas_clima <- origenes_ann |>
+  filter(Año_origen %in% 2021:2024) |>
+  group_by(
+    Estacion,
+    Mes_origen,
+    Hora_origen
+  ) |>
+  summarise(
+    across(
+      all_of(variables_imputar),
+      ~ median(.x, na.rm = TRUE),
+      .names = "{.col}_med"
+    ),
+    .groups = "drop"
+  )
+
+origenes_ann_imputados <- origenes_ann |>
+  mutate(
+    SR_faltante = as.integer(is.na(SR)),
+    TEMP_faltante = as.integer(is.na(TEMP)),
+    RH_faltante = as.integer(is.na(RH)),
+    WS_faltante = as.integer(is.na(WS)),
+    WD_sin_faltante = as.integer(is.na(WD_sin)),
+    WD_cos_faltante = as.integer(is.na(WD_cos)),
+    NOX_faltante = as.integer(is.na(NOX))
+  ) |>
+  left_join(
+    medianas_clima,
+    by = c(
+      "Estacion",
+      "Mes_origen",
+      "Hora_origen"
+    )
+  ) |>
+  mutate(
+    SR = coalesce(SR, SR_med),
+    TEMP = coalesce(TEMP, TEMP_med),
+    RH = coalesce(RH, RH_med),
+    WS = coalesce(WS, WS_med),
+    WD_sin = coalesce(WD_sin, WD_sin_med),
+    WD_cos = coalesce(WD_cos, WD_cos_med),
+    NOX = coalesce(NOX, NOX_med)
+  ) |>
+  select(
+    -Año_origen,
+    -Mes_origen,
+    -Hora_origen,
+    -ends_with("_med")
+  )
+
+base_ann_imputada <- base_ann |>
+  select(
+    -all_of(variables_imputar)
+  ) |>
+  left_join(
+    origenes_ann_imputados,
+    by = c(
+      "Estacion",
+      "fecha_hora"
+    )
+  ) |>
+  arrange(
+    Estacion,
+    fecha_hora,
+    Horizonte_h
+  )
+
+base_ann_modelo <- base_ann_imputada |>
+  filter(
+    !is.na(O3_objetivo),
+    !is.na(O3_t),
+    !is.na(O3_lag_1),
+    !is.na(O3_lag_2),
+    !is.na(O3_lag_3),
+    !is.na(O3_lag_24)
+  )
+
+train_ann <- base_ann_modelo |>
+  filter(Periodo %in% c(
+    "Entrenamiento",
+    "Validacion"
+  ))
+
+prueba_ann <- base_ann_modelo |>
+  filter(Periodo == "Prueba")
+
+crear_dummies_estacion <- function(datos) {
+
+  dummies <- model.matrix(
+    ~ Estacion - 1,
+    data = datos
+  ) |>
+    as.data.frame()
+
+  bind_cols(
+    datos |> select(-Estacion),
+    dummies
+  )
+}
+
+train_ann <- crear_dummies_estacion(train_ann)
+prueba_ann <- crear_dummies_estacion(prueba_ann)
+
+variables_normalizar <- c(
+  "SR", "TEMP", "RH", "WS", "NOX",
+  "O3_t", "O3_lag_1", "O3_lag_2",
+  "O3_lag_3", "O3_lag_24",
+  "O3_objetivo"
+)
+
+parametros_normalizacion <- train_ann |>
+  summarise(
+    across(
+      all_of(variables_normalizar),
+      list(
+        min = ~ min(.x, na.rm = TRUE),
+        max = ~ max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  )
+
+train_ann_norm <- train_ann
+prueba_ann_norm <- prueba_ann
+
+for (variable in variables_normalizar) {
+
+  minimo <- parametros_normalizacion[[paste0(variable, "_min")]]
+
+  maximo <- parametros_normalizacion[[paste0(variable, "_max")]]
+
+  train_ann_norm[[variable]] <-
+    (train_ann[[variable]] - minimo) /
+    (maximo - minimo)
+
+  prueba_ann_norm[[variable]] <-
+    (prueba_ann[[variable]] - minimo) /
+    (maximo - minimo)
+}
+
+train_ann_norm <- train_ann_norm |>
+  mutate(
+    Horizonte_h = (Horizonte_h - 1) / 23
+  )
+
+prueba_ann_norm <- prueba_ann_norm |>
+  mutate(
+    Horizonte_h = (Horizonte_h - 1) / 23
+  )
+
+variables_estacion <- grep(
+  "^Estacion",
+  names(train_ann_norm),
+  value = TRUE
+)
+
+predictores_ann <- c(
+  "SR", "TEMP", "RH", "WS",
+  "WD_sin", "WD_cos", "NOX",
+  "Hora_sin_obj", "Hora_cos_obj",
+  "Mes_sin_obj", "Mes_cos_obj",
+  "O3_t", "O3_lag_1", "O3_lag_2",
+  "O3_lag_3", "O3_lag_24",
+  "Horizonte_h",
+  "SR_faltante", "TEMP_faltante",
+  "RH_faltante", "WS_faltante",
+  "WD_sin_faltante", "WD_cos_faltante",
+  "NOX_faltante",
+  variables_estacion
+)
+
+x_train <- as.matrix(
+  train_ann_norm[, predictores_ann]
+)
+
+y_train <- train_ann_norm$O3_objetivo
+
+x_test <- as.matrix(
+  prueba_ann_norm[, predictores_ann]
+)
+
+y_test <- prueba_ann_norm$O3_objetivo
+
+o3_train_real <- train_ann$O3_objetivo
+
+q75 <- quantile(
+  o3_train_real,
+  0.75,
+  na.rm = TRUE
+)
+
+q90 <- quantile(
+  o3_train_real,
+  0.90,
+  na.rm = TRUE
+)
+
+pesos_train <- case_when(
+  o3_train_real >= q90 ~ 4,
+  o3_train_real >= q75 ~ 1.5,
+  TRUE ~ 1
+)
+
+o3_min <- parametros_normalizacion$O3_objetivo_min
+o3_max <- parametros_normalizacion$O3_objetivo_max
+
+desnormalizar_o3 <- function(x) {
+  x * (o3_max - o3_min) + o3_min
+}
+
+set.seed(123)
+
+modelo_final_ann <- keras_model_sequential(
+  input_shape = c(ncol(x_train))
+) |>
+  layer_dense(
+    units = 7,
+    activation = "tanh"
+  ) |>
+  layer_dense(
+    units = 1,
+    activation = "linear"
+  )
+
+modelo_final_ann |>
+  compile(
+    optimizer = optimizer_adam(
+      learning_rate = 0.001
+    ),
+    loss = "mse"
+  )
+
+historial_ann <- modelo_final_ann |>
+  fit(
+    x = x_train,
+    y = y_train,
+    sample_weight = pesos_train,
+    epochs = 50,
+    batch_size = 4096,
+    verbose = 0
+  )
+
+pred_train_norm <- modelo_final_ann |>
+  predict(
+    x_train,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+pred_test_norm <- modelo_final_ann |>
+  predict(
+    x_test,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+real_train <- desnormalizar_o3(
+  y_train
+)
+
+pred_train <- desnormalizar_o3(
+  pred_train_norm
+)
+
+real_test <- desnormalizar_o3(
+  y_test
+)
+
+pred_test <- desnormalizar_o3(
+  pred_test_norm
+)
+
+RMSE_test <- sqrt(
+  mean(
+    (real_test - pred_test)^2
+  )
+)
+
+MAE_test <- mean(
+  abs(
+    real_test - pred_test
+  )
+)
+
+resultados_test_ann <- tibble(
+  Modelo = "ANN 7 neuronas",
+  RMSE = RMSE_test,
+  MAE = MAE_test
+)
+
+resultados_test_ann
+
+metricas_train_test <- tibble(
+  Conjunto = c(
+    "Entrenamiento",
+    "Prueba"
+  ),
+  RMSE = c(
+    sqrt(
+      mean(
+        (real_train - pred_train)^2
+      )
+    ),
+    RMSE_test
+  ),
+  MAE = c(
+    mean(
+      abs(
+        real_train - pred_train
+      )
+    ),
+    MAE_test
+  )
+)
+
+metricas_train_test
+
+resultados_pred_ann <- prueba_ann_norm |>
+  mutate(
+    Horizonte_original = round(
+      Horizonte_h * 23 + 1
+    ),
+    O3_real = real_test,
+    O3_predicho = pred_test,
+    Error = O3_real - O3_predicho
+  )
+
+metricas_horizonte_ann <- resultados_pred_ann |>
+  group_by(
+    Horizonte_original
+  ) |>
+  summarise(
+    MAE = mean(abs(Error)),
+    RMSE = sqrt(mean(Error^2)),
+    .groups = "drop"
+  )
+
+metricas_horizonte_ann
+
+metricas_horizonte_ann |>
+  ggplot(
+    aes(
+      x = Horizonte_original,
+      y = RMSE
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:24
+  ) +
+  labs(
+    title = "RMSE de la ANN según horizonte de predicción",
+    x = "Horizonte de predicción (horas)",
+    y = "RMSE"
+  ) +
+  theme_minimal()
+
+metricas_horizonte_ann |>
+  ggplot(
+    aes(
+      x = Horizonte_original,
+      y = MAE
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:24
+  ) +
+  labs(
+    title = "MAE de la ANN según horizonte de predicción",
+    x = "Horizonte de predicción (horas)",
+    y = "MAE"
+  ) +
+  theme_minimal()
+
+comparacion_train <- tibble(
+  Real = real_train,
+  Predicho = pred_train,
+  Conjunto = "Entrenamiento"
+)
+
+comparacion_test <- tibble(
+  Real = real_test,
+  Predicho = pred_test,
+  Conjunto = "Prueba"
+)
+
+set.seed(123)
+
+comparacion_train <- comparacion_train |>
+  slice_sample(
+    n = min(
+      3000,
+      nrow(comparacion_train)
+    )
+  )
+
+comparacion_test <- comparacion_test |>
+  slice_sample(
+    n = min(
+      3000,
+      nrow(comparacion_test)
+    )
+  )
+
+comparacion <- bind_rows(
+  comparacion_train,
+  comparacion_test
+)
+
+ggplot(
+  comparacion,
+  aes(
+    x = Real,
+    y = Predicho
+  )
+) +
+  geom_point(
+    alpha = 0.25
+  ) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed"
+  ) +
+  facet_wrap(
+    ~ Conjunto
+  ) +
+  labs(
+    title = "O3 real vs O3 predicho",
+    x = "O3 real",
+    y = "O3 predicho"
+  ) +
+  theme_minimal()
+
+umbral_alto <- quantile(
+  real_test,
+  0.90,
+  na.rm = TRUE
+)
+
+evaluacion_altos <- tibble(
+  Real = real_test,
+  Predicho = pred_test
+) |>
+  mutate(
+    Grupo = if_else(
+      Real >= umbral_alto,
+      "O3 alto",
+      "O3 normal"
+    ),
+    Error = Real - Predicho
+  ) |>
+  group_by(
+    Grupo
+  ) |>
+  summarise(
+    Observaciones = n(),
+    MAE = mean(
+      abs(Error)
+    ),
+    RMSE = sqrt(
+      mean(Error^2)
+    ),
+    Sesgo = mean(Error),
+    .groups = "drop"
+  )
+
+evaluacion_altos
+```
+
+
+
+## Justificación
+
+Se utilizó una red neuronal artificial feedforward como uno de los modelos de predicción de O3. La metodología se planteó en base al trabajo de Cifuentes et al. (2021) ya que les resultó con mucho éxito. 
+
+La separación de los datos se realizó diviendo la base de datos: 2021, 2022 y 2023 fueron utilizados para entrenamiento, 2024 para validación y selección del modelo y 2025 para el conjunto final de prueba. Esto evita utilizar información futura para entrenar o seleccionar el modelo. La arquitectura final utiliza una capa oculta de 7 neuronas con función de activación **tanh** y una neurona de salida con activación lineal. Es necesaria la salida lineal ya que se desea predecir una variable continua. El número de neuronas se seleccionó mediante el desempeño en el conjunto de validación con el conjunto de datos de 2024, probando desde 2 hasta 10 neuronas. Este modelo presentó el mejor desempeño por lo que fue seleccionada, aunque no estuvo muy lejos de los demás. Después de haber usado el modelo, se observó que el error incrementaba en las concentraciones más altas de ozono y por eso se le asignó un peso mayor (4) al 10% superior de las concentraciones observadas durante entrenamiento. 
+
+En el conjunto de entrenamiento se obtuvo un RMSE aproximado de 11.54 y un MAE aproximado de 8.53, mientras que en el conjunto independiente de prueba de 2025 se obtuvo un RMSE de 13.53 y un MAE de 9.99. La diferencia entre los conjuntos es normal e indica una peqeuña pérdida de precisión al utilizar datos no observados previamente, pero no muestra evidencia de un sobreajuste relevante. Si existe una limitación en el modelo, como ya se mencinó, este pierde precisión al modelar los valores más altos de O3. El O3 alto (>90%) tiene un RMSE aproximado de 16.87 y un MAE aproximado de 22.6. También el sesgo incrementa en un 18.09 comparadao al sesgo del O3 normal (0% - 90%).
+
+```{r}
+
+set.seed(123)
+
+n_importancia <- min(
+  100000,
+  nrow(x_val)
+)
+
+indices_importancia <- sample(
+  seq_len(nrow(x_val)),
+  n_importancia
+)
+
+x_imp <- x_val[
+  indices_importancia,
+  ,
+  drop = FALSE
+]
+
+y_imp <- y_val[
+  indices_importancia
+]
+
+real_imp <- desnormalizar_o3(
+  y_imp
+)
+
+pred_base_norm <- modelo_final_ann |>
+  predict(
+    x_imp,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+pred_base <- desnormalizar_o3(
+  pred_base_norm
+)
+
+rmse_base <- sqrt(
+  mean(
+    (real_imp - pred_base)^2
+  )
+)
+
+importancia_variables <- lapply(
+  seq_along(predictores_ann),
+  function(j) {
+
+    x_permutado <- x_imp
+
+    x_permutado[, j] <- sample(
+      x_permutado[, j]
+    )
+
+    pred_perm_norm <- modelo_final_ann |>
+      predict(
+        x_permutado,
+        verbose = 0
+      ) |>
+      as.numeric()
+
+    pred_perm <- desnormalizar_o3(
+      pred_perm_norm
+    )
+
+    rmse_perm <- sqrt(
+      mean(
+        (real_imp - pred_perm)^2
+      )
+    )
+
+    tibble(
+      Variable = predictores_ann[j],
+      RMSE_permutado = rmse_perm,
+      Importancia = rmse_perm - rmse_base
+    )
+  }
+) |>
+  bind_rows() |>
+  arrange(
+    desc(Importancia)
+  )
+
+importancia_variables
+
+```
+
+```{r}
+library(ggplot2)
+
+importancia_variables |>
+  slice_head(n = 15) |>
+  ggplot(
+    aes(
+      x = reorder(
+        Variable,
+        Importancia
+      ),
+      y = Importancia
+    )
+  ) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Importancia de variables en la ANN",
+    x = "Variable",
+    y = "Incremento en RMSE al permutar"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
