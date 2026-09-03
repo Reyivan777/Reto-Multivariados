@@ -1,0 +1,703 @@
+---
+title: "ANN"
+author: "Matías Romero Mariné"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+## Red Neuronal Artificial
+
+```{r}
+
+base_ann <- map_dfr(
+  1:24,
+  ~ construir_base_horizonte(
+    h = .x,
+    incluir_nox = TRUE
+  )
+) |>
+  arrange(
+    Estacion,
+    fecha_hora,
+    Horizonte_h
+  )
+
+base_ann
+
+
+
+```
+
+```{r}
+variables_imputar <- c(
+  "SR", "TEMP", "RH", "WS",
+  "WD_sin", "WD_cos", "NOX"
+)
+
+origenes_ann <- base_ann |>
+  select(
+    Estacion,
+    fecha_hora,
+    all_of(variables_imputar)
+  ) |>
+  distinct() |>
+  mutate(
+    Año_origen = year(fecha_hora),
+    Mes_origen = month(fecha_hora),
+    Hora_origen = hour(fecha_hora)
+  )
+
+medianas_clima <- origenes_ann |>
+  filter(Año_origen %in% 2021:2023) |>
+  group_by(
+    Estacion,
+    Mes_origen,
+    Hora_origen
+  ) |>
+  summarise(
+    across(
+      all_of(variables_imputar),
+      ~ median(.x, na.rm = TRUE),
+      .names = "{.col}_med"
+    ),
+    .groups = "drop"
+  )
+
+origenes_ann_imputados <- origenes_ann |>
+  mutate(
+    SR_faltante = as.integer(is.na(SR)),
+    TEMP_faltante = as.integer(is.na(TEMP)),
+    RH_faltante = as.integer(is.na(RH)),
+    WS_faltante = as.integer(is.na(WS)),
+    WD_sin_faltante = as.integer(is.na(WD_sin)),
+    WD_cos_faltante = as.integer(is.na(WD_cos)),
+    NOX_faltante = as.integer(is.na(NOX))
+  ) |>
+  left_join(
+    medianas_clima,
+    by = c(
+      "Estacion",
+      "Mes_origen",
+      "Hora_origen"
+    )
+  ) |>
+  mutate(
+    SR = coalesce(SR, SR_med),
+    TEMP = coalesce(TEMP, TEMP_med),
+    RH = coalesce(RH, RH_med),
+    WS = coalesce(WS, WS_med),
+    WD_sin = coalesce(WD_sin, WD_sin_med),
+    WD_cos = coalesce(WD_cos, WD_cos_med),
+    NOX = coalesce(NOX, NOX_med)
+  ) |>
+  select(
+    -Año_origen,
+    -Mes_origen,
+    -Hora_origen,
+    -ends_with("_med")
+  )
+
+base_ann_imputada <- base_ann |>
+  select(
+    -all_of(variables_imputar)
+  ) |>
+  left_join(
+    origenes_ann_imputados,
+    by = c(
+      "Estacion",
+      "fecha_hora"
+    )
+  ) |>
+  arrange(
+    Estacion,
+    fecha_hora,
+    Horizonte_h
+  )
+
+base_ann_imputada
+
+```
+```{r}
+
+base_ann_modelo <- base_ann_imputada |>
+  filter(
+    !is.na(O3_objetivo),
+    !is.na(O3_t),
+    !is.na(O3_lag_1),
+    !is.na(O3_lag_2),
+    !is.na(O3_lag_3),
+    !is.na(O3_lag_24)
+  )
+
+train_ann <- base_ann_modelo |>
+  filter(Periodo == "Entrenamiento")
+
+validacion_ann <- base_ann_modelo |>
+  filter(Periodo == "Validacion")
+
+prueba_ann <- base_ann_modelo |>
+  filter(Periodo == "Prueba")
+
+crear_dummies_estacion <- function(datos) {
+
+  dummies <- model.matrix(
+    ~ Estacion - 1,
+    data = datos
+  ) |>
+    as.data.frame()
+
+  bind_cols(
+    datos |> select(-Estacion),
+    dummies
+  )
+}
+
+train_ann <- crear_dummies_estacion(train_ann)
+validacion_ann <- crear_dummies_estacion(validacion_ann)
+prueba_ann <- crear_dummies_estacion(prueba_ann)
+
+variables_normalizar <- c(
+  "SR", "TEMP", "RH", "WS", "NOX",
+  "O3_t", "O3_lag_1", "O3_lag_2",
+  "O3_lag_3", "O3_lag_24",
+  "O3_objetivo"
+)
+
+parametros_normalizacion <- train_ann |>
+  summarise(
+    across(
+      all_of(variables_normalizar),
+      list(
+        min = ~ min(.x, na.rm = TRUE),
+        max = ~ max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  )
+
+train_ann_norm <- train_ann
+validacion_ann_norm <- validacion_ann
+prueba_ann_norm <- prueba_ann
+
+for (variable in variables_normalizar) {
+
+  minimo <- parametros_normalizacion[[paste0(variable, "_min")]]
+  maximo <- parametros_normalizacion[[paste0(variable, "_max")]]
+
+  train_ann_norm[[variable]] <-
+    (train_ann[[variable]] - minimo) /
+    (maximo - minimo)
+
+  validacion_ann_norm[[variable]] <-
+    (validacion_ann[[variable]] - minimo) /
+    (maximo - minimo)
+
+  prueba_ann_norm[[variable]] <-
+    (prueba_ann[[variable]] - minimo) /
+    (maximo - minimo)
+}
+
+train_ann_norm <- train_ann_norm |>
+  mutate(Horizonte_h = (Horizonte_h - 1) / 23)
+
+validacion_ann_norm <- validacion_ann_norm |>
+  mutate(Horizonte_h = (Horizonte_h - 1) / 23)
+
+prueba_ann_norm <- prueba_ann_norm |>
+  mutate(Horizonte_h = (Horizonte_h - 1) / 23)
+
+range(train_ann_norm$Horizonte_h)
+```
+
+```{r}
+
+library(keras3)
+
+variables_estacion <- grep(
+  "^Estacion",
+  names(train_ann_norm),
+  value = TRUE
+)
+
+predictores_ann <- c(
+  "SR", "TEMP", "RH", "WS",
+  "WD_sin", "WD_cos", "NOX",
+  "Hora_sin_obj", "Hora_cos_obj",
+  "Mes_sin_obj", "Mes_cos_obj",
+  "O3_t", "O3_lag_1", "O3_lag_2",
+  "O3_lag_3", "O3_lag_24",
+  "Horizonte_h",
+  "SR_faltante", "TEMP_faltante",
+  "RH_faltante", "WS_faltante",
+  "WD_sin_faltante", "WD_cos_faltante",
+  "NOX_faltante",
+  variables_estacion
+)
+
+x_train <- as.matrix(
+  train_ann_norm[, predictores_ann]
+)
+
+y_train <- train_ann_norm$O3_objetivo
+
+x_val <- as.matrix(
+  validacion_ann_norm[, predictores_ann]
+)
+
+y_val <- validacion_ann_norm$O3_objetivo
+
+# PESOS PARA DAR MÁS IMPORTANCIA A O3 ALTO
+o3_train_real <- train_ann$O3_objetivo
+
+q75 <- quantile(
+  o3_train_real,
+  0.75,
+  na.rm = TRUE
+)
+
+q90 <- quantile(
+  o3_train_real,
+  0.90,
+  na.rm = TRUE
+)
+
+pesos_train <- case_when(
+  o3_train_real >= q90 ~ 4,
+  o3_train_real >= q75 ~ 1.5,
+  TRUE ~ 1
+)
+
+o3_min <- parametros_normalizacion$O3_objetivo_min
+o3_max <- parametros_normalizacion$O3_objetivo_max
+
+desnormalizar_o3 <- function(x) {
+  x * (o3_max - o3_min) + o3_min
+}
+
+crear_ann <- function(neuronas) {
+
+  modelo <- keras_model_sequential(
+    input_shape = c(ncol(x_train))
+  ) |>
+    layer_dense(
+      units = neuronas,
+      activation = "tanh"
+    ) |>
+    layer_dense(
+      units = 1,
+      activation = "linear"
+    )
+
+  modelo |>
+    compile(
+      optimizer = optimizer_adam(
+        learning_rate = 0.001
+      ),
+      loss = "mse"
+    )
+
+  modelo
+}
+
+resultados_ann <- tibble()
+modelos_ann <- list()
+
+for (n in 6:12) {
+
+  cat(
+    "\nEntrenando ANN con",
+    n,
+    "neuronas...\n"
+  )
+
+  set.seed(123)
+
+  modelo <- crear_ann(n)
+
+  historial <- modelo |>
+    fit(
+      x = x_train,
+      y = y_train,
+      sample_weight = pesos_train,
+      validation_data = list(
+        x_val,
+        y_val
+      ),
+      epochs = 50,
+      batch_size = 4096,
+      callbacks = list(
+        callback_early_stopping(
+          monitor = "val_loss",
+          patience = 5,
+          restore_best_weights = TRUE
+        )
+      ),
+      verbose = 0
+    )
+
+  pred_val_norm <- modelo |>
+    predict(
+      x_val,
+      verbose = 0
+    ) |>
+    as.numeric()
+
+  pred_val <- desnormalizar_o3(
+    pred_val_norm
+  )
+
+  real_val <- desnormalizar_o3(
+    y_val
+  )
+
+  RMSE <- sqrt(
+    mean(
+      (real_val - pred_val)^2
+    )
+  )
+
+  MAE <- mean(
+    abs(
+      real_val - pred_val
+    )
+  )
+
+  resultados_ann <- bind_rows(
+    resultados_ann,
+    tibble(
+      Neuronas = n,
+      RMSE = RMSE,
+      MAE = MAE
+    )
+  )
+
+  modelos_ann[[as.character(n)]] <- modelo
+}
+
+resultados_ann
+
+mejor_ann <- resultados_ann |>
+  arrange(RMSE) |>
+  slice(1)
+
+mejor_ann
+```
+```{r}
+
+ggplot(
+  resultados_ann,
+  aes(
+    x = Neuronas,
+    y = RMSE
+  )
+) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_x_continuous(
+    breaks = 6:12
+  ) +
+  labs(
+    title = "RMSE de validación según número de neuronas",
+    x = "Neuronas en la capa oculta",
+    y = "RMSE en 2024"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+
+o3_min
+o3_max
+
+range(y_val, na.rm = TRUE)
+range(pred_val_norm, na.rm = TRUE)
+
+range(real_val, na.rm = TRUE)
+range(pred_val, na.rm = TRUE)
+
+summary(real_val)
+summary(pred_val)
+
+```
+```{r}
+
+modelo_final_ann <- modelos_ann[["8"]]
+
+x_test <- as.matrix(
+  prueba_ann_norm[, predictores_ann]
+)
+
+y_test <- prueba_ann_norm$O3_objetivo
+
+pred_test_norm <- modelo_final_ann |>
+  predict(
+    x_test,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+real_test <- desnormalizar_o3(
+  y_test
+)
+
+pred_test <- desnormalizar_o3(
+  pred_test_norm
+)
+
+RMSE_test <- sqrt(
+  mean(
+    (real_test - pred_test)^2
+  )
+)
+
+MAE_test <- mean(
+  abs(
+    real_test - pred_test
+  )
+)
+
+resultados_test_ann <- tibble(
+  Modelo = "ANN 10 neuronas",
+  RMSE = RMSE_test,
+  MAE = MAE_test
+)
+
+resultados_test_ann
+
+```
+
+```{r}
+
+mejor_num_neuronas <- mejor_ann$Neuronas[1]
+
+modelo_final_ann <- modelos_ann[[as.character(mejor_num_neuronas)]]
+
+x_test <- as.matrix(
+  prueba_ann_norm[, predictores_ann]
+)
+
+y_test_norm <- prueba_ann_norm$O3_objetivo
+
+pred_test_norm <- modelo_final_ann |>
+  predict(
+    x_test,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+real_test <- desnormalizar_o3(
+  y_test_norm
+)
+
+pred_test <- desnormalizar_o3(
+  pred_test_norm
+)
+
+RMSE_test <- sqrt(
+  mean(
+    (real_test - pred_test)^2
+  )
+)
+
+MAE_test <- mean(
+  abs(
+    real_test - pred_test
+  )
+)
+
+resultados_test_ann <- tibble(
+  Modelo = paste0(
+    "ANN ",
+    mejor_num_neuronas,
+    " neuronas"
+  ),
+  RMSE = RMSE_test,
+  MAE = MAE_test
+)
+
+resultados_test_ann
+
+resultados_pred_ann <- prueba_ann_norm |>
+  mutate(
+    Horizonte_original = round(
+      Horizonte_h * 23 + 1
+    ),
+    O3_real = real_test,
+    O3_predicho = pred_test,
+    Error = O3_real - O3_predicho
+  )
+
+metricas_horizonte_ann <- resultados_pred_ann |>
+  group_by(Horizonte_original) |>
+  summarise(
+    MAE = mean(abs(Error)),
+    RMSE = sqrt(mean(Error^2)),
+    .groups = "drop"
+  )
+
+metricas_horizonte_ann
+
+sqrt(
+  weighted.mean(
+    metricas_horizonte_ann$RMSE^2,
+    table(resultados_pred_ann$Horizonte_original)
+  )
+)
+
+RMSE_test
+
+metricas_horizonte_ann |>
+  ggplot(
+    aes(
+      x = Horizonte_original,
+      y = RMSE
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:24) +
+  labs(
+    title = "RMSE de la ANN según horizonte de predicción",
+    x = "Horizonte de predicción (horas)",
+    y = "RMSE"
+  ) +
+  theme_minimal()
+
+metricas_horizonte_ann |>
+  ggplot(
+    aes(
+      x = Horizonte_original,
+      y = MAE
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:24
+  ) +
+  labs(
+    title = "MAE de la ANN según horizonte de predicción",
+    x = "Horizonte de predicción (horas)",
+    y = "MAE"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+
+pred_train_norm <- modelo_final_ann |>
+  predict(
+    x_train,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+real_train <- desnormalizar_o3(y_train)
+
+pred_train <- desnormalizar_o3(
+  pred_train_norm
+)
+
+metricas_train_test <- tibble(
+  Conjunto = c(
+    "Entrenamiento",
+    "Prueba"
+  ),
+  RMSE = c(
+    sqrt(mean((real_train - pred_train)^2)),
+    sqrt(mean((real_test - pred_test)^2))
+  ),
+  MAE = c(
+    mean(abs(real_train - pred_train)),
+    mean(abs(real_test - pred_test))
+  )
+)
+
+metricas_train_test
+
+```
+
+```{r}
+comparacion_train <- tibble(
+  Real = real_train,
+  Predicho = pred_train,
+  Conjunto = "Entrenamiento"
+)
+
+comparacion_test <- tibble(
+  Real = real_test,
+  Predicho = pred_test,
+  Conjunto = "Prueba"
+)
+
+comparacion_train <- comparacion_train |>
+  slice_sample(
+    n = min(3000, nrow(comparacion_train))
+  )
+
+comparacion_test <- comparacion_test |>
+  slice_sample(
+    n = min(3000, nrow(comparacion_test))
+  )
+
+comparacion <- bind_rows(
+  comparacion_train,
+  comparacion_test
+)
+
+ggplot(
+  comparacion,
+  aes(
+    x = Real,
+    y = Predicho
+  )
+) +
+  geom_point(alpha = 0.25) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed"
+  ) +
+  facet_wrap(~ Conjunto) +
+  labs(
+    title = "O3 real vs O3 predicho",
+    x = "O3 real",
+    y = "O3 predicho"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+
+umbral_alto <- quantile(
+  real_test,
+  0.90,
+  na.rm = TRUE
+)
+
+evaluacion_altos <- tibble(
+  Real = real_test,
+  Predicho = pred_test
+) |>
+  mutate(
+    Grupo = if_else(
+      Real >= umbral_alto,
+      "O3 alto",
+      "O3 normal"
+    ),
+    Error = Real - Predicho
+  ) |>
+  group_by(Grupo) |>
+  summarise(
+    Observaciones = n(),
+    MAE = mean(abs(Error)),
+    RMSE = sqrt(mean(Error^2)),
+    Sesgo = mean(Error),
+    .groups = "drop"
+  )
+
+evaluacion_altos
+
+```
