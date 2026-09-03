@@ -416,9 +416,7 @@ indice_mejor_h1 <- which.min(
 )
 
 mejor_iteracion_h1 <- registro_entrenamiento_h1$iter[indice_mejor_h1]
-mejor_rmse_validacion_h1 <- registro_entrenamiento_h1[
-  [columna_rmse_validacion]
-][indice_mejor_h1]
+mejor_rmse_validacion_h1 <- registro_entrenamiento_h1[[columna_rmse_validacion]][indice_mejor_h1]
 
 resumen_entrenamiento_h1 <- tibble(
   Observaciones_entrenamiento = nrow(entrenamiento_h1),
