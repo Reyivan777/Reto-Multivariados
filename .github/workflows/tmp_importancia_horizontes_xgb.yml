@@ -1,0 +1,198 @@
+name: Agregar importancia XGBoost por horizonte
+
+on:
+  push:
+    branches: [trunk]
+    paths:
+      - ".github/workflows/tmp_importancia_horizontes_xgb.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  importancia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Comparar importancia entre horizontes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("quarto/xgboost.qmd")
+          texto = path.read_text(encoding="utf-8")
+
+          old_return = r'''  tibble(
+    Horizonte_h = h,
+    Observaciones = length(indices_comunes_h),
+    Mejor_iteracion = registro_h$iter[indice_mejor_h],
+    MAE_Persistencia = metricas_persistencia_h$MAE,
+    MAE_XGBoost = metricas_xgb_h$MAE,
+    RMSE_Persistencia = metricas_persistencia_h$RMSE,
+    RMSE_XGBoost = metricas_xgb_h$RMSE,
+    Mejora_MAE_pct = 100 *
+      (MAE_Persistencia - MAE_XGBoost) / MAE_Persistencia,
+    Mejora_RMSE_pct = 100 *
+      (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
+  )
+}
+```'''
+
+          new_return = r'''  resumen_h <- tibble(
+    Horizonte_h = h,
+    Observaciones = length(indices_comunes_h),
+    Mejor_iteracion = registro_h$iter[indice_mejor_h],
+    MAE_Persistencia = metricas_persistencia_h$MAE,
+    MAE_XGBoost = metricas_xgb_h$MAE,
+    RMSE_Persistencia = metricas_persistencia_h$RMSE,
+    RMSE_XGBoost = metricas_xgb_h$RMSE,
+    Mejora_MAE_pct = 100 *
+      (MAE_Persistencia - MAE_XGBoost) / MAE_Persistencia,
+    Mejora_RMSE_pct = 100 *
+      (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
+  )
+
+  importancia_h <- xgb.importance(
+    model = modelo_h
+  ) |>
+    as_tibble() |>
+    mutate(Horizonte_h = h, .before = 1)
+
+  list(
+    resumen = resumen_h,
+    importancia = importancia_h
+  )
+}
+```'''
+
+          if old_return not in texto:
+              raise RuntimeError("No se encontró el retorno de entrenar_y_evaluar_horizonte")
+          texto = texto.replace(old_return, new_return, 1)
+
+          old_resultados = r'''resultados_horizontes <- bind_rows(
+  resultado_h1,
+  map_dfr(c(6, 12, 24), entrenar_y_evaluar_horizonte)
+) |>
+  arrange(Horizonte_h)'''
+
+          new_resultados = r'''evaluaciones_horizontes <- map(
+  c(6, 12, 24),
+  entrenar_y_evaluar_horizonte
+)
+
+resultados_horizontes <- bind_rows(
+  resultado_h1,
+  map_dfr(evaluaciones_horizontes, ~ .x$resumen)
+) |>
+  arrange(Horizonte_h)'''
+
+          if old_resultados not in texto:
+              raise RuntimeError("No se encontró la construcción de resultados_horizontes")
+          texto = texto.replace(old_resultados, new_resultados, 1)
+
+          bloque = r'''
+## Importancia de variables según el horizonte
+
+La importancia observada a una hora está dominada por `O3_t`, pero esa estructura puede cambiar cuando aumenta la anticipación. Para comprobarlo se reutilizan los modelos ya entrenados de 1, 6, 12 y 24 horas; no se vuelven a ajustar modelos adicionales.
+
+La comparación utiliza nuevamente **Gain** como medida principal. El objetivo es observar qué predictores ayudan más a reducir el error en cada horizonte y comprobar si la historia reciente de O3 pierde peso cuando el objetivo está más lejos, mientras aumentan la relevancia de la estructura horaria, el ciclo diario o las variables meteorológicas.
+
+```{r}
+#| label: importancia-por-horizonte
+importancia_horizontes <- bind_rows(
+  importancia_h1 |>
+    mutate(Horizonte_h = 1, .before = 1),
+  map_dfr(
+    evaluaciones_horizontes,
+    ~ .x$importancia
+  )
+)
+
+top_importancia_horizontes <- importancia_horizontes |>
+  group_by(Horizonte_h) |>
+  slice_max(
+    order_by = Gain,
+    n = 8,
+    with_ties = FALSE
+  ) |>
+  ungroup() |>
+  arrange(Horizonte_h, desc(Gain))
+
+top_importancia_horizontes |>
+  transmute(
+    Horizonte_h,
+    Feature,
+    Gain = round(Gain, 4)
+  ) |>
+  knitr::kable(
+    caption = "Variables con mayor Gain en horizontes de 1, 6, 12 y 24 horas"
+  )
+```
+
+La tabla muestra las ocho variables con mayor `Gain` dentro de cada horizonte. Como el `Gain` se calcula por separado para cada modelo, los valores permiten comparar cómo se redistribuye la importancia predictiva al aumentar la distancia de pronóstico.
+
+```{r}
+#| label: grafica-importancia-por-horizonte
+#| fig-cap: "Variables con mayor Gain según el horizonte de predicción"
+#| fig-width: 9
+#| fig-height: 7
+top_importancia_horizontes |>
+  mutate(
+    Feature_h = paste(Feature, Horizonte_h, sep = "___"),
+    Feature_h = forcats::fct_reorder(Feature_h, Gain)
+  ) |>
+  ggplot(aes(x = Feature_h, y = Gain)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(
+    ~ Horizonte_h,
+    scales = "free_y",
+    ncol = 2,
+    labeller = labeller(
+      Horizonte_h = function(x) paste0("h = ", x, " horas")
+    )
+  ) +
+  scale_x_discrete(
+    labels = function(x) sub("___.*$", "", x)
+  ) +
+  labs(
+    x = NULL,
+    y = "Gain"
+  ) +
+  theme_minimal()
+```
+
+Este diagnóstico permitirá explicar la forma de la curva de error. En particular, se revisará si `O3_t` domina a una hora, si pierde importancia alrededor de 6-12 horas y si las variables asociadas al ciclo diario recuperan peso al llegar a 24 horas.
+'''
+
+          marcador = "\n# Evaluación\n"
+          if "#| label: importancia-por-horizonte" not in texto:
+              if marcador not in texto:
+                  raise RuntimeError("No se encontró la sección Evaluación")
+              texto = texto.replace(
+                  marcador,
+                  "\n" + bloque.strip() + "\n\n# Evaluación\n",
+                  1
+              )
+
+          texto = texto.replace(
+              "La configuración inicial ya se evalúa sobre **2024** en horizontes de 1, 6, 12 y 24 horas. Estos resultados permitirán decidir el siguiente paso de ajuste sin utilizar todavía el conjunto de prueba final.",
+              "La configuración inicial ya se evalúa sobre **2024** en horizontes de 1, 6, 12 y 24 horas. Además, se compara la importancia de variables entre estos horizontes para entender cómo cambia la información utilizada por el modelo antes de ajustar hiperparámetros."
+          )
+
+          path.write_text(texto, encoding="utf-8")
+          Path(".github/workflows/tmp_importancia_horizontes_xgb.yml").unlink()
+          PY
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add quarto/xgboost.qmd .github/workflows/tmp_importancia_horizontes_xgb.yml
+          git commit -m "Compara importancia de variables entre horizontes"
+          git push
