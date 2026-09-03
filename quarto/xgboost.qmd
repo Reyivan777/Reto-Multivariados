@@ -1,0 +1,158 @@
+---
+title: "Modelado XGBoost para O3"
+author: "Equipo 4"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Objetivo de este archivo
+
+Este archivo se utilizará únicamente para construir, ajustar y evaluar el modelo XGBoost. La limpieza, homologación y justificación de las decisiones metodológicas permanecen documentadas en `reporte.qmd`.
+
+Para evitar repetir el procesamiento de los seis archivos de Excel, aquí se parte de `data/datos_etapa2_limpios.csv`, que contiene la base previamente homologada y depurada. A partir de ella se cargan únicamente las cuatro estaciones y las variables necesarias para el modelado de O3.
+
+La definición del problema se mantiene igual que en el reporte principal:
+
+- estaciones: `NTE`, `NTE2`, `NO` y `NE`;
+- periodo útil: 2021-2025;
+- entrenamiento: 2021-2023;
+- validación: 2024;
+- prueba final: 2025;
+- horas objetivo: 10:00-20:00;
+- horizonte máximo: 24 horas.
+
+# Carga de la base limpia
+
+```{r}
+#| label: configuracion
+library(tidyverse)
+library(here)
+library(lubridate)
+
+options(scipen = 999)
+
+estaciones_interes <- c("NTE", "NTE2", "NO", "NE")
+```
+
+```{r}
+#| label: carga-base-limpia
+ruta_base <- here("data", "datos_etapa2_limpios.csv")
+
+if (!file.exists(ruta_base)) {
+  stop(
+    "No se encontró data/datos_etapa2_limpios.csv. ",
+    "Genera o actualiza primero la base limpia del proyecto."
+  )
+}
+
+datos_fuente <- read_csv(
+  ruta_base,
+  show_col_types = FALSE
+)
+```
+
+La fecha y hora puede provenir de los archivos originales como texto o como número serial de Excel. Se utiliza la misma lógica temporal del reporte principal para obtener una única variable `fecha_hora` en formato `POSIXct`.
+
+```{r}
+#| label: preparacion-minima-modelado
+convertir_fecha_hora <- function(x) {
+  x <- str_squish(as.character(x))
+  x_num <- suppressWarnings(as.numeric(x))
+
+  fecha_excel <- as.POSIXct(
+    x_num * 86400,
+    origin = "1899-12-30",
+    tz = "UTC"
+  )
+
+  fecha_texto <- suppressWarnings(
+    parse_date_time(
+      x,
+      orders = c(
+        "Ymd HMS", "Ymd HM",
+        "dmY HMS", "dmY HM",
+        "mdY HMS", "mdY HM"
+      ),
+      tz = "UTC"
+    )
+  )
+
+  coalesce(fecha_excel, fecha_texto)
+}
+
+nombre_fecha <- case_when(
+  "fecha y hora" %in% names(datos_fuente) ~ "fecha y hora",
+  "date" %in% names(datos_fuente) ~ "date",
+  "fecha_hora" %in% names(datos_fuente) ~ "fecha_hora",
+  TRUE ~ NA_character_
+)
+
+if (is.na(nombre_fecha)) {
+  stop("No se encontró una columna de fecha y hora en la base limpia.")
+}
+
+datos_modelado <- datos_fuente |>
+  mutate(
+    fecha_hora = convertir_fecha_hora(.data[[nombre_fecha]])
+  ) |>
+  filter(
+    Año >= 2021,
+    Estacion %in% estaciones_interes,
+    !is.na(fecha_hora)
+  ) |>
+  transmute(
+    Año = as.integer(Año),
+    Estacion = factor(Estacion, levels = estaciones_interes),
+    fecha_hora,
+    O3,
+    SR,
+    TEMP,
+    RH,
+    WS,
+    WD,
+    NOX,
+    WD_sin = sin(2 * pi * WD / 360),
+    WD_cos = cos(2 * pi * WD / 360)
+  ) |>
+  arrange(Estacion, fecha_hora)
+```
+
+```{r}
+#| label: verificacion-base-xgboost
+resumen_base_xgboost <- tibble(
+  Registros = nrow(datos_modelado),
+  Desde = min(datos_modelado$fecha_hora, na.rm = TRUE),
+  Hasta = max(datos_modelado$fecha_hora, na.rm = TRUE),
+  Estaciones = n_distinct(datos_modelado$Estacion)
+)
+
+knitr::kable(
+  resumen_base_xgboost,
+  caption = "Base cargada para el modelado XGBoost"
+)
+```
+
+`datos_modelado` será el punto de partida de los siguientes bloques. Este archivo no volverá a ejecutar el análisis exploratorio ni las tablas de limpieza del reporte principal.
+
+# Construcción de la base temporal
+
+Pendiente de construir la cuadrícula horaria, los rezagos seleccionados y el objetivo para cada horizonte de 1 a 24 horas.
+
+# Modelo de persistencia
+
+Pendiente de calcular la referencia mínima de desempeño sobre las mismas observaciones utilizadas para evaluar XGBoost.
+
+# XGBoost
+
+Pendiente de implementar el primer modelo y ajustar sus hiperparámetros utilizando únicamente 2021-2023 para entrenamiento y 2024 para validación.
+
+# Evaluación
+
+Pendiente de comparar MAE y RMSE por horizonte y estación. El conjunto de 2025 se reservará para la evaluación final una vez cerradas las decisiones de modelado.
