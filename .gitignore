@@ -9,3 +9,4 @@ output/
 
 **/*.quarto_ipynb
 **/*_cache/
+data/base_modelado_o3.rds

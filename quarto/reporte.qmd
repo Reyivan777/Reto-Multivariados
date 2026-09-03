@@ -2392,6 +2392,41 @@ La cobertura acumulada confirma esta conclusión. Con `O3_t` y sus rezagos todav
 
 Por lo tanto, eliminar automáticamente toda la meteorología para conservar más registros no sería conveniente, ya que `RH` y `TEMP` se encuentran entre las variables con mayor relación predictiva con O3. El problema debe tratarse de forma específica en estas variables. El O3 objetivo continuará sin imputarse y cualquier tratamiento de faltantes en predictores deberá estimarse únicamente con el periodo de entrenamiento para evitar utilizar información de validación o prueba durante la preparación del modelo.
 
+### Exportación de la base para los modelos
+
+La preparación de datos termina con una única base de origen para el modelado. Para evitar repetir la homologación, limpieza, construcción de la cuadrícula horaria y creación de rezagos en cada archivo de modelo, este objeto se guarda en formato RDS. El formato conserva directamente los tipos de las columnas, los factores, las fechas `POSIXct` y los valores `NA`.
+
+A partir de este punto, los archivos dedicados a cada modelo cargan esta base y se concentran únicamente en construir el objetivo para cada horizonte, ajustar el modelo y evaluarlo. De esta manera, `reporte.qmd` queda como la única fuente de verdad para la preparación de los datos.
+
+```{r}
+#| label: exportar-base-modelado
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+saveRDS(
+  base_origen_modelado,
+  ruta_base_modelado
+)
+
+resumen_exportacion_modelado <- tibble(
+  Archivo = "data/base_modelado_o3.rds",
+  Registros = nrow(base_origen_modelado),
+  Estaciones = n_distinct(base_origen_modelado$Estacion),
+  Desde = min(base_origen_modelado$fecha_hora),
+  Hasta = max(base_origen_modelado$fecha_hora),
+  O3_t_disponible_pct = round(
+    mean(!is.na(base_origen_modelado$O3_t)) * 100,
+    1
+  )
+)
+
+knitr::kable(
+  resumen_exportacion_modelado,
+  caption = "Base exportada para los archivos de modelado"
+)
+```
+
+El archivo `data/base_modelado_o3.rds` es un producto derivado y reproducible. Se genera al renderizar este reporte después de cualquier cambio en la preparación de datos. Por ello no es necesario reconstruir la limpieza ni los rezagos dentro de cada archivo de modelado.
+
 # Modelado
 
 ## Modelo base
