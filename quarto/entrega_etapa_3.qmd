@@ -1,0 +1,505 @@
+---
+title: "Etapa 3. Modelado y evaluación"
+author: "Equipo 4"
+date: today
+format:
+  pdf:
+    toc: false
+    number-sections: true
+    fontsize: 9pt
+    geometry:
+      - top=1.15cm
+      - bottom=1.15cm
+      - left=1.30cm
+      - right=1.30cm
+    fig-pos: H
+    tbl-pos: H
+    keep-tex: false
+execute:
+  echo: false
+  warning: false
+  message: false
+header-includes:
+  - |
+    \usepackage{float}
+    \usepackage{booktabs}
+    \usepackage{caption}
+    \captionsetup{font=small,skip=2pt}
+    \setlength{\textfloatsep}{5pt}
+    \setlength{\floatsep}{4pt}
+    \setlength{\intextsep}{4pt}
+    \setlength{\abovedisplayskip}{4pt}
+    \setlength{\belowdisplayskip}{4pt}
+    \renewcommand{\arraystretch}{0.92}
+---
+
+\begin{center}
+\small
+\textbf{Integrantes del equipo}\\
+Rey Iván de la Fuente Chávez, A01709445\\
+Jannette Cristina Flores Rodríguez, A01255711\\
+Matías Romero Mariné, A01708802\\
+Emilio Alonso Sánchez, A00841853\\
+Dulce Alejandra Sánchez López, A01412307
+\end{center}
+
+```{r}
+#| label: setup-entrega3
+#| include: false
+library(tidyverse)
+library(here)
+library(lubridate)
+library(knitr)
+library(xgboost)
+library(mgcv)
+
+options(scipen = 999, knitr.kable.NA = "-")
+set.seed(123)
+
+ruta_base <- here("data", "base_modelado_o3.rds")
+if (!file.exists(ruta_base)) {
+  stop("No se encontró data/base_modelado_o3.rds. Renderiza primero quarto/reporte.qmd.")
+}
+
+base_origen <- readRDS(ruta_base)
+niveles_estacion <- c("NE", "NO", "NTE", "NTE2")
+
+base_h24 <- base_origen |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_alineado_1d = O3_t,
+    O3_alineado_2d = lag(O3_t, 24),
+    O3_alineado_3d = lag(O3_t, 48),
+    O3_alineado_4d = lag(O3_t, 72),
+    O3_objetivo = lead(O3_t, 24)
+  ) |>
+  ungroup() |>
+  mutate(
+    fecha_objetivo = fecha_hora + hours(24),
+    Año_objetivo = year(fecha_objetivo),
+    Hora_objetivo = hour(fecha_objetivo),
+    Mes_objetivo = month(fecha_objetivo),
+    Hora_sin_obj = sin(2 * pi * Hora_objetivo / 24),
+    Hora_cos_obj = cos(2 * pi * Hora_objetivo / 24),
+    Mes_sin_obj = sin(2 * pi * (Mes_objetivo - 1) / 12),
+    Mes_cos_obj = cos(2 * pi * (Mes_objetivo - 1) / 12),
+    Estacion = factor(Estacion, levels = niveles_estacion)
+  ) |>
+  filter(
+    Año_objetivo %in% 2021:2025,
+    between(Hora_objetivo, 10, 20),
+    !is.na(O3_objetivo)
+  )
+
+calcular_metricas <- function(obs, pred) {
+  tibble(
+    MAE = mean(abs(obs - pred)),
+    RMSE = sqrt(mean((obs - pred)^2))
+  )
+}
+
+perfil_horario <- base_origen |>
+  mutate(Año = year(fecha_hora), Hora = hour(fecha_hora)) |>
+  filter(Año %in% 2021:2024, !is.na(O3_t)) |>
+  group_by(Hora) |>
+  summarise(O3_promedio = mean(O3_t), .groups = "drop")
+
+# -----------------------
+# GAM basado en GAM.qmd
+# -----------------------
+predictores_gam <- c(
+  "O3_t", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "Hora_objetivo", "Mes_objetivo", "Estacion"
+)
+
+formula_gam <- O3_objetivo ~
+  s(O3_t, k = 10) +
+  s(O3_lag_24, k = 10) +
+  s(SR, k = 10) +
+  s(TEMP, k = 15) +
+  s(RH, k = 10) +
+  s(WS, k = 10) +
+  WD_sin + WD_cos +
+  s(Hora_objetivo, k = 8) +
+  s(Mes_objetivo, bs = "cc", k = 10) +
+  Estacion
+
+train_gam <- base_h24 |>
+  filter(Año_objetivo %in% 2021:2023) |>
+  drop_na(all_of(predictores_gam))
+
+val_gam <- base_h24 |>
+  filter(Año_objetivo == 2024) |>
+  drop_na(all_of(predictores_gam))
+
+modelo_gam_gauss <- bam(
+  formula_gam,
+  data = train_gam,
+  method = "fREML",
+  discrete = TRUE
+)
+
+modelo_gam_gamma <- bam(
+  formula_gam,
+  data = train_gam,
+  family = Gamma(link = "log"),
+  method = "fREML",
+  discrete = TRUE
+)
+
+pred_gam_gauss <- predict(modelo_gam_gauss, newdata = val_gam)
+pred_gam_gamma <- predict(modelo_gam_gamma, newdata = val_gam, type = "response")
+
+met_gam_gauss <- calcular_metricas(val_gam$O3_objetivo, pred_gam_gauss)
+met_gam_gamma <- calcular_metricas(val_gam$O3_objetivo, pred_gam_gamma)
+
+tabla_familias_gam <- bind_rows(
+  met_gam_gauss |> mutate(Familia = "Gaussiana", .before = 1),
+  met_gam_gamma |> mutate(Familia = "Gamma (link log)", .before = 1)
+) |>
+  arrange(RMSE)
+
+familia_gam <- tabla_familias_gam$Familia[1]
+modelo_gam_validacion <- if (familia_gam == "Gaussiana") modelo_gam_gauss else modelo_gam_gamma
+pred_gam_validacion <- if (familia_gam == "Gaussiana") pred_gam_gauss else pred_gam_gamma
+
+resumen_gam <- summary(modelo_gam_validacion)
+deviance_gam <- 100 * resumen_gam$dev.expl
+
+conc <- concurvity(modelo_gam_validacion, full = TRUE)
+conc_est <- if ("estimate" %in% rownames(conc)) conc["estimate", ] else conc[nrow(conc), ]
+if (!is.null(names(conc_est))) conc_est <- conc_est[names(conc_est) != "para"]
+max_concurvity <- max(conc_est, na.rm = TRUE)
+
+stab <- as.data.frame(resumen_gam$s.table)
+tabla_smooths <- tibble(
+  Termino = rownames(stab),
+  EDF = stab[, 1],
+  Estadistico = stab[, 3],
+  p_valor = stab[, 4]
+) |>
+  arrange(p_valor) |>
+  slice_head(n = 6)
+
+# -----------------------
+# XGBoost final de xgboost.qmd
+# -----------------------
+predictores_xgb <- c(
+  "O3_alineado_1d", "O3_alineado_2d", "O3_alineado_3d", "O3_alineado_4d",
+  "O3_lag_1", "O3_lag_2", "O3_lag_3",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "Hora_sin_obj", "Hora_cos_obj", "Mes_sin_obj", "Mes_cos_obj"
+)
+
+crear_matriz_xgb <- function(datos) {
+  x_num <- datos |>
+    select(all_of(predictores_xgb)) |>
+    as.matrix()
+  storage.mode(x_num) <- "double"
+  x_est <- model.matrix(~ Estacion - 1, data = datos)
+  cbind(x_num, x_est)
+}
+
+parametros_xgb <- list(
+  objective = "reg:squarederror",
+  eval_metric = "rmse",
+  eta = 0.05,
+  max_depth = 4,
+  min_child_weight = 5,
+  subsample = 0.8,
+  colsample_bytree = 0.8,
+  lambda = 1
+)
+iteraciones_xgb <- 119
+
+train_xgb_val <- base_h24 |> filter(Año_objetivo %in% 2021:2023)
+val_xgb <- base_h24 |> filter(Año_objetivo == 2024)
+
+dtrain_xgb_val <- xgb.DMatrix(
+  crear_matriz_xgb(train_xgb_val),
+  label = train_xgb_val$O3_objetivo,
+  missing = NA
+)
+
+set.seed(123)
+modelo_xgb_validacion <- xgb.train(
+  params = parametros_xgb,
+  data = dtrain_xgb_val,
+  nrounds = iteraciones_xgb,
+  verbose = 0
+)
+
+pred_xgb_val_comun <- predict(
+  modelo_xgb_validacion,
+  xgb.DMatrix(crear_matriz_xgb(val_gam), missing = NA)
+)
+
+met_persist_val <- calcular_metricas(val_gam$O3_objetivo, val_gam$O3_t)
+met_gam_val <- calcular_metricas(val_gam$O3_objetivo, pred_gam_validacion)
+met_xgb_val <- calcular_metricas(val_gam$O3_objetivo, pred_xgb_val_comun)
+
+comparacion_validacion <- bind_rows(
+  met_persist_val |> mutate(Modelo = "Persistencia diaria", .before = 1),
+  met_gam_val |> mutate(Modelo = paste0("GAM ", familia_gam), .before = 1),
+  met_xgb_val |> mutate(Modelo = "XGBoost", .before = 1)
+) |>
+  mutate(Periodo = "Validación 2024", Observaciones = nrow(val_gam), .after = Modelo)
+
+importancia_xgb <- xgb.importance(model = modelo_xgb_validacion) |>
+  as_tibble() |>
+  arrange(desc(Gain)) |>
+  slice_head(n = 8)
+
+# -----------------------
+# Prueba final 2025
+# -----------------------
+train_xgb_final <- base_h24 |> filter(Año_objetivo %in% 2021:2024)
+test_xgb <- base_h24 |> filter(Año_objetivo == 2025)
+
+dtrain_xgb_final <- xgb.DMatrix(
+  crear_matriz_xgb(train_xgb_final),
+  label = train_xgb_final$O3_objetivo,
+  missing = NA
+)
+set.seed(123)
+modelo_xgb_final <- xgb.train(
+  params = parametros_xgb,
+  data = dtrain_xgb_final,
+  nrounds = iteraciones_xgb,
+  verbose = 0
+)
+
+pred_xgb_2025 <- predict(
+  modelo_xgb_final,
+  xgb.DMatrix(crear_matriz_xgb(test_xgb), missing = NA)
+)
+
+test_xgb_oficial <- test_xgb |>
+  mutate(Pred_XGBoost = pred_xgb_2025) |>
+  filter(!is.na(O3_t))
+
+met_persist_xgb_2025 <- calcular_metricas(test_xgb_oficial$O3_objetivo, test_xgb_oficial$O3_t)
+met_xgb_2025 <- calcular_metricas(test_xgb_oficial$O3_objetivo, test_xgb_oficial$Pred_XGBoost)
+mejora_xgb_mae <- 100 * (met_persist_xgb_2025$MAE - met_xgb_2025$MAE) / met_persist_xgb_2025$MAE
+mejora_xgb_rmse <- 100 * (met_persist_xgb_2025$RMSE - met_xgb_2025$RMSE) / met_persist_xgb_2025$RMSE
+
+metricas_xgb_estacion <- test_xgb_oficial |>
+  group_by(Estacion) |>
+  summarise(
+    RMSE_Persistencia = sqrt(mean((O3_objetivo - O3_t)^2)),
+    RMSE_XGBoost = sqrt(mean((O3_objetivo - Pred_XGBoost)^2)),
+    .groups = "drop"
+  ) |>
+  mutate(Mejora_RMSE_pct = 100 * (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia)
+
+# GAM definitivo usando la familia seleccionada solo con 2024
+train_gam_final <- base_h24 |>
+  filter(Año_objetivo %in% 2021:2024) |>
+  drop_na(all_of(predictores_gam))
+
+test_gam <- base_h24 |>
+  filter(Año_objetivo == 2025) |>
+  drop_na(all_of(predictores_gam))
+
+modelo_gam_final <- if (familia_gam == "Gaussiana") {
+  bam(formula_gam, data = train_gam_final, method = "fREML", discrete = TRUE)
+} else {
+  bam(
+    formula_gam,
+    data = train_gam_final,
+    family = Gamma(link = "log"),
+    method = "fREML",
+    discrete = TRUE
+  )
+}
+
+pred_gam_2025 <- predict(
+  modelo_gam_final,
+  newdata = test_gam,
+  type = if (familia_gam == "Gaussiana") "link" else "response"
+)
+
+pred_xgb_2025_comun <- predict(
+  modelo_xgb_final,
+  xgb.DMatrix(crear_matriz_xgb(test_gam), missing = NA)
+)
+
+met_persist_test_comun <- calcular_metricas(test_gam$O3_objetivo, test_gam$O3_t)
+met_gam_test_comun <- calcular_metricas(test_gam$O3_objetivo, pred_gam_2025)
+met_xgb_test_comun <- calcular_metricas(test_gam$O3_objetivo, pred_xgb_2025_comun)
+
+comparacion_prueba <- bind_rows(
+  met_persist_test_comun |> mutate(Modelo = "Persistencia diaria", .before = 1),
+  met_gam_test_comun |> mutate(Modelo = paste0("GAM ", familia_gam), .before = 1),
+  met_xgb_test_comun |> mutate(Modelo = "XGBoost", .before = 1)
+) |>
+  mutate(Periodo = "Prueba 2025", Observaciones = nrow(test_gam), .after = Modelo)
+
+comparacion_modelos <- bind_rows(comparacion_validacion, comparacion_prueba)
+```
+
+# 1. Objetivo actualizado
+
+El objetivo inicial del reto era amplio: estudiar relaciones entre contaminantes y meteorología y explorar alternativas predictivas. Conforme avanzó la preparación de datos, el objetivo se hizo más específico. El análisis mostró que **O3** tiene una señal meteorológica y temporal clara, mientras que 2020 presenta entre aproximadamente 94 % y 100 % de faltantes de O3 en las estaciones seleccionadas, por lo que ese año no es adecuado para modelado supervisado.
+
+El objetivo actual es **predecir la concentración horaria de O3 entre las 10:00 y las 20:00 con 24 horas de anticipación en las estaciones NTE, NTE2, NO y NE de SIMA**, utilizando historia reciente de O3, meteorología y estructura temporal. El horizonte se fijó en 24 horas porque el análisis previo mostró una periodicidad diaria marcada: el O3 observado hoy a una hora determinada es una referencia natural para el O3 de mañana a la misma hora.
+
+# 2. Datos y preparación
+
+La base de modelado utiliza información de **2021 a junio de 2025**. La limpieza previa homologó nombres de variables, convirtió códigos inválidos como `-9999` a `NA`, validó rangos físicos por año, eliminó duplicados y conservó los valores extremos plausibles. El O3 objetivo no se imputa para evitar introducir información artificial en la variable a predecir.
+
+| Componente | Variables principales | Papel en el modelo |
+|---|---|---|
+| Historial de O3 | O3 actual y rezagos diarios/recientes | Capturar persistencia y ciclo diario. |
+| Meteorología | SR, TEMP, RH, WS, dirección del viento | Representar condiciones de formación y dispersión. |
+| Contexto | Estación, hora y mes objetivo | Incorporar diferencias espaciales y estacionales. |
+| Objetivo | O3 a 24 h | Concentración horaria futura entre 10:00 y 20:00. |
+
+La separación es estrictamente cronológica: **2021-2023** para entrenamiento, **2024** para validación y selección, y **2025** como prueba final. No se realiza partición aleatoria, porque rompería la dependencia temporal y produciría fuga de información.
+
+```{r}
+#| label: perfil-o3
+#| fig-cap: "Ciclo horario promedio de O3 en 2021-2024."
+#| fig-height: 2.2
+#| fig-width: 6.7
+ggplot(perfil_horario, aes(Hora, O3_promedio)) +
+  geom_line(linewidth = 0.7) +
+  geom_point(size = 1.4) +
+  geom_vline(xintercept = c(10, 20), linetype = 2) +
+  scale_x_continuous(breaks = seq(0, 23, 2)) +
+  labs(x = "Hora", y = "O3 promedio") +
+  theme_minimal(base_size = 8)
+```
+
+La curva horaria confirma una estructura diaria fuerte y justifica concentrar el pronóstico en el intervalo 10:00-20:00, donde se observan niveles de O3 más relevantes para el análisis.
+
+# 3. Técnicas estadísticas seleccionadas
+
+La rúbrica recomienda, idealmente, combinar una técnica de dependencia con una de interdependencia. En este proyecto el objetivo final es explícitamente **predictivo**, por lo que se priorizan dos técnicas de dependencia complementarias:
+
+- **GAM (Generalized Additive Model):** modelo estadístico interpretable que permite relaciones no lineales suaves entre O3 y variables meteorológicas sin imponer una forma lineal rígida. Se parte de la especificación desarrollada en `GAM.qmd`.
+- **XGBoost:** ensamble de árboles que captura interacciones y no linealidades complejas, tolera valores faltantes en predictores y permite medir importancia mediante `Gain`. Se utiliza la configuración final definida en `xgboost.qmd`.
+
+La comparación entre ambos permite contrastar **interpretabilidad estadística** frente a **flexibilidad predictiva**, manteniendo el mismo objetivo temporal de 24 horas.
+
+# 4. GAM: adecuación, supuestos y variables
+
+El GAM utiliza O3 actual, O3 de 24 horas antes del origen, radiación solar, temperatura, humedad, velocidad y dirección del viento, hora, mes y estación. Como `GAM.qmd` mostró problemas de heterocedasticidad y cola derecha bajo una familia gaussiana, se compara esa especificación con una familia **Gamma con link log**, apropiada para una respuesta positiva cuya variabilidad aumenta con la media.
+
+```{r}
+#| label: familias-gam
+knitr::kable(
+  tabla_familias_gam |>
+    mutate(across(c(MAE, RMSE), ~ round(.x, 3))),
+  col.names = c("Familia", "MAE", "RMSE"),
+  caption = "Selección de familia del GAM en validación 2024.",
+  booktabs = TRUE
+)
+```
+
+La familia seleccionada por menor RMSE es **`r familia_gam`**. El modelo explica aproximadamente **`r round(deviance_gam, 1)` %** de la devianza en entrenamiento. La concurvidad máxima estimada entre los términos suaves es **`r round(max_concurvity, 2)`**; este diagnóstico se revisa porque una concurvidad alta dificulta separar el efecto de predictores relacionados.
+
+```{r}
+#| label: smooths-gam
+knitr::kable(
+  tabla_smooths |>
+    mutate(
+      EDF = round(EDF, 2),
+      Estadistico = round(Estadistico, 2),
+      p_valor = format.pval(p_valor, digits = 2, eps = 0.001)
+    ),
+  col.names = c("Término", "EDF", "Estadístico", "p"),
+  caption = "Términos suaves más relevantes del GAM.",
+  booktabs = TRUE
+)
+```
+
+Un EDF cercano a 1 representa una relación aproximadamente lineal; valores mayores indican una forma más flexible. Esta tabla permite identificar qué variables requieren una relación no lineal para explicar el O3 futuro.
+
+```{r}
+#| label: diagnostico-gam
+#| fig-cap: "Diagnóstico compacto de residuos del GAM seleccionado."
+#| fig-height: 2.1
+#| fig-width: 6.7
+res_gam <- residuals(modelo_gam_validacion, type = "deviance")
+fit_gam <- fitted(modelo_gam_validacion)
+op <- par(mfrow = c(1, 2), mar = c(3.2, 3.2, 1.3, 0.7), cex = 0.8)
+plot(fit_gam, res_gam, pch = 16, cex = 0.25,
+     xlab = "Ajustados", ylab = "Residuos")
+abline(h = 0, lty = 2)
+qqnorm(res_gam, pch = 16, cex = 0.25, main = "QQ-plot")
+qqline(res_gam, lty = 2)
+par(op)
+```
+
+# 5. XGBoost: validación y papel de las variables
+
+El XGBoost final utiliza la historia de O3 alineada con la misma hora de uno a cuatro días anteriores al objetivo, rezagos recientes, meteorología, estación y variables cíclicas de hora y mes. La configuración quedó congelada con `eta = 0.05`, `max_depth = 4`, `min_child_weight = 5`, `subsample = 0.8`, `colsample_bytree = 0.8`, `lambda = 1` y **119 iteraciones**. XGBoost no exige normalidad u homocedasticidad y maneja `NA` de los predictores de forma nativa; la principal precaución metodológica es conservar la separación temporal y evitar fuga de información.
+
+```{r}
+#| label: importancia-xgb
+#| fig-cap: "Variables con mayor Gain en el XGBoost de 24 horas."
+#| fig-height: 2.6
+#| fig-width: 6.7
+importancia_xgb |>
+  mutate(Feature = forcats::fct_reorder(Feature, Gain)) |>
+  ggplot(aes(Feature, Gain)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = NULL, y = "Gain") +
+  theme_minimal(base_size = 8)
+```
+
+La importancia se interpreta como contribución predictiva, no como causalidad. El historial diario de O3 domina el modelo, consistente con la periodicidad de 24 horas observada previamente; meteorología y contexto temporal funcionan como correcciones cuando el día siguiente difiere del anterior.
+
+# 6. Validación de los modelos
+
+Para comparar GAM y XGBoost de manera justa, la tabla siguiente usa exactamente las mismas observaciones completas requeridas por el GAM. La persistencia diaria, $\widehat{O3}_{t+24}=O3_t$, funciona como referencia mínima.
+
+```{r}
+#| label: tabla-comparacion-modelos
+knitr::kable(
+  comparacion_modelos |>
+    mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+    select(Periodo, Modelo, Observaciones, MAE, RMSE),
+  col.names = c("Periodo", "Modelo", "n", "MAE", "RMSE"),
+  caption = "Comparación de persistencia, GAM y XGBoost sobre muestras comunes.",
+  booktabs = TRUE
+)
+```
+
+```{r}
+#| label: grafica-comparacion-modelos
+#| fig-cap: "RMSE de los modelos en validación 2024 y prueba 2025."
+#| fig-height: 2.3
+#| fig-width: 6.7
+comparacion_modelos |>
+  ggplot(aes(Modelo, RMSE)) +
+  geom_col() +
+  facet_wrap(~ Periodo, scales = "free_x") +
+  labs(x = NULL, y = "RMSE") +
+  theme_minimal(base_size = 8) +
+  theme(axis.text.x = element_text(angle = 15, hjust = 1))
+```
+
+Además de la comparación común, la prueba oficial de XGBoost sobre todas las observaciones de 2025 donde existe la referencia diaria contiene **`r nrow(test_xgb_oficial)` observaciones**. En ese conjunto, la persistencia obtiene MAE **`r round(met_persist_xgb_2025$MAE, 3)`** y RMSE **`r round(met_persist_xgb_2025$RMSE, 3)`**, mientras XGBoost alcanza MAE **`r round(met_xgb_2025$MAE, 3)`** y RMSE **`r round(met_xgb_2025$RMSE, 3)`**. Esto representa reducciones de **`r round(mejora_xgb_mae, 1)` % en MAE** y **`r round(mejora_xgb_rmse, 1)` % en RMSE**.
+
+La mejora de RMSE de XGBoost aparece en las cuatro estaciones, con un rango de **`r round(min(metricas_xgb_estacion$Mejora_RMSE_pct), 1)` % a `r round(max(metricas_xgb_estacion$Mejora_RMSE_pct), 1)` %**. Por tanto, la ganancia global no depende de una sola zona de monitoreo.
+
+# 7. Interpretación y conclusión parcial
+
+Los resultados muestran que el problema puede formularse de forma más concreta que al inicio del reto. La señal más fuerte para anticipar O3 a 24 horas es su **estructura diaria**: el valor observado a la misma hora en días previos contiene una parte importante de la información. Sin embargo, la persistencia diaria no es suficiente; ambos modelos incorporan meteorología y contexto para representar cambios entre días.
+
+El GAM aporta una lectura estadística de relaciones suaves y permite revisar explícitamente distribución de residuos y concurvidad. XGBoost es menos interpretable en forma funcional, pero captura interacciones complejas, tolera faltantes en predictores y en la prueba final mantiene una reducción clara del error respecto a persistencia. La elección final entre modelos debe considerar simultáneamente precisión, cobertura de datos e interpretabilidad; para una aplicación operativa, XGBoost es el candidato principal si conserva la mejor precisión fuera de muestra, mientras GAM sirve como referencia estadística interpretable.
+
+Hasta esta etapa se logró: (1) depurar y estructurar la serie temporal, (2) fijar un objetivo de 24 horas, (3) construir dos modelos no lineales, (4) validar cronológicamente y (5) realizar una prueba final fuera de muestra. Lo siguiente es integrar la retroalimentación de SIMA, diseñar una interfaz sencilla para uso del modelo y documentar cómo se actualizarían las predicciones con datos nuevos. Una pregunta pendiente es cuánto mejoraría el pronóstico al incorporar **pronósticos meteorológicos futuros** en lugar de usar únicamente la meteorología disponible en el origen.
+
+# 8. Código y referencias
+
+El código completo, la preparación de datos y los modelos se encuentran en:
+
+[Repositorio del proyecto en GitHub](https://github.com/Reyivan777/Reto-Multivariados)
+
+Referencias principales: Chen, T. y Guestrin, C. (2016), *XGBoost: A Scalable Tree Boosting System*; Wood, S. N. (2017), *Generalized Additive Models: An Introduction with R*; y los datos horarios proporcionados por SIMA para la Zona Metropolitana de Monterrey.
