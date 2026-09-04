@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Equipo 4">
+<meta name="dcterms.date" content="2026-09-03">
+
+<title>Modelado GAM para O3</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="GAM_files/libs/clipboard/clipboard.min.js"></script>
+<script src="GAM_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="GAM_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="GAM_files/libs/quarto-html/popper.min.js"></script>
+<script src="GAM_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="GAM_files/libs/quarto-html/anchor.min.js"></script>
+<link href="GAM_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="GAM_files/libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="GAM_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="GAM_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="GAM_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#objetivo-de-este-archivo" id="toc-objetivo-de-este-archivo" class="nav-link active" data-scroll-target="#objetivo-de-este-archivo">Objetivo de este archivo</a></li>
+  <li><a href="#carga-de-la-base-de-modelado" id="toc-carga-de-la-base-de-modelado" class="nav-link" data-scroll-target="#carga-de-la-base-de-modelado">Carga de la base de modelado</a></li>
+  <li><a href="#construcción-del-horizonte" id="toc-construcción-del-horizonte" class="nav-link" data-scroll-target="#construcción-del-horizonte">Construcción del horizonte</a></li>
+  <li><a href="#preparación-de-los-predictores-del-gam" id="toc-preparación-de-los-predictores-del-gam" class="nav-link" data-scroll-target="#preparación-de-los-predictores-del-gam">Preparación de los predictores del GAM</a>
+  <ul class="collapse">
+  <li><a href="#selección-de-variables" id="toc-selección-de-variables" class="nav-link" data-scroll-target="#selección-de-variables">Selección de variables</a></li>
+  <li><a href="#preparación-de-la-base-para-h-1" id="toc-preparación-de-la-base-para-h-1" class="nav-link" data-scroll-target="#preparación-de-la-base-para-h-1">Preparación de la base para h = 1</a></li>
+  </ul></li>
+  <li><a href="#modelo-de-persistencia-recalculado-sobre-el-subconjunto-del-gam" id="toc-modelo-de-persistencia-recalculado-sobre-el-subconjunto-del-gam" class="nav-link" data-scroll-target="#modelo-de-persistencia-recalculado-sobre-el-subconjunto-del-gam">Modelo de persistencia (recalculado sobre el subconjunto del GAM)</a></li>
+  <li><a href="#gam" id="toc-gam" class="nav-link" data-scroll-target="#gam">GAM</a>
+  <ul class="collapse">
+  <li><a href="#especificación-del-modelo" id="toc-especificación-del-modelo" class="nav-link" data-scroll-target="#especificación-del-modelo">Especificación del modelo</a></li>
+  <li><a href="#diagnóstico-de-concurvity" id="toc-diagnóstico-de-concurvity" class="nav-link" data-scroll-target="#diagnóstico-de-concurvity">Diagnóstico de concurvity</a></li>
+  <li><a href="#resumen-del-modelo" id="toc-resumen-del-modelo" class="nav-link" data-scroll-target="#resumen-del-modelo">Resumen del modelo</a></li>
+  <li><a href="#visualización-de-los-efectos-la-interpretación-gratis-del-gam" id="toc-visualización-de-los-efectos-la-interpretación-gratis-del-gam" class="nav-link" data-scroll-target="#visualización-de-los-efectos-la-interpretación-gratis-del-gam">Visualización de los efectos (la interpretación “gratis” del GAM)</a></li>
+  <li><a href="#modelo-alternativo-con-familia-gamma-link-log" id="toc-modelo-alternativo-con-familia-gamma-link-log" class="nav-link" data-scroll-target="#modelo-alternativo-con-familia-gamma-link-log">Modelo alternativo con familia Gamma (link log)</a></li>
+  <li><a href="#comparación-con-persistencia-en-validación-2024" id="toc-comparación-con-persistencia-en-validación-2024" class="nav-link" data-scroll-target="#comparación-con-persistencia-en-validación-2024">Comparación con persistencia en validación 2024</a></li>
+  </ul></li>
+  <li><a href="#extensión-a-horizontes-de-6-12-y-24-horas" id="toc-extensión-a-horizontes-de-6-12-y-24-horas" class="nav-link" data-scroll-target="#extensión-a-horizontes-de-6-12-y-24-horas">Extensión a horizontes de 6, 12 y 24 horas</a></li>
+  <li><a href="#evaluación" id="toc-evaluación" class="nav-link" data-scroll-target="#evaluación">Evaluación</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Modelado GAM para O3</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Equipo 4 </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">September 3, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="objetivo-de-este-archivo" class="level1">
+<h1>Objetivo de este archivo</h1>
+<p>Este archivo se utiliza únicamente para construir, ajustar e interpretar el modelo GAM (Modelo Aditivo Generalizado). La limpieza, homologación y justificación de las decisiones metodológicas permanecen documentadas en <code>reporte.qmd</code>.</p>
+<p>Igual que el archivo de XGBoost, este parte directamente de <code>data/base_modelado_o3.rds</code>, que ya contiene la cuadrícula horaria, las variables limpias y los rezagos seleccionados. Aquí no se vuelve a homologar fechas ni a reconstruir la historia temporal.</p>
+<p>La definición del problema se mantiene igual que en el reporte principal y que en el archivo de XGBoost:</p>
+<ul>
+<li>estaciones: <code>NTE</code>, <code>NTE2</code>, <code>NO</code> y <code>NE</code>;</li>
+<li>periodo útil: 2021-2025;</li>
+<li>entrenamiento: 2021-2023;</li>
+<li>validación: 2024;</li>
+<li>prueba final: 2025;</li>
+<li>horas objetivo: 10:00-20:00;</li>
+<li>horizonte máximo: 24 horas.</li>
+</ul>
+<p><strong>Diferencia clave frente a XGBoost:</strong> un GAM (<code>mgcv</code>) no maneja valores faltantes de forma nativa. Cualquier fila con NA en algún predictor se elimina antes de ajustar el modelo. Esto significa que el conjunto de entrenamiento/validación del GAM será más pequeño que el usado por XGBoost, y esta reducción se documenta explícitamente antes de ajustar el modelo.</p>
+<p>El desarrollo se hace de forma incremental: primero se construye el modelo para <strong>una hora de anticipación</strong> (<code>h = 1</code>), y después se extiende la misma lógica a 6, 12 y 24 horas para comparar contra XGBoost en los mismos horizontes.</p>
+</section>
+<section id="carga-de-la-base-de-modelado" class="level1">
+<h1>Carga de la base de modelado</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lubridate)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(mgcv)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gratia)  <span class="co"># para visualizar los smooths de forma más clara que plot.gam base</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">scipen =</span> <span class="dv">999</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Se lee exactamente la misma base que utilizó XGBoost, sin ninguna transformación adicional.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>ruta_base_modelado <span class="ot">&lt;-</span> <span class="fu">here</span>(<span class="st">"data"</span>, <span class="st">"base_modelado_o3.rds"</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(ruta_base_modelado)) {</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stop</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"No se encontró data/base_modelado_o3.rds. "</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Renderiza primero quarto/reporte.qmd para generar la base de modelado."</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>base_origen_modelado <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(ruta_base_modelado)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>columnas_requeridas <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Estacion"</span>, <span class="st">"fecha_hora"</span>,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">"O3_t"</span>, <span class="st">"O3_lag_1"</span>, <span class="st">"O3_lag_2"</span>, <span class="st">"O3_lag_3"</span>, <span class="st">"O3_lag_24"</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"SR"</span>, <span class="st">"TEMP"</span>, <span class="st">"RH"</span>, <span class="st">"WS"</span>, <span class="st">"WD_sin"</span>, <span class="st">"WD_cos"</span>, <span class="st">"NOX"</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>faltantes_estructura <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  columnas_requeridas,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">names</span>(base_origen_modelado)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(faltantes_estructura) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stop</span>(</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"La base de modelado no contiene: "</span>,</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">paste</span>(faltantes_estructura, <span class="at">collapse =</span> <span class="st">", "</span>)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="construcción-del-horizonte" class="level1">
+<h1>Construcción del horizonte</h1>
+<p>Se reutiliza exactamente la misma lógica que en el archivo de XGBoost, para que ambos modelos partan de la misma definición de horizonte, hora objetivo y separación cronológica.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>construir_base_horizonte <span class="ot">&lt;-</span> <span class="cf">function</span>(h) {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  base_origen_modelado <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Estacion) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>      <span class="at">O3_objetivo =</span> <span class="fu">lead</span>(O3_t, h)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">Horizonte_h =</span> h,</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>      <span class="at">fecha_objetivo =</span> fecha_hora <span class="sc">+</span> <span class="fu">hours</span>(h),</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>      Año<span class="at">_objetivo =</span> <span class="fu">year</span>(fecha_objetivo),</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>      <span class="at">Hora_objetivo =</span> <span class="fu">hour</span>(fecha_objetivo),</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">Mes_objetivo =</span> <span class="fu">month</span>(fecha_objetivo),</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>      <span class="at">Periodo =</span> <span class="fu">case_when</span>(</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>        Año_objetivo <span class="sc">%in%</span> <span class="dv">2021</span><span class="sc">:</span><span class="dv">2023</span> <span class="sc">~</span> <span class="st">"Entrenamiento"</span>,</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>        Año_objetivo <span class="sc">==</span> <span class="dv">2024</span> <span class="sc">~</span> <span class="st">"Validacion"</span>,</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>        Año_objetivo <span class="sc">==</span> <span class="dv">2025</span> <span class="sc">~</span> <span class="st">"Prueba"</span>,</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>        <span class="cn">TRUE</span> <span class="sc">~</span> <span class="cn">NA_character_</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>      <span class="sc">!</span><span class="fu">is.na</span>(Periodo),</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">between</span>(Hora_objetivo, <span class="dv">10</span>, <span class="dv">20</span>)</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>calcular_metricas <span class="ot">&lt;-</span> <span class="cf">function</span>(observado, predicho) {</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">MAE =</span> <span class="fu">mean</span>(<span class="fu">abs</span>(observado <span class="sc">-</span> predicho)),</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">RMSE =</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>((observado <span class="sc">-</span> predicho)<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Nota: aquí no se generan <code>Hora_sin_obj</code>/<code>Hora_cos_obj</code> ni <code>Mes_sin_obj</code>/<code>Mes_cos_obj</code>, porque el GAM va a modelar <code>Hora_objetivo</code> y <code>Mes_objetivo</code> directamente con splines (ver justificación abajo), en vez de con la codificación seno/coseno que usó XGBoost.</p>
+</section>
+<section id="preparación-de-los-predictores-del-gam" class="level1">
+<h1>Preparación de los predictores del GAM</h1>
+<section id="selección-de-variables" class="level2">
+<h2 class="anchored" data-anchor-id="selección-de-variables">Selección de variables</h2>
+<p>Se parte del mismo conjunto principal definido en la Tabla 29 del reporte, con dos ajustes deliberados para el GAM:</p>
+<ul>
+<li><code>Hora_objetivo</code> se modela con un smooth <strong>no cíclico</strong>, porque el objetivo está restringido a 10:00-20:00 (11 horas), no a las 24 horas del día. Una base cíclica (<code>bs = "cc"</code>) forzaría a conectar la hora 20 con la hora 10 como si fueran continuas, lo cual no aplica aquí.</li>
+<li><code>Mes_objetivo</code> sí se modela con un smooth <strong>cíclico</strong> (<code>bs = "cc"</code>), porque diciembre y enero sí son meses consecutivos en el conjunto completo.</li>
+</ul>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>predictores_gam <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">"O3_t"</span>, <span class="st">"O3_lag_24"</span>,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">"SR"</span>, <span class="st">"TEMP"</span>, <span class="st">"RH"</span>, <span class="st">"WS"</span>, <span class="st">"WD_sin"</span>, <span class="st">"WD_cos"</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Hora_objetivo"</span>, <span class="st">"Mes_objetivo"</span>, <span class="st">"Estacion"</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Por ahora se deja fuera <code>O3_lag_1</code>, <code>O3_lag_2</code> y <code>O3_lag_3</code> para evitar concurvity con <code>O3_t</code> (ver diagnóstico más abajo). Si el chequeo de concurvity muestra que aportan información independiente, se pueden agregar después.</p>
+</section>
+<section id="preparación-de-la-base-para-h-1" class="level2">
+<h2 class="anchored" data-anchor-id="preparación-de-la-base-para-h-1">Preparación de la base para h = 1</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>base_h1 <span class="ot">&lt;-</span> <span class="fu">construir_base_horizonte</span>(<span class="dv">1</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(O3_objetivo))</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>resumen_h1_completo <span class="ot">&lt;-</span> base_h1 <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">drop_na</span>(<span class="fu">all_of</span>(predictores_gam)) <span class="sc">|&gt;</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(Periodo, <span class="at">name =</span> <span class="st">"Casos_completos"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    base_h1 <span class="sc">|&gt;</span> <span class="fu">count</span>(Periodo, <span class="at">name =</span> <span class="st">"Objetivos_disponibles"</span>),</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"Periodo"</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Cobertura_pct =</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">*</span> Casos_completos <span class="sc">/</span> Objetivos_disponibles, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">factor</span>(Periodo, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Entrenamiento"</span>, <span class="st">"Validacion"</span>, <span class="st">"Prueba"</span>)))</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  resumen_h1_completo,</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="st">"Casos completos disponibles para el GAM (h = 1)"</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Casos completos disponibles para el GAM (h = 1)</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Periodo</th>
+<th style="text-align: right;">Casos_completos</th>
+<th style="text-align: right;">Objetivos_disponibles</th>
+<th style="text-align: right;">Cobertura_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Entrenamiento</td>
+<td style="text-align: right;">39043</td>
+<td style="text-align: right;">45110</td>
+<td style="text-align: right;">86.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Validacion</td>
+<td style="text-align: right;">8682</td>
+<td style="text-align: right;">15547</td>
+<td style="text-align: right;">55.8</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Prueba</td>
+<td style="text-align: right;">3471</td>
+<td style="text-align: right;">7467</td>
+<td style="text-align: right;">46.5</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Esta tabla es el equivalente, para el GAM, de la Tabla 31 del reporte: muestra cuánta información se pierde al exigir casos completos, información necesaria para justificar la decisión frente a los profesores.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>base_h1_completo <span class="ot">&lt;-</span> base_h1 <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">drop_na</span>(<span class="fu">all_of</span>(predictores_gam)) <span class="sc">|&gt;</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Estacion =</span> <span class="fu">factor</span>(Estacion))</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>entrenamiento_h1 <span class="ot">&lt;-</span> base_h1_completo <span class="sc">|&gt;</span> <span class="fu">filter</span>(Periodo <span class="sc">==</span> <span class="st">"Entrenamiento"</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>validacion_h1 <span class="ot">&lt;-</span> base_h1_completo <span class="sc">|&gt;</span> <span class="fu">filter</span>(Periodo <span class="sc">==</span> <span class="st">"Validacion"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="modelo-de-persistencia-recalculado-sobre-el-subconjunto-del-gam" class="level1">
+<h1>Modelo de persistencia (recalculado sobre el subconjunto del GAM)</h1>
+<p>Aunque ya existe un modelo de persistencia en el archivo de XGBoost, aquí se recalcula sobre el subconjunto de casos completos que efectivamente usará el GAM, para que la comparación GAM-vs-persistencia sea justa dentro de este mismo archivo.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>metricas_persistencia_h1_gam <span class="ot">&lt;-</span> <span class="fu">calcular_metricas</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  validacion_h1<span class="sc">$</span>O3_objetivo,</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  validacion_h1<span class="sc">$</span>O3_t</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Modelo =</span> <span class="st">"Persistencia"</span>, <span class="at">Observaciones =</span> <span class="fu">nrow</span>(validacion_h1), <span class="at">.before =</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="gam" class="level1">
+<h1>GAM</h1>
+<section id="especificación-del-modelo" class="level2">
+<h2 class="anchored" data-anchor-id="especificación-del-modelo">Especificación del modelo</h2>
+<p>Se utiliza <code>bam()</code> en vez de <code>gam()</code> porque está optimizado para bases de datos grandes (decenas de miles de filas), con <code>method = "fREML"</code> y <code>discrete = TRUE</code> para acelerar el ajuste sin perder precisión relevante.</p>
+<p><code>Estacion</code> entra como factor paramétrico (un desplazamiento fijo por estación), no como smooth — es el punto de partida más simple e interpretable; se puede explorar un smooth distinto por estación (<code>by = Estacion</code>) más adelante si la validación lo justifica.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>modelo_gam_h1 <span class="ot">&lt;-</span> <span class="fu">bam</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  O3_objetivo <span class="sc">~</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(O3_t, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(O3_lag_24, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(SR, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(TEMP, <span class="at">k =</span> <span class="dv">15</span>) <span class="sc">+</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(RH, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(WS, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    WD_sin <span class="sc">+</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    WD_cos <span class="sc">+</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(Hora_objetivo, <span class="at">k =</span> <span class="dv">8</span>) <span class="sc">+</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(Mes_objetivo, <span class="at">bs =</span> <span class="st">"cc"</span>, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    Estacion,</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> entrenamiento_h1,</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">"fREML"</span>,</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">discrete =</span> <span class="cn">TRUE</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="diagnóstico-de-concurvity" class="level2">
+<h2 class="anchored" data-anchor-id="diagnóstico-de-concurvity">Diagnóstico de concurvity</h2>
+<p>Antes de interpretar el modelo, se revisa si algún smooth se puede aproximar a partir de otros (el equivalente, en GAM, de revisar multicolinealidad en una regresión lineal múltiple).</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">concurvity</span>(modelo_gam_h1, <span class="at">full =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>              para   s(O3_t) s(O3_lag_24)     s(SR)   s(TEMP)     s(RH)
+worst    0.9921855 0.9787612    0.9819626 0.8443773 0.8671710 0.6995598
+observed 0.9921855 0.9122923    0.9633448 0.5616501 0.6297536 0.6621488
+estimate 0.9921855 0.8822385    0.8648879 0.7521874 0.7721563 0.5728808
+             s(WS) s(Hora_objetivo) s(Mes_objetivo)
+worst    0.9416013        0.5993999       0.7116622
+observed 0.4938965        0.5690740       0.4216838
+estimate 0.7417094        0.5747879       0.1747294</code></pre>
+</div>
+</div>
+<p>Valores cercanos a 1 en algún par de variables indican que uno de los smooths es casi redundante frente a otro; valores bajos (cercanos a 0) indican que aportan información independiente. Esto ayuda a decidir si vale la pena reincorporar <code>O3_lag_1</code>, <code>O3_lag_2</code> o <code>O3_lag_3</code> más adelante.</p>
+</section>
+<section id="resumen-del-modelo" class="level2">
+<h2 class="anchored" data-anchor-id="resumen-del-modelo">Resumen del modelo</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(modelo_gam_h1)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Family: gaussian 
+Link function: identity 
+
+Formula:
+O3_objetivo ~ s(O3_t, k = 10) + s(O3_lag_24, k = 10) + s(SR, 
+    k = 10) + s(TEMP, k = 15) + s(RH, k = 10) + s(WS, k = 10) + 
+    WD_sin + WD_cos + s(Hora_objetivo, k = 8) + s(Mes_objetivo, 
+    bs = "cc", k = 10) + Estacion
+
+Parametric coefficients:
+             Estimate Std. Error t value             Pr(&gt;|t|)    
+(Intercept)  68.56319    0.39208 174.871 &lt; 0.0000000000000002 ***
+WD_sin       -0.40944    0.08371  -4.891           0.00000101 ***
+WD_cos        0.28061    0.06156   4.558           0.00000517 ***
+EstacionNTE2 -1.54815    0.15931  -9.718 &lt; 0.0000000000000002 ***
+EstacionNO   -0.39024    0.16953  -2.302             0.021349 *  
+EstacionNE   -0.61994    0.16316  -3.800             0.000145 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Approximate significance of smooth terms:
+                   edf Ref.df       F             p-value    
+s(O3_t)          8.575  8.897 8131.81 &lt;0.0000000000000002 ***
+s(O3_lag_24)     6.743  7.515   38.68 &lt;0.0000000000000002 ***
+s(SR)            8.200  8.726   79.68 &lt;0.0000000000000002 ***
+s(TEMP)          9.669 11.248   12.08 &lt;0.0000000000000002 ***
+s(RH)            6.023  7.165   27.23 &lt;0.0000000000000002 ***
+s(WS)            7.790  8.406  204.15 &lt;0.0000000000000002 ***
+s(Hora_objetivo) 6.805  6.986  965.56 &lt;0.0000000000000002 ***
+s(Mes_objetivo)  7.069  8.000   32.41 &lt;0.0000000000000002 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+R-sq.(adj) =  0.861   Deviance explained = 86.2%
+fREML = 1.3104e+05  Scale est. = 47.769    n = 39043</code></pre>
+</div>
+</div>
+<p>La columna <code>edf</code> (grados de libertad efectivos) es la clave de interpretación: un <code>edf</code> cercano a 1 indica que el efecto de esa variable es prácticamente lineal; valores más altos indican una curva más flexible/no lineal. Esto reemplaza directamente lo que XGBoost necesita SHAP para mostrar.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">gam.check</span>(modelo_gam_h1)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="GAM_files/figure-html/chequeo-residuos-gam-h1-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Diagnóstico de residuos del GAM para h = 1</figcaption>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Method: fREML   Optimizer: perf chol
+$grad
+[1]  0.0000000000136579636 -0.0000000000106985532  0.0000000000150239821
+[4]  0.0000000000093205443 -0.0000000000005551115 -0.0000000000004871659
+[7]  0.0000000000013233858  0.0000000000015472068  0.0000000006220943760
+
+$hess
+           [,1]          [,2]         [,3]         [,4]          [,5]
+   2.9741605343  0.0244551576 -0.001000811 -0.018041194 -0.0008916287
+   0.0244551576  2.1130396808  0.003206685 -0.006517841  0.0094853792
+  -0.0010008106  0.0032066847  2.982203888  0.009098081  0.0036670858
+  -0.0180411938 -0.0065178414  0.009098081  1.551640313  0.0017819659
+  -0.0008916287  0.0094853792  0.003667086  0.001781966  1.1414083553
+  -0.0028636657 -0.0026432323  0.007569898 -0.007708139  0.0088805933
+  -0.0001178829  0.0020488596  0.017397336 -0.001162086  0.0029110240
+   0.0066410486  0.0005271959  0.021653267  0.035938407 -0.0183768249
+d -3.7873643736 -2.8715570740 -3.600006401 -4.334304677 -2.5116177091
+          [,6]          [,7]          [,8]         [,9]
+  -0.002863666 -0.0001178829  0.0066410486    -3.787364
+  -0.002643232  0.0020488596  0.0005271959    -2.871557
+   0.007569898  0.0173973355  0.0216532666    -3.600006
+  -0.007708139 -0.0011620857  0.0359384070    -4.334305
+   0.008880593  0.0029110240 -0.0183768249    -2.511618
+   3.153866410  0.0047983191 -0.0030936296    -3.395222
+   0.004798319  2.8684125328 -0.0011974237    -2.902534
+  -0.003093630 -0.0011974237  3.0278986524    -3.534372
+d -3.395221619 -2.9025344846 -3.5343718818 19515.000000
+
+Model rank =  80 / 80 
+
+Basis dimension (k) checking results. Low p-value (k-index&lt;1) may
+indicate that k is too low, especially if edf is close to k'.
+
+                    k'   edf k-index p-value  
+s(O3_t)           9.00  8.57    1.00   0.630  
+s(O3_lag_24)      9.00  6.74    1.00   0.460  
+s(SR)             9.00  8.20    1.00   0.390  
+s(TEMP)          14.00  9.67    0.98   0.025 *
+s(RH)             9.00  6.02    1.00   0.305  
+s(WS)             9.00  7.79    0.99   0.200  
+s(Hora_objetivo)  7.00  6.81    0.99   0.290  
+s(Mes_objetivo)   8.00  7.07    1.01   0.820  
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+</section>
+<section id="visualización-de-los-efectos-la-interpretación-gratis-del-gam" class="level2">
+<h2 class="anchored" data-anchor-id="visualización-de-los-efectos-la-interpretación-gratis-del-gam">Visualización de los efectos (la interpretación “gratis” del GAM)</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">draw</span>(modelo_gam_h1)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="GAM_files/figure-html/grafica-smooths-gam-h1-1.png" class="img-fluid figure-img" width="864"></p>
+<figcaption>Efecto parcial de cada predictor sobre O3 objetivo (h = 1)</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Cada panel es directamente interpretable: muestra cómo cambia la predicción de O3 conforme varía esa variable, manteniendo las demás fijas — sin necesitar SHAP ni PDP calculados por separado.</p>
+</section>
+<section id="modelo-alternativo-con-familia-gamma-link-log" class="level2">
+<h2 class="anchored" data-anchor-id="modelo-alternativo-con-familia-gamma-link-log">Modelo alternativo con familia Gamma (link log)</h2>
+<p>El diagnóstico de residuos del modelo gaussiano (QQ-plot, residuos vs.&nbsp;predictor lineal, histograma) muestra dos problemas relacionados: la varianza de los residuos crece conforme aumenta el valor predicho (heterocedasticidad) y la cola derecha es más pesada de lo que un modelo gaussiano espera. Esto es consistente con la asimetría de O3 ya documentada en el análisis exploratorio (Figura 1 del reporte). Como O3 es siempre positivo en la base limpia (mínimo observado = 1, Tabla 17), se prueba una familia Gamma con link logarítmico, que asume que la varianza crece con el cuadrado de la media — el supuesto natural para concentraciones de contaminantes.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>modelo_gam_h1_gamma <span class="ot">&lt;-</span> <span class="fu">bam</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  O3_objetivo <span class="sc">~</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(O3_t, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(O3_lag_24, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(SR, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(TEMP, <span class="at">k =</span> <span class="dv">15</span>) <span class="sc">+</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(RH, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(WS, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    WD_sin <span class="sc">+</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    WD_cos <span class="sc">+</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(Hora_objetivo, <span class="at">k =</span> <span class="dv">8</span>) <span class="sc">+</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">s</span>(Mes_objetivo, <span class="at">bs =</span> <span class="st">"cc"</span>, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    Estacion,</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> entrenamiento_h1,</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">Gamma</span>(<span class="at">link =</span> <span class="st">"log"</span>),</span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">"fREML"</span>,</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">discrete =</span> <span class="cn">TRUE</span></span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">gam.check</span>(modelo_gam_h1_gamma)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="GAM_files/figure-html/chequeo-residuos-gam-h1-gamma-1.png" class="img-fluid figure-img" width="672"></p>
+<figcaption>Diagnóstico de residuos del GAM con familia Gamma para h = 1</figcaption>
+</figure>
+</div>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Method: fREML   Optimizer: perf chol
+$grad
+[1] -0.0000012879890  0.0000002270274  0.0000032416385  0.0000021753419
+[5]  0.0000007150569  0.0000001564142 -0.0000002528689  0.0000003851668
+[9] -0.0034446576647
+
+$hess
+          [,1]         [,2]         [,3]         [,4]          [,5]
+   3.703071810  0.029338052  0.002519846  0.004723680  0.0033534305
+   0.029338052  1.709553727  0.004620336  0.015299524  0.0045130626
+   0.002519846  0.004620336  1.792299757  0.028387185  0.0033741395
+   0.004723680  0.015299524  0.028387185  1.695735098  0.0593771263
+   0.003353430  0.004513063  0.003374139  0.059377126  1.5135066934
+   0.002922463  0.002124048  0.013011759 -0.003985939  0.0094194577
+   0.002752419  0.014694082 -0.001691540 -0.005860592  0.0031393639
+  -0.002773348 -0.006411462  0.014776594  0.001340199 -0.0001432261
+d -3.857399171 -2.321953613 -3.109629034 -3.425566804 -2.8770080873
+          [,6]          [,7]          [,8]         [,9]
+   0.002922463  0.0027524194 -0.0027733480    -3.857399
+   0.002124048  0.0146940821 -0.0064114617    -2.321954
+   0.013011759 -0.0016915404  0.0147765938    -3.109629
+  -0.003985939 -0.0058605922  0.0013401988    -3.425567
+   0.009419458  0.0031393639 -0.0001432261    -2.877008
+   2.354651540  0.0020529026  0.0035733396    -2.859565
+   0.002052903  2.7162650644  0.0009582981    -2.879197
+   0.003573340  0.0009582981  3.1727706300    -3.675419
+d -2.859564826 -2.8791965746 -3.6754189706 19515.003445
+
+Model rank =  80 / 80 
+
+Basis dimension (k) checking results. Low p-value (k-index&lt;1) may
+indicate that k is too low, especially if edf is close to k'.
+
+                    k'   edf k-index             p-value    
+s(O3_t)           9.00  8.71    0.95 &lt;0.0000000000000002 ***
+s(O3_lag_24)      9.00  5.64    0.98               0.115    
+s(SR)             9.00  7.22    1.02               0.970    
+s(TEMP)          14.00  7.85    1.01               0.780    
+s(RH)             9.00  6.75    0.97               0.015 *  
+s(WS)             9.00  6.72    0.95 &lt;0.0000000000000002 ***
+s(Hora_objetivo)  7.00  6.76    1.00               0.535    
+s(Mes_objetivo)   8.00  7.35    0.98               0.140    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+<p>Se espera que el QQ-plot y el gráfico de residuos vs.&nbsp;predictor lineal luzcan más estables (menos abanico, menos desviación en la cola derecha) que en el modelo gaussiano. Si es así, este modelo se vuelve el candidato principal para reportar; si no mejora de forma clara, se puede mantener el gaussiano por su interpretación más directa (efectos aditivos en la escala original de O3, en vez de en escala logarítmica).</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">draw</span>(modelo_gam_h1_gamma)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="GAM_files/figure-html/grafica-smooths-gam-h1-gamma-1.png" class="img-fluid figure-img" width="864"></p>
+<figcaption>Efecto parcial de cada predictor, familia Gamma (h = 1)</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Nota de interpretación: con link logarítmico, los efectos parciales de <code>draw()</code> están en la escala del predictor lineal (log de O3), no en unidades directas de O3. Para explicar el efecto de una variable en unidades de O3, es más claro usar <code>predict(..., type = "response")</code> variando esa variable y fijando las demás, en vez de leer directamente la escala del smooth.</p>
+</section>
+<section id="comparación-con-persistencia-en-validación-2024" class="level2">
+<h2 class="anchored" data-anchor-id="comparación-con-persistencia-en-validación-2024">Comparación con persistencia en validación 2024</h2>
+<p>Igual que con XGBoost, la comparación se hace sobre las mismas observaciones (aquí, el subconjunto de casos completos de validación). Se incluyen ambos modelos GAM (gaussiano y Gamma) para decidir cuál llevar a los demás horizontes.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>pred_gam_validacion_h1 <span class="ot">&lt;-</span> <span class="fu">predict</span>(modelo_gam_h1, <span class="at">newdata =</span> validacion_h1)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>pred_gam_gamma_validacion_h1 <span class="ot">&lt;-</span> <span class="fu">predict</span>(modelo_gam_h1_gamma, <span class="at">newdata =</span> validacion_h1, <span class="at">type =</span> <span class="st">"response"</span>)</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>metricas_gam_h1 <span class="ot">&lt;-</span> <span class="fu">calcular_metricas</span>(</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>  validacion_h1<span class="sc">$</span>O3_objetivo,</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>  pred_gam_validacion_h1</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Modelo =</span> <span class="st">"GAM (gaussiano)"</span>, <span class="at">Observaciones =</span> <span class="fu">nrow</span>(validacion_h1), <span class="at">.before =</span> <span class="dv">1</span>)</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>metricas_gam_gamma_h1 <span class="ot">&lt;-</span> <span class="fu">calcular_metricas</span>(</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>  validacion_h1<span class="sc">$</span>O3_objetivo,</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>  pred_gam_gamma_validacion_h1</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Modelo =</span> <span class="st">"GAM (Gamma, link log)"</span>, <span class="at">Observaciones =</span> <span class="fu">nrow</span>(validacion_h1), <span class="at">.before =</span> <span class="dv">1</span>)</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>  metricas_persistencia_h1_gam,</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>  metricas_gam_h1,</span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>  metricas_gam_gamma_h1</span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">MAE =</span> <span class="fu">round</span>(MAE, <span class="dv">3</span>), <span class="at">RMSE =</span> <span class="fu">round</span>(RMSE, <span class="dv">3</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Comparación GAM (gaussiano y Gamma) vs. persistencia en validación 2024 para h = 1"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Comparación GAM (gaussiano y Gamma) vs.&nbsp;persistencia en validación 2024 para h = 1</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Modelo</th>
+<th style="text-align: right;">Observaciones</th>
+<th style="text-align: right;">MAE</th>
+<th style="text-align: right;">RMSE</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Persistencia</td>
+<td style="text-align: right;">8682</td>
+<td style="text-align: right;">7.031</td>
+<td style="text-align: right;">9.590</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">GAM (gaussiano)</td>
+<td style="text-align: right;">8682</td>
+<td style="text-align: right;">4.884</td>
+<td style="text-align: right;">6.910</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">GAM (Gamma, link log)</td>
+<td style="text-align: right;">8682</td>
+<td style="text-align: right;">4.933</td>
+<td style="text-align: right;">6.907</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>Decisión pendiente:</strong> si el MAE/RMSE del modelo Gamma es similar o mejor que el gaussiano, y los diagnósticos de residuos mejoran, se recomienda adoptar Gamma como el modelo GAM definitivo y actualizar también la función <code>entrenar_y_evaluar_gam_horizonte</code> para usar <code>family = Gamma(link = "log")</code> y <code>type = "response"</code> en las predicciones de los demás horizontes.</p>
+</section>
+</section>
+<section id="extensión-a-horizontes-de-6-12-y-24-horas" class="level1">
+<h1>Extensión a horizontes de 6, 12 y 24 horas</h1>
+<p>Se repite la misma lógica para los demás horizontes representativos, manteniendo la misma especificación del modelo. Esto permite comparar directamente contra la tabla de horizontes que ya obtuvo tu compañero con XGBoost.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>entrenar_y_evaluar_gam_horizonte <span class="ot">&lt;-</span> <span class="cf">function</span>(h) {</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  base_h <span class="ot">&lt;-</span> <span class="fu">construir_base_horizonte</span>(h) <span class="sc">|&gt;</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(O3_objetivo)) <span class="sc">|&gt;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">drop_na</span>(<span class="fu">all_of</span>(predictores_gam)) <span class="sc">|&gt;</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">Estacion =</span> <span class="fu">factor</span>(Estacion))</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  entrenamiento_h <span class="ot">&lt;-</span> base_h <span class="sc">|&gt;</span> <span class="fu">filter</span>(Periodo <span class="sc">==</span> <span class="st">"Entrenamiento"</span>)</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  validacion_h <span class="ot">&lt;-</span> base_h <span class="sc">|&gt;</span> <span class="fu">filter</span>(Periodo <span class="sc">==</span> <span class="st">"Validacion"</span>)</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  modelo_h <span class="ot">&lt;-</span> <span class="fu">bam</span>(</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    O3_objetivo <span class="sc">~</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(O3_t, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(O3_lag_24, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(SR, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(TEMP, <span class="at">k =</span> <span class="dv">15</span>) <span class="sc">+</span></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(RH, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(WS, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>      WD_sin <span class="sc">+</span></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>      WD_cos <span class="sc">+</span></span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(Hora_objetivo, <span class="at">k =</span> <span class="dv">8</span>) <span class="sc">+</span></span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>      <span class="fu">s</span>(Mes_objetivo, <span class="at">bs =</span> <span class="st">"cc"</span>, <span class="at">k =</span> <span class="dv">10</span>) <span class="sc">+</span></span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>      Estacion,</span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> entrenamiento_h,</span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">method =</span> <span class="st">"fREML"</span>,</span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">discrete =</span> <span class="cn">TRUE</span></span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>  predicciones_h <span class="ot">&lt;-</span> <span class="fu">predict</span>(modelo_h, <span class="at">newdata =</span> validacion_h)</span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a>  metricas_persistencia_h <span class="ot">&lt;-</span> <span class="fu">calcular_metricas</span>(</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a>    validacion_h<span class="sc">$</span>O3_objetivo,</span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>    validacion_h<span class="sc">$</span>O3_t</span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-35"><a href="#cb22-35" aria-hidden="true" tabindex="-1"></a>  metricas_gam_h <span class="ot">&lt;-</span> <span class="fu">calcular_metricas</span>(</span>
+<span id="cb22-36"><a href="#cb22-36" aria-hidden="true" tabindex="-1"></a>    validacion_h<span class="sc">$</span>O3_objetivo,</span>
+<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a>    predicciones_h</span>
+<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-40"><a href="#cb22-40" aria-hidden="true" tabindex="-1"></a>  resumen_h <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb22-41"><a href="#cb22-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">Horizonte_h =</span> h,</span>
+<span id="cb22-42"><a href="#cb22-42" aria-hidden="true" tabindex="-1"></a>    <span class="at">Observaciones =</span> <span class="fu">nrow</span>(validacion_h),</span>
+<span id="cb22-43"><a href="#cb22-43" aria-hidden="true" tabindex="-1"></a>    <span class="at">MAE_Persistencia =</span> metricas_persistencia_h<span class="sc">$</span>MAE,</span>
+<span id="cb22-44"><a href="#cb22-44" aria-hidden="true" tabindex="-1"></a>    <span class="at">MAE_GAM =</span> metricas_gam_h<span class="sc">$</span>MAE,</span>
+<span id="cb22-45"><a href="#cb22-45" aria-hidden="true" tabindex="-1"></a>    <span class="at">RMSE_Persistencia =</span> metricas_persistencia_h<span class="sc">$</span>RMSE,</span>
+<span id="cb22-46"><a href="#cb22-46" aria-hidden="true" tabindex="-1"></a>    <span class="at">RMSE_GAM =</span> metricas_gam_h<span class="sc">$</span>RMSE,</span>
+<span id="cb22-47"><a href="#cb22-47" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mejora_MAE_pct =</span> <span class="dv">100</span> <span class="sc">*</span> (MAE_Persistencia <span class="sc">-</span> MAE_GAM) <span class="sc">/</span> MAE_Persistencia,</span>
+<span id="cb22-48"><a href="#cb22-48" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mejora_RMSE_pct =</span> <span class="dv">100</span> <span class="sc">*</span> (RMSE_Persistencia <span class="sc">-</span> RMSE_GAM) <span class="sc">/</span> RMSE_Persistencia</span>
+<span id="cb22-49"><a href="#cb22-49" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb22-50"><a href="#cb22-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-51"><a href="#cb22-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">modelo =</span> modelo_h, <span class="at">resumen =</span> resumen_h)</span>
+<span id="cb22-52"><a href="#cb22-52" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>resultado_h1_gam <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">Horizonte_h =</span> <span class="dv">1</span>,</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">Observaciones =</span> metricas_gam_h1<span class="sc">$</span>Observaciones,</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">MAE_Persistencia =</span> metricas_persistencia_h1_gam<span class="sc">$</span>MAE,</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">MAE_GAM =</span> metricas_gam_h1<span class="sc">$</span>MAE,</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">RMSE_Persistencia =</span> metricas_persistencia_h1_gam<span class="sc">$</span>RMSE,</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">RMSE_GAM =</span> metricas_gam_h1<span class="sc">$</span>RMSE,</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">Mejora_MAE_pct =</span> <span class="dv">100</span> <span class="sc">*</span> (MAE_Persistencia <span class="sc">-</span> MAE_GAM) <span class="sc">/</span> MAE_Persistencia,</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">Mejora_RMSE_pct =</span> <span class="dv">100</span> <span class="sc">*</span> (RMSE_Persistencia <span class="sc">-</span> RMSE_GAM) <span class="sc">/</span> RMSE_Persistencia</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>evaluaciones_horizontes_gam <span class="ot">&lt;-</span> <span class="fu">map</span>(</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="dv">6</span>, <span class="dv">12</span>, <span class="dv">24</span>),</span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>  entrenar_y_evaluar_gam_horizonte</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>resultados_horizontes_gam <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>  resultado_h1_gam,</span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">map_dfr</span>(evaluaciones_horizontes_gam, <span class="sc">~</span> .x<span class="sc">$</span>resumen)</span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(Horizonte_h)</span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>resultados_horizontes_gam <span class="sc">|&gt;</span></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">across</span>(<span class="fu">c</span>(MAE_Persistencia, MAE_GAM, RMSE_Persistencia, RMSE_GAM), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>)),</span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mejora_MAE_pct =</span> <span class="fu">round</span>(Mejora_MAE_pct, <span class="dv">1</span>),</span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">Mejora_RMSE_pct =</span> <span class="fu">round</span>(Mejora_RMSE_pct, <span class="dv">1</span>)</span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Persistencia y GAM en horizontes representativos de 2024"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Persistencia y GAM en horizontes representativos de 2024</caption>
+<colgroup>
+<col style="width: 11%">
+<col style="width: 12%">
+<col style="width: 15%">
+<col style="width: 7%">
+<col style="width: 16%">
+<col style="width: 8%">
+<col style="width: 13%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Horizonte_h</th>
+<th style="text-align: right;">Observaciones</th>
+<th style="text-align: right;">MAE_Persistencia</th>
+<th style="text-align: right;">MAE_GAM</th>
+<th style="text-align: right;">RMSE_Persistencia</th>
+<th style="text-align: right;">RMSE_GAM</th>
+<th style="text-align: right;">Mejora_MAE_pct</th>
+<th style="text-align: right;">Mejora_RMSE_pct</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">8682</td>
+<td style="text-align: right;">7.031</td>
+<td style="text-align: right;">4.884</td>
+<td style="text-align: right;">9.590</td>
+<td style="text-align: right;">6.910</td>
+<td style="text-align: right;">30.5</td>
+<td style="text-align: right;">27.9</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">8047</td>
+<td style="text-align: right;">23.253</td>
+<td style="text-align: right;">10.727</td>
+<td style="text-align: right;">30.301</td>
+<td style="text-align: right;">14.634</td>
+<td style="text-align: right;">53.9</td>
+<td style="text-align: right;">51.7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">7743</td>
+<td style="text-align: right;">23.636</td>
+<td style="text-align: right;">11.375</td>
+<td style="text-align: right;">30.170</td>
+<td style="text-align: right;">15.378</td>
+<td style="text-align: right;">51.9</td>
+<td style="text-align: right;">49.0</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">8571</td>
+<td style="text-align: right;">11.819</td>
+<td style="text-align: right;">10.452</td>
+<td style="text-align: right;">16.354</td>
+<td style="text-align: right;">14.254</td>
+<td style="text-align: right;">11.6</td>
+<td style="text-align: right;">12.8</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Con esta tabla ya se puede comparar, horizonte por horizonte, el desempeño del GAM contra el XGBoost del compañero (MAE_XGBoost y MAE_GAM sobre las mismas métricas, aunque en subconjuntos de datos ligeramente distintos por el tema de casos completos — esto debe mencionarse explícitamente al comparar ambos modelos en el reporte final).</p>
+</section>
+<section id="evaluación" class="level1">
+<h1>Evaluación</h1>
+<p>El GAM ya se evalúa sobre <strong>2024</strong> en los mismos horizontes representativos (1, 6, 12, 24) que XGBoost. El conjunto de <strong>2025 permanece reservado</strong> para la prueba final y no debe utilizarse para decidir variables, <code>k</code> de los smooths, ni especificación del modelo.</p>
+<p><strong>Pendiente antes de considerar este modelo definitivo:</strong></p>
+<ul>
+<li>Revisar los resultados de <code>concurvity()</code> y decidir si vale la pena reincorporar <code>O3_lag_1</code>, <code>O3_lag_2</code> o <code>O3_lag_3</code>.</li>
+<li>Revisar <code>gam.check()</code> para confirmar que los <code>k</code> elegidos son suficientes (si el p-value de algún smooth en <code>gam.check()</code> es muy bajo, puede necesitar más grados de libertad).</li>
+<li>Decidir si conviene explorar un smooth distinto por estación (<code>by = Estacion</code>) para las variables meteorológicas, dado que la Tabla 18 del reporte ya mostró diferencias sistemáticas de O3 entre estaciones.</li>
+<li>Documentar explícitamente, en el reporte, la reducción de muestra por casos completos frente al enfoque nativo de XGBoost.</li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

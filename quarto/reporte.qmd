@@ -47,11 +47,11 @@ Desarrollar y evaluar modelos capaces de **predecir la concentración horaria di
 
 ## Objetivos específicos
 
-1. Preparar y validar la calidad de los registros históricos necesarios para modelar O3, conservando la estructura temporal y espacial de las mediciones.
-2. Caracterizar el comportamiento del O3 e identificar qué variables meteorológicas, contaminantes y patrones temporales aportan información relevante para su predicción.
-3. Construir variables derivadas que representen la dinámica temporal del problema, incluyendo características de fecha y hora y rezagos de mediciones disponibles antes del momento de predicción.
-4. Construir y comparar al menos dos enfoques de modelado, incluyendo un modelo estadístico interpretable y un modelo capaz de representar relaciones no lineales.
-5. Evaluar los modelos mediante una separación cronológica de los datos y métricas de error, analizando además cómo cambia el desempeño según el horizonte de predicción y la estación de monitoreo.
+1.  Preparar y validar la calidad de los registros históricos necesarios para modelar O3, conservando la estructura temporal y espacial de las mediciones.
+2.  Caracterizar el comportamiento del O3 e identificar qué variables meteorológicas, contaminantes y patrones temporales aportan información relevante para su predicción.
+3.  Construir variables derivadas que representen la dinámica temporal del problema, incluyendo características de fecha y hora y rezagos de mediciones disponibles antes del momento de predicción.
+4.  Construir y comparar al menos dos enfoques de modelado, incluyendo un modelo estadístico interpretable y un modelo capaz de representar relaciones no lineales.
+5.  Evaluar los modelos mediante una separación cronológica de los datos y métricas de error, analizando además cómo cambia el desempeño según el horizonte de predicción y la estación de monitoreo.
 
 ## Justificación y antecedentes
 
@@ -69,11 +69,9 @@ El horizonte máximo de predicción se establece en **24 horas**. Esto no signif
 
 En un momento determinado $t$, únicamente se utilizará información disponible hasta ese instante para estimar las concentraciones futuras de O3 durante las horas siguientes. De forma conceptual:
 
-$$
-\text{información disponible hasta } t
+$$\text{información disponible hasta } t
 \longrightarrow
-\widehat{O_3}(t+1),\ldots,\widehat{O_3}(t+24)
-$$
+\widehat{O_3}(t+1),\ldots,\widehat{O_3}(t+24)$$
 
 Cuando exista una nueva medición, esa información podrá incorporarse para generar nuevamente el pronóstico de las siguientes 24 horas. Esta estructura evita utilizar información futura durante la predicción y permite evaluar el desempeño del modelo de forma semejante a como se utilizaría posteriormente con nuevos datos.
 
@@ -86,7 +84,7 @@ El análisis exploratorio mostró que las concentraciones elevadas de O3 se conc
 La variable objetivo del proyecto es la concentración horaria de **O3**. Las posibles variables predictoras se organizan en cuatro grupos:
 
 | Grupo | Variables principales | Función dentro del modelo |
-|---|---|---|
+|------------------------|------------------------|------------------------|
 | Variable objetivo | O3 | Concentración que se desea predecir |
 | Meteorológicas | BP, RAINF, RH, SR, TEMP, WS, WD | Describir las condiciones atmosféricas asociadas con la formación, transporte y dispersión del O3 |
 | Contaminantes | CO, NO, NO2, NOX, PM10, PM2.5, SO2 y valores previos de O3 | Incorporar información del estado reciente de la contaminación atmosférica |
@@ -100,11 +98,11 @@ La dirección del viento requiere un tratamiento particular por ser una variable
 
 El proyecto seguirá una secuencia orientada directamente al problema predictivo:
 
-1. **Comprensión y limpieza de los datos.** Integrar las bases de 2020 a 2025, homologar nombres y unidades, identificar valores faltantes, registros inválidos y duplicados, y conservar únicamente información adecuada para el análisis.
-2. **Análisis exploratorio enfocado en O3.** Estudiar su distribución, comportamiento horario y estacional, diferencias entre estaciones y relación con las variables candidatas a predictoras.
-3. **Preparación temporal.** Ordenar los registros cronológicamente, construir variables temporales y rezagos, y definir las observaciones disponibles para cada horizonte de predicción.
-4. **Modelado.** Construir primero una referencia simple y posteriormente comparar modelos estadísticos y modelos más flexibles. Entre los candidatos se consideran la regresión lineal múltiple y métodos no lineales como Random Forest o Gradient Boosting.
-5. **Evaluación.** Medir el error sobre periodos posteriores a los utilizados para el entrenamiento y analizar los resultados por estación y horizonte de predicción.
+1.  **Comprensión y limpieza de los datos.** Integrar las bases de 2020 a 2025, homologar nombres y unidades, identificar valores faltantes, registros inválidos y duplicados, y conservar únicamente información adecuada para el análisis.
+2.  **Análisis exploratorio enfocado en O3.** Estudiar su distribución, comportamiento horario y estacional, diferencias entre estaciones y relación con las variables candidatas a predictoras.
+3.  **Preparación temporal.** Ordenar los registros cronológicamente, construir variables temporales y rezagos, y definir las observaciones disponibles para cada horizonte de predicción.
+4.  **Modelado.** Construir primero una referencia simple y posteriormente comparar modelos estadísticos y modelos más flexibles. Entre los candidatos se consideran la regresión lineal múltiple y métodos no lineales como Random Forest o Gradient Boosting.
+5.  **Evaluación.** Medir el error sobre periodos posteriores a los utilizados para el entrenamiento y analizar los resultados por estación y horizonte de predicción.
 
 Debido a la naturaleza temporal del problema, los datos **no se dividirán aleatoriamente**. La separación de modelado se definirá después de revisar la disponibilidad real de O3 en cada año, conservando siempre el orden temporal para evitar fuga de información del futuro hacia el entrenamiento.
 
@@ -1621,9 +1619,7 @@ El análisis anterior estudió relaciones entre variables observadas en la misma
 
 Un rezago de $h$ horas representa la concentración observada $h$ horas antes:
 
-$$
-O_3(t-h)
-$$
+$$O_3(t-h)$$
 
 Primero se calcula la relación entre $O_3(t)$ y los valores observados entre 1 y 24 horas antes. Esta separación temporal es equivalente a estudiar cuánto puede aportar $O_3(t)$ para anticipar $O_3(t+h)$ a la misma distancia de tiempo.
 
@@ -1785,9 +1781,7 @@ Estos resultados no implican que deban incorporarse los 24 rezagos al modelo. Lo
 
 Después de estudiar el propio O3, se analiza directamente si las condiciones meteorológicas conocidas en el momento $t$ contienen información sobre el O3 que se observará después. Para cada variable se calcula:
 
-$$
-Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24
-$$
+$$Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24$$
 
 De esta forma, un horizonte de 6 horas indica qué tan relacionada está una medición meteorológica disponible ahora con el O3 observado seis horas después. Igual que en el análisis anterior, solo se utiliza 2021-2023 y se conserva una secuencia horaria completa por estación.
 
@@ -1896,9 +1890,7 @@ La forma de las curvas vuelve a reflejar el ciclo diario observado previamente. 
 
 Se repite el mismo análisis con los demás contaminantes. Para cada variable medida en el momento $t$ se calcula su correlación con el O3 observado entre 1 y 24 horas después:
 
-$$
-Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24
-$$
+$$Corr\left(X(t), O_3(t+h)\right), \qquad h=1,\ldots,24$$
 
 Se utilizan `CO`, `NO`, `NO2`, `NOX`, `PM10`, `PM2.5` y `SO2`. El cálculo se mantiene restringido a 2021-2023 y conserva la secuencia horaria completa de cada estación.
 
@@ -2429,6 +2421,36 @@ El archivo `data/base_modelado_o3.rds` es un producto derivado y reproducible. S
 
 # Modelado
 
+------------------------------------------------------------------------
+
+### **Reporte de modelo GAM**
+
+Se eligió un Modelo Aditivo Generalizado como el modelo estadístico no lineal del proyecto porque conserva interpretabilidad directa de una regresión lineal múltiple, es decir, se puede visualizar y explicar el modelo, predictor por predictor. Al mismo tiempo, permite capturar relaciones curvas entre O3 y sus predictores, algo que un modelo solo lineal no puede representar. GAM sirve como complemento para XGBoost y la red neuronal, ya que puede explicar de manera más clara su funcionamiento.
+
+**Ajuste general**
+
+El modelo para h = 1 explica el 86.2 % de la devianza de O3 (R² ajustado = 0.861), usando siete smooths meteorológicos/temporales más efectos paramétricos de estación y dirección del viento, sobre un conjunto de 39,043 casos completos (86.6 % de los objetivos disponibles). \| \| \### Concurvity La mayoría de los smooths presenta concurvity moderada (0.42-0.66), esperable por la covariación natural entre variables meteorológicas. El rezago de 24 horas de O3 destaca con 0.963, ya que comparte con la hora del día la misma periodicidad diurna; se conserva por ser significativo (p \< 0.001), aunque su forma exacta debe interpretarse con cautela.
+
+**Efectos no lineales**
+
+Las curvas son consistentes con la química esperada del ozono: `O3_t` crece casi linealmente y se satura cerca de 130 µg/m³ (el predictor dominante); `O3_lag_24` refleja la persistencia diaria; `SR` (radiación solar) muestra forma de joroba, coherente con su rol como precursor fotoquímico que se satura a niveles extremos; `TEMP` crece (acelera la fotoquímica); `RH` decrece (asociada a nubosidad y remoción de contaminantes); `WS` decrece y se estabiliza (dilución atmosférica). La hora objetivo pica entre 11:00-12:00 —más temprano que el pico crudo de O3 (14:00-16:00)—, lo que sugiere que los rezagos de O3 ya explican buena parte del incremento vespertino, dejando a la hora principalmente el efecto de la acumulación matutina. El mes objetivo mantiene el patrón estacional ya descrito (máximo en primavera).
+
+**Dirección del viento y estación**
+
+WD_sin y WD_cos son significativos (p \< 0.001) y consistentes con el patrón descriptivo (mayor O3 con viento del sureste-este) —interesante porque en XGBoost esta variable tuvo Gain casi nulo, mostrando que ambos modelos priorizan señales débiles de forma distinta. El efecto de estación (NTE como referencia) es negativo y significativo para las tres restantes, pero de magnitud pequeña frente a las diferencias brutas del análisis exploratorio, indicando que la mayoría de la variación entre estaciones se explica por sus condiciones meteorológicas locales, no por la ubicación en sí.
+
+**Gaussiano contra Gamma**
+
+Ante la heterocedasticidad detectada en el modelo gaussiano, se probó una familia Gamma (link log), adecuada para variables positivas con varianza creciente. El desempeño fue prácticamente idéntico (MAE 4.884 vs. 4.933) y Gamma sí corrigió la heterocedasticidad, pero se optó por reportar el gaussiano como modelo principal por interpretarse directamente en unidades de O3; Gamma se documenta como verificación de robustez.
+
+**Desempeño por horizonte**
+
+La mejora del GAM sobre persistencia varía marcadamente: 30.5 % (h=1), 53.9 % (h=6), 51.9 % (h=12), 11.6 % (h=24). Este patrón coincide con la correlación de O3 con sus propios rezagos (Figura 12): cae de 0.916 en h=1 hasta -0.208 cerca de 12h y se recupera a 0.741 en h=24. Donde la persistencia ya es buena predictora (h=1, h=24), el margen de mejora es limitado; donde deja de serlo (h=6, h=12), la meteorología y la hora aportan mucho más. El mismo patrón aparece, de forma independiente, en la importancia de variables de XGBoost (O3_t domina en h=1/h=24; la hora y TEMP dominan en h=6/h=12) .
+
+Los dos modelos de naturaleza distinta coincidiendo en la misma estructura temporal, lo que hace más sólida esta conclusión sobre la dinámica del ozono en la ZMM.
+
+------------------------------------------------------------------------
+
 ## Modelo base
 
 Pendiente de implementar un modelo de persistencia que sirva como referencia mínima de desempeño.
@@ -2484,7 +2506,6 @@ Cerón Bretón, R. M., et al. (2020). *Short-Term Effects of Atmospheric Polluti
 Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). *Hourly Ozone and PM2.5 Prediction Using Meteorological Data – Alternatives for Cities with Limited Pollutant Information*. Aerosol and Air Quality Research, 21, 200471.
 
 Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations*. International Journal of Public Health, 66, 1604465.
-
 
 ```{r}
 library(dplyr)
@@ -3006,9 +3027,9 @@ evaluacion_altos
 
 Se utilizó una red neuronal artificial feedforward como uno de los modelos de predicción de O3. La metodología se planteó en base al trabajo de Cifuentes et al. (2021) ya que les resultó con mucho éxito. A diferencia de otros modelos, la red neuronal no necesita demostrar normalidad en los residuos ni linealidad ni homoscedasticidad. Sin embargo, si se tomaron precauciones antes de aplicar el modelo. Por ejemplo, se respetó la temporalidad de los datos porque no suponemos independencia temporal. También, todas las estadísticas utilizadas para la normalización y la imputación fueron calculadas a partir del periodo de entrenamiento. Aparte, las variables numéricas utilizadas por la red fueron normalizadas y las variables meteorológicas faltantes se imputaron mediante medianas históricas calculadas según estación, mes y hora. En cambio, los valores faltantes de O3 utilizados como respuesta o como rezagos esenciales no fueron imputados
 
-La separación de los datos se realizó diviendo la base de datos: 2021, 2022 y 2023 fueron utilizados para entrenamiento, 2024 para validación y selección del modelo y 2025 para el conjunto final de prueba. Esto evita utilizar información futura para entrenar o seleccionar el modelo. La arquitectura final utiliza una capa oculta de 7 neuronas con función de activación **tanh** y una neurona de salida con activación lineal. Es necesaria la salida lineal ya que se desea predecir una variable continua. El número de neuronas se seleccionó mediante el desempeño en el conjunto de validación con el conjunto de datos de 2024, probando desde 2 hasta 10 neuronas. Este modelo presentó el mejor desempeño por lo que fue seleccionada, aunque no estuvo muy lejos de los demás. Después de haber usado el modelo, se observó que el error incrementaba en las concentraciones más altas de ozono y por eso se le asignó un peso mayor (4) al 10% superior de las concentraciones observadas durante entrenamiento. 
+La separación de los datos se realizó diviendo la base de datos: 2021, 2022 y 2023 fueron utilizados para entrenamiento, 2024 para validación y selección del modelo y 2025 para el conjunto final de prueba. Esto evita utilizar información futura para entrenar o seleccionar el modelo. La arquitectura final utiliza una capa oculta de 7 neuronas con función de activación **tanh** y una neurona de salida con activación lineal. Es necesaria la salida lineal ya que se desea predecir una variable continua. El número de neuronas se seleccionó mediante el desempeño en el conjunto de validación con el conjunto de datos de 2024, probando desde 2 hasta 10 neuronas. Este modelo presentó el mejor desempeño por lo que fue seleccionada, aunque no estuvo muy lejos de los demás. Después de haber usado el modelo, se observó que el error incrementaba en las concentraciones más altas de ozono y por eso se le asignó un peso mayor (4) al 10% superior de las concentraciones observadas durante entrenamiento.
 
-En el conjunto de entrenamiento se obtuvo un RMSE aproximado de 11.54 y un MAE aproximado de 8.53, mientras que en el conjunto independiente de prueba de 2025 se obtuvo un RMSE de 13.53 y un MAE de 9.99. La diferencia entre los conjuntos es normal e indica una peqeuña pérdida de precisión al utilizar datos no observados previamente, pero no muestra evidencia de un sobreajuste relevante. Si existe una limitación en el modelo, como ya se mencinó, este pierde precisión al modelar los valores más altos de O3. El O3 alto (>90%) tiene un RMSE aproximado de 16.87 y un MAE aproximado de 22.6. También el sesgo incrementa en un 18.09 comparadao al sesgo del O3 normal (0% - 90%).
+En el conjunto de entrenamiento se obtuvo un RMSE aproximado de 11.54 y un MAE aproximado de 8.53, mientras que en el conjunto independiente de prueba de 2025 se obtuvo un RMSE de 13.53 y un MAE de 9.99. La diferencia entre los conjuntos es normal e indica una peqeuña pérdida de precisión al utilizar datos no observados previamente, pero no muestra evidencia de un sobreajuste relevante. Si existe una limitación en el modelo, como ya se mencinó, este pierde precisión al modelar los valores más altos de O3. El O3 alto (\>90%) tiene un RMSE aproximado de 16.87 y un MAE aproximado de 22.6. También el sesgo incrementa en un 18.09 comparadao al sesgo del O3 normal (0% - 90%).
 
 ```{r}
 set.seed(123)
@@ -3117,7 +3138,6 @@ ggplot(
 
 ```
 
-
 La importancia de las variables se evaluó mediante Permutation Importance. Los resultados muestran que la hora objetivo es la variable más importante del modelo. Esto confirma lo que se observó en el análisis exploratorio de los datos. El estado actual del O3 y las estaciones también constituyen gran parte de la predicción.
 
 Se van a tomar en cuenta las siguientes cosas para la última mejora del modelo antes del informe final:
@@ -3126,5 +3146,3 @@ Se van a tomar en cuenta las siguientes cosas para la última mejora del modelo 
 - Selección de variables
 - Ajuste de hiperparámetros
 - Análisis del error
-
-

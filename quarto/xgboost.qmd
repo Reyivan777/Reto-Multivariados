@@ -3,7 +3,7 @@ title: "Modelado XGBoost para O3"
 author: "Equipo 4"
 date: today
 format:
-  html:
+  pdf:
     toc: true
     toc-depth: 3
 execute:
@@ -12,6 +12,12 @@ execute:
   message: false
 ---
 
+
+html:
+    toc: true
+    toc-depth: 3
+    
+    
 # Objetivo de este archivo
 
 Este archivo se utilizará únicamente para construir, ajustar y evaluar el modelo XGBoost. La limpieza, homologación y justificación de las decisiones metodológicas permanecen documentadas en `reporte.qmd`.

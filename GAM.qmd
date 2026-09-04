@@ -3,7 +3,7 @@ title: "Modelado GAM para O3"
 author: "Equipo 4"
 date: today
 format:
-  html:
+  pdf:
     toc: true
     toc-depth: 3
 execute:
@@ -11,3 +11,401 @@ execute:
   warning: false
   message: false
 ---
+
+# Objetivo de este archivo
+
+Igual que el archivo de XGBoost, este parte directamente de `data/base_modelado_o3.rds`.
+
+- estaciones: `NTE`, `NTE2`, `NO` y `NE`;
+- periodo útil: 2021-2025;
+- entrenamiento: 2021-2023;
+- validación: 2024;
+- prueba final: 2025;
+- horas objetivo: 10:00-20:00;
+- horizonte máximo: 24 horas.
+
+A diferencia de XGBoost, GAM no maneja valores faltantes de forma nativa. Cualquier fila con NA en algún predictor se elimina antes de ajustar el modelo. Esto significa que el conjunto de entrenamiento/validación del GAM es más pequeño que el usado por XGBoost.
+
+El desarrollo se hace de forma "incremental". Primero se construye el modelo para una hora de anticipación (`h = 1`), y después se extiende la misma lógica a 6, 12 y 24 horas para comparar contra XGBoost en los mismos horizontes.
+
+# Carga de la base de modelado
+
+```{r}
+#| label: configuracion
+library(tidyverse)
+library(here)
+library(lubridate)
+library(mgcv)
+library(gratia)  # para visualizar los smooths de forma más clara que plot.gam base
+
+options(scipen = 999)
+set.seed(123)
+```
+
+Primero se lee la misma base de datos utilizada por XGBoost.
+
+```{r}
+#| label: carga-base-modelado
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+if (!file.exists(ruta_base_modelado)) {
+  stop(
+    "No se encontró data/base_modelado_o3.rds. ",
+    "Renderiza primero quarto/reporte.qmd para generar la base de modelado."
+  )
+}
+
+base_origen_modelado <- readRDS(ruta_base_modelado)
+```
+
+```{r}
+#| label: verificacion-base-modelado
+columnas_requeridas <- c(
+  "Estacion", "fecha_hora",
+  "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+)
+
+faltantes_estructura <- setdiff(
+  columnas_requeridas,
+  names(base_origen_modelado)
+)
+
+if (length(faltantes_estructura) > 0) {
+  stop(
+    "La base de modelado no contiene: ",
+    paste(faltantes_estructura, collapse = ", ")
+  )
+}
+```
+
+# Construcción del horizonte
+
+
+```{r}
+#| label: funcion-base-horizonte
+construir_base_horizonte <- function(h) {
+  base_origen_modelado |>
+    group_by(Estacion) |>
+    mutate(
+      O3_objetivo = lead(O3_t, h)
+    ) |>
+    ungroup() |>
+    mutate(
+      Horizonte_h = h,
+      fecha_objetivo = fecha_hora + hours(h),
+      Año_objetivo = year(fecha_objetivo),
+      Hora_objetivo = hour(fecha_objetivo),
+      Mes_objetivo = month(fecha_objetivo),
+      Periodo = case_when(
+        Año_objetivo %in% 2021:2023 ~ "Entrenamiento",
+        Año_objetivo == 2024 ~ "Validacion",
+        Año_objetivo == 2025 ~ "Prueba",
+        TRUE ~ NA_character_
+      )
+    ) |>
+    filter(
+      !is.na(Periodo),
+      between(Hora_objetivo, 10, 20)
+    )
+}
+
+calcular_metricas <- function(observado, predicho) {
+  tibble(
+    MAE = mean(abs(observado - predicho)),
+    RMSE = sqrt(mean((observado - predicho)^2))
+  )
+}
+```
+
+
+# Preparación de los predictores del GAM
+
+## Selección de variables
+
+```{r}
+#| label: predictores-gam
+predictores_gam <- c(
+  "O3_t", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "Hora_objetivo", "Mes_objetivo", "Estacion"
+)
+```
+
+Hasta este chunk se deja fuera `O3_lag_1`, `O3_lag_2` y `O3_lag_3` para evitar concurvity con `O3_t`.
+
+## Preparación de la base para h = 1
+
+```{r}
+#| label: base-h1-gam
+base_h1 <- construir_base_horizonte(1) |>
+  filter(!is.na(O3_objetivo))
+
+resumen_h1_completo <- base_h1 |>
+  drop_na(all_of(predictores_gam)) |>
+  count(Periodo, name = "Casos_completos") |>
+  left_join(
+    base_h1 |> count(Periodo, name = "Objetivos_disponibles"),
+    by = "Periodo"
+  ) |>
+  mutate(Cobertura_pct = round(100 * Casos_completos / Objetivos_disponibles, 1)) |>
+  arrange(factor(Periodo, levels = c("Entrenamiento", "Validacion", "Prueba")))
+
+knitr::kable(
+  resumen_h1_completo,
+  caption = "Casos completos disponibles para el GAM (h = 1)"
+)
+```
+
+
+```{r}
+#| label: base-h1-gam-completa
+base_h1_completo <- base_h1 |>
+  drop_na(all_of(predictores_gam)) |>
+  mutate(Estacion = factor(Estacion))
+
+entrenamiento_h1 <- base_h1_completo |> filter(Periodo == "Entrenamiento")
+validacion_h1 <- base_h1_completo |> filter(Periodo == "Validacion")
+```
+
+# Modelo de persistencia (recalculado sobre el subconjunto del GAM)
+
+```{r}
+#| label: persistencia-h1-gam
+metricas_persistencia_h1_gam <- calcular_metricas(
+  validacion_h1$O3_objetivo,
+  validacion_h1$O3_t
+) |>
+  mutate(Modelo = "Persistencia", Observaciones = nrow(validacion_h1), .before = 1)
+```
+
+# GAM
+
+## Especificación del modelo
+
+```{r}
+#| label: modelo-gam-h1
+modelo_gam_h1 <- bam(
+  O3_objetivo ~
+    s(O3_t, k = 10) +
+    s(O3_lag_24, k = 10) +
+    s(SR, k = 10) +
+    s(TEMP, k = 15) +
+    s(RH, k = 15) +
+    s(WS, k = 10) +
+    WD_sin +
+    WD_cos +
+    s(Hora_objetivo, k = 8) +
+    s(Mes_objetivo, bs = "cc", k = 10) +
+    Estacion,
+  data = entrenamiento_h1,
+  method = "fREML",
+  discrete = TRUE
+)
+```
+
+## Diagnóstico de concurvity
+
+A continuación se revisa si algún smooth se puede aproximar a partir de otros.
+
+```{r}
+#| label: concurvity-gam-h1
+concurvity(modelo_gam_h1, full = TRUE)
+```
+
+## Resumen del modelo
+
+```{r}
+#| label: resumen-gam-h1
+summary(modelo_gam_h1)
+```
+
+
+```{r}
+#| label: chequeo-residuos-gam-h1
+#| fig-cap: "Diagnóstico de residuos del GAM para h = 1"
+gam.check(modelo_gam_h1)
+```
+
+## Visualización de los efectos
+
+```{r}
+#| label: grafica-smooths-gam-h1
+#| fig-cap: "Efecto parcial de cada predictor sobre O3 objetivo (h = 1)"
+#| fig-width: 9
+#| fig-height: 7
+draw(modelo_gam_h1)
+```
+
+
+## Modelo alternativo con familia Gamma (link log)
+
+El diagnóstico de residuos del modelo gaussiano (QQ-plot, residuos vs. predictor lineal, histograma) muestra dos problemas relacionados, los cuales son que la varianza de los residuos crece conforme aumenta el valor predicho (heterocedasticidad) y la cola derecha es más pesada de lo que un modelo gaussiano espera. Esto es consistente con la asimetría de O3 ya documentada en el análisis exploratorio. Como O3 es siempre positivo en la base limpia (mínimo observado = 1, se prueba una familia Gamma con link logarítmico, que asume que la varianza crece con el cuadrado de la media; es un supuesto natural para concentraciones de contaminantes.
+
+```{r}
+#| label: modelo-gam-h1-gamma
+modelo_gam_h1_gamma <- bam(
+  O3_objetivo ~
+    s(O3_t, k = 10) +
+    s(O3_lag_24, k = 10) +
+    s(SR, k = 10) +
+    s(TEMP, k = 15) +
+    s(RH, k = 10) +
+    s(WS, k = 10) +
+    WD_sin +
+    WD_cos +
+    s(Hora_objetivo, k = 8) +
+    s(Mes_objetivo, bs = "cc", k = 10) +
+    Estacion,
+  data = entrenamiento_h1,
+  family = Gamma(link = "log"),
+  method = "fREML",
+  discrete = TRUE
+)
+```
+
+```{r}
+#| label: chequeo-residuos-gam-h1-gamma
+#| fig-cap: "Diagnóstico de residuos del GAM con familia Gamma para h = 1"
+gam.check(modelo_gam_h1_gamma)
+```
+
+
+```{r}
+#| label: grafica-smooths-gam-h1-gamma
+#| fig-cap: "Efecto parcial de cada predictor, familia Gamma (h = 1)"
+#| fig-width: 9
+#| fig-height: 7
+draw(modelo_gam_h1_gamma)
+```
+
+
+## Comparación con persistencia en validación 2024
+
+Igual que con XGBoost, la comparación se hace sobre las mismas observaciones. Se incluyen ambos modelos GAM (gaussiano y Gamma) para decidir cuál llevar a los demás horizontes.
+
+```{r}
+#| label: comparacion-persistencia-gam-h1
+pred_gam_validacion_h1 <- predict(modelo_gam_h1, newdata = validacion_h1)
+pred_gam_gamma_validacion_h1 <- predict(modelo_gam_h1_gamma, newdata = validacion_h1, type = "response")
+
+metricas_gam_h1 <- calcular_metricas(
+  validacion_h1$O3_objetivo,
+  pred_gam_validacion_h1
+) |>
+  mutate(Modelo = "GAM (gaussiano)", Observaciones = nrow(validacion_h1), .before = 1)
+
+metricas_gam_gamma_h1 <- calcular_metricas(
+  validacion_h1$O3_objetivo,
+  pred_gam_gamma_validacion_h1
+) |>
+  mutate(Modelo = "GAM (Gamma, link log)", Observaciones = nrow(validacion_h1), .before = 1)
+
+bind_rows(
+  metricas_persistencia_h1_gam,
+  metricas_gam_h1,
+  metricas_gam_gamma_h1
+) |>
+  mutate(MAE = round(MAE, 3), RMSE = round(RMSE, 3)) |>
+  knitr::kable(caption = "Comparación GAM (gaussiano y Gamma) vs. persistencia en validación 2024 para h = 1")
+```
+
+
+# Extensión a horizontes de 6, 12 y 24 horas
+
+Se repite la misma lógica para los demás horizontes representativos, manteniendo la misma especificación del modelo. Esto permite comparar directamente contra la tabla de horizontes obtenida con XGBoost.
+
+```{r}
+#| label: funcion-evaluar-horizonte-gam
+entrenar_y_evaluar_gam_horizonte <- function(h) {
+  base_h <- construir_base_horizonte(h) |>
+    filter(!is.na(O3_objetivo)) |>
+    drop_na(all_of(predictores_gam)) |>
+    mutate(Estacion = factor(Estacion))
+
+  entrenamiento_h <- base_h |> filter(Periodo == "Entrenamiento")
+  validacion_h <- base_h |> filter(Periodo == "Validacion")
+
+  modelo_h <- bam(
+    O3_objetivo ~
+      s(O3_t, k = 10) +
+      s(O3_lag_24, k = 10) +
+      s(SR, k = 10) +
+      s(TEMP, k = 15) +
+      s(RH, k = 10) +
+      s(WS, k = 10) +
+      WD_sin +
+      WD_cos +
+      s(Hora_objetivo, k = 8) +
+      s(Mes_objetivo, bs = "cc", k = 10) +
+      Estacion,
+    data = entrenamiento_h,
+    method = "fREML",
+    discrete = TRUE
+  )
+
+  predicciones_h <- predict(modelo_h, newdata = validacion_h)
+
+  metricas_persistencia_h <- calcular_metricas(
+    validacion_h$O3_objetivo,
+    validacion_h$O3_t
+  )
+
+  metricas_gam_h <- calcular_metricas(
+    validacion_h$O3_objetivo,
+    predicciones_h
+  )
+
+  resumen_h <- tibble(
+    Horizonte_h = h,
+    Observaciones = nrow(validacion_h),
+    MAE_Persistencia = metricas_persistencia_h$MAE,
+    MAE_GAM = metricas_gam_h$MAE,
+    RMSE_Persistencia = metricas_persistencia_h$RMSE,
+    RMSE_GAM = metricas_gam_h$RMSE,
+    Mejora_MAE_pct = 100 * (MAE_Persistencia - MAE_GAM) / MAE_Persistencia,
+    Mejora_RMSE_pct = 100 * (RMSE_Persistencia - RMSE_GAM) / RMSE_Persistencia
+  )
+
+  list(modelo = modelo_h, resumen = resumen_h)
+}
+```
+
+```{r}
+#| label: comparacion-horizontes-gam
+resultado_h1_gam <- tibble(
+  Horizonte_h = 1,
+  Observaciones = metricas_gam_h1$Observaciones,
+  MAE_Persistencia = metricas_persistencia_h1_gam$MAE,
+  MAE_GAM = metricas_gam_h1$MAE,
+  RMSE_Persistencia = metricas_persistencia_h1_gam$RMSE,
+  RMSE_GAM = metricas_gam_h1$RMSE,
+  Mejora_MAE_pct = 100 * (MAE_Persistencia - MAE_GAM) / MAE_Persistencia,
+  Mejora_RMSE_pct = 100 * (RMSE_Persistencia - RMSE_GAM) / RMSE_Persistencia
+)
+
+evaluaciones_horizontes_gam <- map(
+  c(6, 12, 24),
+  entrenar_y_evaluar_gam_horizonte
+)
+
+resultados_horizontes_gam <- bind_rows(
+  resultado_h1_gam,
+  map_dfr(evaluaciones_horizontes_gam, ~ .x$resumen)
+) |>
+  arrange(Horizonte_h)
+
+resultados_horizontes_gam |>
+  mutate(
+    across(c(MAE_Persistencia, MAE_GAM, RMSE_Persistencia, RMSE_GAM), ~ round(.x, 3)),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(caption = "Persistencia y GAM en horizontes representativos de 2024")
+```
+
+Con esta tabla se puede comparar el desempeño del GAM contra el XGBoost (MAE_XGBoost y MAE_GAM sobre las mismas métricas, aunque en subconjuntos de datos ligeramente distintos por el tema de casos completos.
+
+# Evaluación
+
+El GAM ya se evalúa sobre **2024** en los mismos horizontes representativos (1, 6, 12, 24) que XGBoost. El conjunto de **2025 permanece reservado** para la prueba final y no debe utilizarse para decidir variables, `k` de los smooths, ni especificación del modelo.
