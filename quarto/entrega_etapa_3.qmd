@@ -434,7 +434,7 @@ Desde 2021 también existen interrupciones de O3 que pueden durar varios días o
 La limpieza convirtió códigos inválidos `-9999` y **1,062 mediciones fuera de los rangos físicos definidos** a `NA`, sin eliminar horas completas. Los valores extremos que permanecieron dentro de límites plausibles se conservaron porque pueden corresponder a episodios reales de contaminación. La base limpia del periodo útil contiene **157,616 registros**.
 
 | Componente | Variables principales | Papel en los modelos |
-|---|---|---|
+|------------------------|------------------------|------------------------|
 | Historial de O3 | O3 actual, rezagos recientes y valores de días previos | Capturar persistencia, dinámica reciente y ciclo diario. |
 | Meteorología | SR, TEMP, RH, WS y dirección del viento | Representar condiciones asociadas con formación, transporte y dispersión. |
 | Contexto temporal | Hora y mes, en forma directa o cíclica | Incorporar patrón diario y estacional. |
@@ -489,7 +489,7 @@ En el análisis exploratorio previo también se encontró que O3 presenta asocia
 La etapa solicita por lo menos dos técnicas de análisis. Debido a que el objetivo final es explícitamente predictivo, se eligieron dos técnicas de **relaciones de dependencia**, complementarias entre sí:
 
 | Técnica | Fortalezas para este problema | Principal limitación |
-|---|---|---|
+|------------------------|------------------------|------------------------|
 | GAM | Relaciones no lineales suaves, interpretación de cada predictor, diagnóstico estadístico explícito. | Requiere casos completos y puede verse afectado por concurvidad. |
 | XGBoost | Interacciones complejas, alta flexibilidad, manejo nativo de faltantes, importancia de variables. | Menor interpretabilidad funcional y requiere controlar hiperparámetros. |
 
@@ -742,7 +742,7 @@ La diagonal representa una predicción perfecta. La dispersión alrededor de esa
 La instrucción de la etapa contempla una interfaz que permita utilizar el modelo. Con base en el flujo definitivo, el prototipo debe ser simple y evitar pedir al usuario información que no estaría disponible al momento de predecir.
 
 | Elemento de la interfaz | Contenido |
-|---|---|
+|------------------------------------|------------------------------------|
 | Entradas | Estación, fecha/hora de origen, O3 de la misma hora en días previos, O3 reciente y meteorología disponible. |
 | Proceso | Construcción automática de variables cíclicas y matriz de predictores; aplicación del XGBoost congelado. |
 | Salida principal | Predicción de O3 para la misma hora del día siguiente. |
@@ -763,7 +763,14 @@ Hasta ahora se logró: (1) limpiar y estructurar la información temporal, (2) d
 
 Las preguntas que quedan abiertas son principalmente operativas: **¿cuánto mejoraría el modelo si se incorporaran pronósticos meteorológicos para las siguientes 24 horas?, ¿conviene construir modelos específicos por estación?, ¿cómo cambia el desempeño durante episodios de O3 especialmente alto?, y qué formato de interfaz sería más útil para el personal de SIMA?** Estas preguntas orientan la siguiente etapa y la sesión de retroalimentación con el socio formador.
 
-# 11. Código y referencias
+# 11. Dinámica atmosférica observada en los modelos
+El ozono troposférico (O3) es un contaminante secundario que se sintetiza mediante reacciones fotoquímicas complejas entre óxidos de nitrógeno (NOx) y compuestos orgánicos volátiles (COV) bajo la presencia de luz solar. Esta fuerte dependencia fotoquímica explica el ciclo diario marcado que presenta O3, comportamiento también capturado en la exploración de datos históricos de este proyecto, mostrando siempre concentraciones bajas matutinas y un pico máximo vespertino. Igualmente, esto fundamenta de manera teórica por qué la radiación solar actúa como predictor con alta significancia dentro del modelo GAM.
+
+Por otro lado, la cinética de estas reacciones de formación de ozono está fuertemente regulada por las condiciones meteorológicas contemporáneas. Las altas temperaturas aceleran la tasa de las reacciones químicas creadoras de ozono, mientras que incrementos en la humedad relativa suelen estar asociados con una mayor nubosidad lo cual reduce la luz solar, o con precipitaciones que favorecen la dispersión de los contaminantes. Se aprecia cómo los modelos utilizados reflejaron esta fenomenología, cuando la temperatura requirió una alta flexibilidad para capturar su efecto, mientras que la curva de la humedad relativa cuenta con un impacto inversamente proporcional en las concentraciones de ozono.
+
+La literatura ambiental expresa que los episodios severos de ozono suelen ser producto de fenómenos de estancamiento a escala, como las inversiones térmicas, que bloquean la dispersión del aire durante varios días seguidos. Esta inercia del sistema atmosférico valida la estructura del modelo XGBoost, donde el historial alineado a 24 horas previas logró concentrar el 75.6% de la ganancia predictiva total. El algoritmo identifica empíricamente que la persistencia de estas condiciones de un día para otro es el factor más determinante para proyectar la contaminación futura.
+
+# 12. Código y referencias
 
 El código completo, la preparación de datos y los modelos se encuentran en:
 
@@ -772,3 +779,5 @@ El código completo, la preparación de datos y los modelos se encuentran en:
 Los archivos principales para esta etapa son `quarto/xgboost.qmd`, `quarto/GAM.qmd` y el presente `quarto/entrega_etapa_3.qmd`.
 
 Referencias metodológicas principales: Chen, T. y Guestrin, C. (2016), *XGBoost: A Scalable Tree Boosting System*; Wood, S. N. (2017), *Generalized Additive Models: An Introduction with R*; y los registros horarios proporcionados por SIMA para la Zona Metropolitana de Monterrey.
+
+Liu, H., Wang, H., Wang, B., Wang, H., Bai, L., Xue, C., Zhao, L., Bai, J., & Yu, S. (2026). Ozone Pollution in a Heavy-Industrial City with Complex Terrain: VOC Reactivity, Source Apportionment, and Meteorological Drivers. Atmosphere, 17(9), 812. 
