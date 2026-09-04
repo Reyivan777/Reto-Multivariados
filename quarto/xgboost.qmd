@@ -171,8 +171,9 @@ La cantidad de objetivos debe coincidir con la obtenida en `reporte.qmd` para el
 
 Antes de XGBoost se calcula una referencia mínima. Para una hora de anticipación, el modelo de persistencia supone que la concentración dentro de una hora será igual a la concentración actual:
 
-$$\widehat{O_3}(t+1) = O_3(t)
-$$$$\widehat{O_3}(t+1) = O_3(t)$$
+$$
+\widehat{O_3}(t+1) = O_3(t)
+$$
 
 Primero se define una función pequeña para calcular las dos métricas que utilizaremos en todos los modelos: MAE y RMSE.
 
@@ -689,8 +690,306 @@ top_importancia_horizontes |>
 
 Este diagnóstico permitirá explicar la forma de la curva de error. En particular, se revisará si `O3_t` domina a una hora, si pierde importancia alrededor de 6-12 horas y si las variables asociadas al ciclo diario recuperan peso al llegar a 24 horas.
 
+## Ajuste reducido de hiperparámetros
+
+Después de comprobar que la configuración inicial supera a persistencia y que la importancia de las variables cambia con el horizonte, se realiza un ajuste pequeño de hiperparámetros. El objetivo no es explorar cientos de combinaciones, sino comprobar si cambios razonables en la complejidad y velocidad de aprendizaje mejoran el RMSE de validación sin aumentar innecesariamente el tiempo de ejecución.
+
+Se mantienen fijos `objective = "reg:squarederror"`, `eval_metric = "rmse"` y `lambda = 1`. Se prueban seis configuraciones adicionales alrededor del modelo inicial, modificando `eta`, `max_depth`, `min_child_weight`, `subsample` y `colsample_bytree`. El número de árboles continúa determinado por `early stopping`.
+
+```{r}
+#| label: configuraciones-tuning-xgboost
+configuraciones_tuning <- tribble(
+  ~Configuracion, ~eta, ~max_depth, ~min_child_weight, ~subsample, ~colsample_bytree,
+  "T1", 0.05, 4, 5, 0.8, 0.8,
+  "T2", 0.05, 8, 5, 0.8, 0.8,
+  "T3", 0.03, 6, 5, 0.8, 0.8,
+  "T4", 0.10, 6, 5, 0.8, 0.8,
+  "T5", 0.05, 6, 10, 0.8, 0.8,
+  "T6", 0.05, 6, 5, 0.7, 0.7
+)
+
+knitr::kable(
+  configuraciones_tuning,
+  caption = "Configuraciones adicionales evaluadas en el tuning reducido"
+)
+```
+
+La búsqueda se realiza por separado para `h = 1, 6, 12 y 24`, porque el análisis anterior mostró que la información utilizada por el modelo cambia considerablemente con la distancia de pronóstico. Para cada horizonte se construyen una sola vez las matrices de entrenamiento y validación y después se reutilizan en todas las configuraciones.
+
+```{r}
+#| label: funciones-tuning-xgboost
+preparar_horizonte_tuning <- function(h) {
+  base_h <- construir_base_horizonte(h) |>
+    filter(!is.na(O3_objetivo))
+
+  entrenamiento_h <- base_h |>
+    filter(Periodo == "Entrenamiento")
+
+  validacion_h <- base_h |>
+    filter(Periodo == "Validacion")
+
+  list(
+    validacion = validacion_h,
+    dtrain = xgb.DMatrix(
+      data = crear_matriz_xgb(entrenamiento_h),
+      label = entrenamiento_h$O3_objetivo,
+      missing = NA
+    ),
+    dval = xgb.DMatrix(
+      data = crear_matriz_xgb(validacion_h),
+      label = validacion_h$O3_objetivo,
+      missing = NA
+    )
+  )
+}
+
+evaluar_configuracion_tuning <- function(datos_h, h, configuracion) {
+  parametros_h <- list(
+    objective = "reg:squarederror",
+    eval_metric = "rmse",
+    eta = configuracion$eta,
+    max_depth = configuracion$max_depth,
+    min_child_weight = configuracion$min_child_weight,
+    subsample = configuracion$subsample,
+    colsample_bytree = configuracion$colsample_bytree,
+    lambda = 1
+  )
+
+  set.seed(123)
+
+  modelo_h <- xgb.train(
+    params = parametros_h,
+    data = datos_h$dtrain,
+    nrounds = 1000,
+    evals = list(
+      entrenamiento = datos_h$dtrain,
+      validacion = datos_h$dval
+    ),
+    early_stopping_rounds = 30,
+    verbose = 0
+  )
+
+  registro_h <- as_tibble(attr(modelo_h, "evaluation_log"))
+  columna_rmse_h <- names(registro_h)[
+    str_detect(names(registro_h), "^validacion.*rmse$")
+  ]
+
+  if (length(columna_rmse_h) != 1) {
+    stop("No se pudo identificar la columna de RMSE de validación durante el tuning.")
+  }
+
+  indice_mejor_h <- which.min(registro_h[[columna_rmse_h]])
+  predicciones_h <- predict(modelo_h, datos_h$dval)
+  indices_comunes_h <- which(!is.na(datos_h$validacion$O3_t))
+
+  metricas_comunes_h <- calcular_metricas(
+    datos_h$validacion$O3_objetivo[indices_comunes_h],
+    predicciones_h[indices_comunes_h]
+  )
+
+  tibble(
+    Horizonte_h = h,
+    Configuracion = configuracion$Configuracion,
+    eta = configuracion$eta,
+    max_depth = configuracion$max_depth,
+    min_child_weight = configuracion$min_child_weight,
+    subsample = configuracion$subsample,
+    colsample_bytree = configuracion$colsample_bytree,
+    Mejor_iteracion = registro_h$iter[indice_mejor_h],
+    RMSE_validacion = registro_h[[columna_rmse_h]][indice_mejor_h],
+    MAE_comun = metricas_comunes_h$MAE,
+    RMSE_comun = metricas_comunes_h$RMSE
+  )
+}
+```
+
+El siguiente bloque ejecuta las seis configuraciones para los cuatro horizontes representativos. La selección se hace con el menor `RMSE_validacion` de 2024. El conjunto de 2025 permanece completamente fuera de este proceso.
+
+```{r}
+#| label: ejecutar-tuning-xgboost
+resultados_tuning <- map_dfr(
+  c(1, 6, 12, 24),
+  function(h) {
+    datos_h <- preparar_horizonte_tuning(h)
+
+    map_dfr(
+      seq_len(nrow(configuraciones_tuning)),
+      function(i) {
+        evaluar_configuracion_tuning(
+          datos_h,
+          h,
+          configuraciones_tuning[i, ]
+        )
+      }
+    )
+  }
+)
+
+mejores_tuning <- resultados_tuning |>
+  group_by(Horizonte_h) |>
+  slice_min(
+    order_by = RMSE_validacion,
+    n = 1,
+    with_ties = FALSE
+  ) |>
+  ungroup()
+
+mejores_tuning |>
+  select(
+    Horizonte_h,
+    Configuracion,
+    eta,
+    max_depth,
+    min_child_weight,
+    subsample,
+    colsample_bytree,
+    Mejor_iteracion,
+    RMSE_validacion
+  ) |>
+  mutate(RMSE_validacion = round(RMSE_validacion, 3)) |>
+  knitr::kable(
+    caption = "Mejor configuración del tuning reducido por horizonte"
+  )
+```
+
+Finalmente se compara el mejor modelo encontrado en el tuning contra la configuración inicial sobre el mismo subconjunto de observaciones donde también puede calcularse persistencia. Una mejora positiva indica que el tuning redujo el error respecto al XGBoost inicial.
+
+```{r}
+#| label: comparacion-tuning-inicial
+comparacion_tuning <- mejores_tuning |>
+  select(
+    Horizonte_h,
+    Configuracion,
+    MAE_tuning = MAE_comun,
+    RMSE_tuning = RMSE_comun
+  ) |>
+  left_join(
+    resultados_horizontes |>
+      select(
+        Horizonte_h,
+        MAE_inicial = MAE_XGBoost,
+        RMSE_inicial = RMSE_XGBoost
+      ),
+    by = "Horizonte_h"
+  ) |>
+  mutate(
+    Mejora_MAE_pct = 100 *
+      (MAE_inicial - MAE_tuning) / MAE_inicial,
+    Mejora_RMSE_pct = 100 *
+      (RMSE_inicial - RMSE_tuning) / RMSE_inicial
+  )
+
+comparacion_tuning |>
+  mutate(
+    across(
+      c(MAE_inicial, MAE_tuning, RMSE_inicial, RMSE_tuning),
+      ~ round(.x, 3)
+    ),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(
+    caption = "Configuración inicial frente al mejor tuning en 2024"
+  )
+```
+
+El tuning reducido produjo mejoras muy pequeñas: entre 0.0% y 1.0% en RMSE para los horizontes representativos. Por ello no se justifica utilizar configuraciones distintas por horizonte ni ampliar la búsqueda. Para la extensión a 24 horas se conserva la configuración inicial, que es más simple, uniforme y ya mostró un desempeño prácticamente equivalente.
+
+## Extensión a los 24 horizontes
+
+El tuning reducido no produjo mejoras suficientes para justificar configuraciones distintas por horizonte. Por ello se conserva la configuración inicial de XGBoost y se extiende el mismo procedimiento a cada horizonte desde 1 hasta 24 horas. Esta decisión permite estudiar la curva completa de desempeño manteniendo constantes los predictores y los hiperparámetros.
+
+Los modelos de `h = 1, 6, 12 y 24` ya fueron entrenados previamente, por lo que se reutilizan sus resultados. Solo se entrenan los veinte horizontes restantes. En todos los casos se utiliza 2021-2023 para entrenamiento, 2024 para validación y 2025 continúa sin utilizarse.
+
+```{r}
+#| label: extender-xgboost-24-horizontes
+horizontes_pendientes <- setdiff(
+  2:24,
+  c(6, 12, 24)
+)
+
+evaluaciones_horizontes_completos <- map(
+  horizontes_pendientes,
+  entrenar_y_evaluar_horizonte
+)
+
+resultados_24_horizontes <- bind_rows(
+  resultado_h1,
+  map_dfr(evaluaciones_horizontes, ~ .x$resumen),
+  map_dfr(evaluaciones_horizontes_completos, ~ .x$resumen)
+) |>
+  arrange(Horizonte_h)
+
+resultados_24_horizontes |>
+  transmute(
+    Horizonte_h,
+    Observaciones,
+    Mejor_iteracion,
+    MAE_Persistencia = round(MAE_Persistencia, 3),
+    MAE_XGBoost = round(MAE_XGBoost, 3),
+    RMSE_Persistencia = round(RMSE_Persistencia, 3),
+    RMSE_XGBoost = round(RMSE_XGBoost, 3),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(
+    caption = "Desempeño de persistencia y XGBoost para los 24 horizontes en validación 2024"
+  )
+```
+
+La tabla permite revisar hora por hora cuánto aumenta o disminuye el error y en qué horizontes XGBoost conserva una ventaja clara sobre persistencia. Las métricas continúan calculándose sobre el subconjunto común donde ambos modelos pueden evaluarse de forma justa.
+
+```{r}
+#| label: grafica-metricas-24-horizontes
+#| fig-cap: "MAE y RMSE de persistencia y XGBoost para horizontes de 1 a 24 horas"
+#| fig-width: 8
+#| fig-height: 6
+resultados_24_horizontes |>
+  select(
+    Horizonte_h,
+    MAE_Persistencia,
+    MAE_XGBoost,
+    RMSE_Persistencia,
+    RMSE_XGBoost
+  ) |>
+  pivot_longer(
+    cols = -Horizonte_h,
+    names_to = c("Metrica", "Modelo"),
+    names_sep = "_",
+    values_to = "Error"
+  ) |>
+  ggplot(
+    aes(
+      x = Horizonte_h,
+      y = Error,
+      group = Modelo,
+      linetype = Modelo,
+      shape = Modelo
+    )
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  facet_wrap(~ Metrica, scales = "free_y", ncol = 1) +
+  scale_x_continuous(breaks = seq(1, 24, by = 2)) +
+  labs(
+    x = "Horizonte (horas)",
+    y = "Error",
+    linetype = "Modelo",
+    shape = "Modelo"
+  ) +
+  theme_minimal()
+```
+
+Los resultados muestran que XGBoost supera a persistencia en los 24 horizontes de validación. A una hora obtiene un MAE de 4.248 y un RMSE de 6.027. Conforme aumenta la anticipación, ambos errores crecen hasta alcanzar su zona más alta alrededor de 12-13 horas; en `h = 13`, el MAE es 10.863 y el RMSE 14.741. Después el error disminuye gradualmente y en `h = 24` termina con MAE de 10.043 y RMSE de 13.651.
+
+La forma de la curva es consistente con el ciclo diario observado previamente. Los horizontes intermedios separan al origen y al objetivo en fases distintas del día, por lo que el valor actual de O3 pierde capacidad predictiva y cobran mayor importancia la hora objetivo y las variables meteorológicas. Al acercarse a 24 horas, el origen y el objetivo vuelven a corresponder aproximadamente a la misma hora del día, lo que recupera parte de la estructura temporal.
+
+Persistencia presenta este efecto de manera todavía más marcada: su RMSE aumenta desde 9.416 en `h = 1` hasta valores superiores a 31 alrededor de 7-11 horas y después desciende a 15.749 en `h = 24`. XGBoost controla mucho mejor este aumento. La reducción de RMSE respecto a persistencia supera 50% en buena parte de los horizontes intermedios, mientras que en 24 horas baja a 13.3% porque la propia persistencia vuelve a ser una referencia más competitiva.
+
+Las cantidades de observaciones se mantienen estables, aproximadamente entre 14.4 mil y 15.4 mil casos comunes según el horizonte, por lo que la forma de la curva no se explica por cambios drásticos en el tamaño de la muestra. En conjunto, la validación 2024 muestra que el modelo conserva una ventaja sobre persistencia en todo el rango de 1 a 24 horas y que su mayor dificultad aparece alrededor de medio día de anticipación.
+
 # Evaluación
 
-La configuración inicial ya se evalúa sobre **2024** en horizontes de 1, 6, 12 y 24 horas. Además, se compara la importancia de variables entre estos horizontes para entender cómo cambia la información utilizada por el modelo antes de ajustar hiperparámetros.
+La selección del modelo queda cerrada con **2024**: XGBoost supera a persistencia en los 24 horizontes, el tuning reducido solo produjo mejoras marginales y se conserva una configuración uniforme para todos los horizontes. La evolución de MAE y RMSE también es coherente con la estructura diaria identificada durante el análisis exploratorio.
 
-El conjunto de **2025 permanece reservado** para la prueba final y no debe utilizarse para decidir parámetros, variables ni arquitectura del modelo.
+El conjunto de **2025 permanece reservado** para la prueba final. A partir de este punto no se deben modificar predictores, hiperparámetros ni decisiones de modelado utilizando los resultados de 2025.
