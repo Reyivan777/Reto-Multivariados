@@ -723,8 +723,9 @@ Esta revisión permite detectar si la precisión cambia durante la ventana diurn
 #| fig-height: 2.8
 #| fig-width: 6.8
 set.seed(123)
+n_muestra <- min(3500L, nrow(test_xgb_oficial))
 muestra_pred <- test_xgb_oficial |>
-  slice_sample(n = min(3500, n()))
+  slice_sample(n = n_muestra)
 
 ggplot(muestra_pred, aes(O3_objetivo, Pred_XGBoost)) +
   geom_point(alpha = 0.12, size = 0.55) +
