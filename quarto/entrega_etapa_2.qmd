@@ -149,7 +149,7 @@ Se utilizaron medidas de tendencia central y dispersión, histogramas y diagrama
 La base limpia utilizada contiene **`r format(nrow(datos), big.mark = ",")` registros y `r ncol(datos)` columnas** correspondientes a las estaciones `NTE`, `NTE2`, `NO` y `NE`. Cada fila representa una medición horaria asociada a una estación.
 
 | Grupo | Variables | Función en el análisis |
-|---|---|---|
+|------------------------|------------------------|------------------------|
 | Contaminantes | CO, NO, NO2, NOX, O3, PM10, PM2.5, SO2 | Posibles variables objetivo. |
 | Meteorológicas | BP, RAINF, RH, SR, TEMP, WS, WD | Principales variables predictoras. |
 | Temporales/espaciales | Estacion, Año, fecha y hora | Conservan el contexto espacial y temporal. |

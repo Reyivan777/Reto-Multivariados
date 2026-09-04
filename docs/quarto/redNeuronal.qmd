@@ -1,0 +1,2686 @@
+---
+title: "Red Neuronal"
+author: "Equipo 4"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# A partir de la línea 2024 se encuentra la red neuronal.
+```{r}
+#| label: carga-datos-brutos
+#| output: false
+library(tidyverse)
+library(readxl)
+library(here)
+library(purrr)
+
+rm(list = ls())
+options(scipen = 999)
+
+estaciones_interes <- c("NTE", "NTE2", "NO", "NE")
+
+archivos <- tibble(Año = 2020:2025) |>
+  mutate(
+    Archivo = here("data", paste0("BD ", Año, ".xlsx"))
+  )
+
+leer_anio_bruto <- function(archivo, anio) {
+  hojas_disponibles <- excel_sheets(archivo)
+  hojas_interes <- intersect(estaciones_interes, hojas_disponibles)
+
+  map_dfr(hojas_interes, function(hoja) {
+    read_excel(
+      archivo,
+      sheet = hoja,
+      col_types = "text"
+    ) |>
+      mutate(
+        Año = anio,
+        Estacion = hoja,
+        .before = 1
+      )
+  })
+}
+
+datos_brutos <- map2_dfr(
+  archivos$Archivo,
+  archivos$Año,
+  leer_anio_bruto
+)
+```
+
+
+```{r}
+#| label: disponibilidad-registros
+#| output: false
+registros_por_estacion <- expand_grid(
+  Año = 2020:2025,
+  Estacion = estaciones_interes
+) |>
+  left_join(
+    datos_brutos |>
+      count(Año, Estacion, name = "Registros"),
+    by = c("Año", "Estacion")
+  ) |>
+  mutate(Registros = replace_na(Registros, 0L))
+
+registros_por_estacion |>
+  pivot_wider(
+    names_from = Estacion,
+    values_from = Registros
+  ) |>
+  knitr::kable(
+    caption = "Cantidad de registros por año y estación seleccionada"
+  )
+```
+
+
+```{r}
+#| label: estructura-inicial
+#| output: false
+resumen_estructura <- tibble(
+  Registros = nrow(datos_brutos),
+  Columnas = ncol(datos_brutos),
+  Años = n_distinct(datos_brutos$Año),
+  Estaciones = n_distinct(datos_brutos$Estacion)
+)
+
+knitr::kable(
+  resumen_estructura,
+  caption = "Estructura inicial del conjunto de trabajo"
+)
+```
+
+
+```{r}
+#| label: equivalencias-nombres
+#| output: false
+equivalencias_nombres <- tribble(
+  ~Variable_estandar, ~Nombres_en_archivos,
+  "fecha_hora", "fecha y hora / date",
+  "BP", "BP / PRS",
+  "TEMP", "TEMP / TOUT",
+  "WS", "WS / WSR",
+  "WD", "WD / WDR"
+)
+
+knitr::kable(
+  equivalencias_nombres,
+  caption = "Equivalencias utilizadas para homologar la estructura"
+)
+```
+
+
+```{r}
+#| label: homologacion-estructura
+#| output: false
+normalizar_etiqueta <- function(x) {
+  x |>
+    str_replace_all("[\r\n]", " ") |>
+    str_replace("\\s*\\([^)]*\\).*", "") |>
+    str_squish() |>
+    str_to_upper()
+}
+
+extraer_variable <- function(datos, aliases) {
+  nombres_originales <- names(datos)
+  nombres_normalizados <- normalizar_etiqueta(nombres_originales)
+  aliases_normalizados <- normalizar_etiqueta(aliases)
+
+  columnas <- nombres_originales[
+    nombres_normalizados %in% aliases_normalizados
+  ]
+
+  if (length(columnas) == 0) {
+    return(rep(NA_character_, nrow(datos)))
+  }
+
+  reduce(datos[columnas], coalesce)
+}
+
+datos_homologados <- datos_brutos |>
+  transmute(
+    Año,
+    Estacion,
+    fecha_hora = extraer_variable(datos_brutos, c("fecha y hora", "date")),
+    CO = extraer_variable(datos_brutos, "CO"),
+    NO = extraer_variable(datos_brutos, "NO"),
+    NO2 = extraer_variable(datos_brutos, "NO2"),
+    NOX = extraer_variable(datos_brutos, "NOX"),
+    O3 = extraer_variable(datos_brutos, "O3"),
+    PM10 = extraer_variable(datos_brutos, "PM10"),
+    PM2.5 = extraer_variable(datos_brutos, "PM2.5"),
+    SO2 = extraer_variable(datos_brutos, "SO2"),
+    BP = extraer_variable(datos_brutos, c("BP", "PRS")),
+    RAINF = extraer_variable(datos_brutos, "RAINF"),
+    RH = extraer_variable(datos_brutos, "RH"),
+    SR = extraer_variable(datos_brutos, "SR"),
+    TEMP = extraer_variable(datos_brutos, c("TEMP", "TOUT")),
+    WS = extraer_variable(datos_brutos, c("WS", "WSR")),
+    WD = extraer_variable(datos_brutos, c("WD", "WDR"))
+  )
+```
+
+
+```{r}
+#| label: verificacion-homologacion
+#| output: false
+variables_esperadas <- c(
+  "Año", "Estacion", "fecha_hora",
+  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2",
+  "BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD"
+)
+
+resumen_homologacion <- tibble(
+  Registros = nrow(datos_homologados),
+  Columnas = ncol(datos_homologados),
+  Variables_faltantes = if_else(
+    length(setdiff(variables_esperadas, names(datos_homologados))) == 0,
+    "Ninguna",
+    paste(setdiff(variables_esperadas, names(datos_homologados)), collapse = ", ")
+  )
+)
+
+knitr::kable(
+  resumen_homologacion,
+  caption = "Verificación de la estructura homologada"
+)
+```
+
+```{r}
+#| label: conversion-tipos
+#| output: false
+variables_medicion <- c(
+  "CO", "NO", "NO2", "NOX", "O3", "PM10", "PM2.5", "SO2",
+  "BP", "RAINF", "RH", "SR", "TEMP", "WS", "WD"
+)
+
+convertir_fecha_hora <- function(x) {
+  x <- str_squish(x)
+  x_num <- suppressWarnings(as.numeric(x))
+
+  fecha_excel <- as.POSIXct(
+    x_num * 86400,
+    origin = "1899-12-30",
+    tz = "UTC"
+  )
+
+  fecha_texto <- suppressWarnings(
+    lubridate::parse_date_time(
+      x,
+      orders = c(
+        "Ymd HMS", "Ymd HM",
+        "dmY HMS", "dmY HM",
+        "mdY HMS", "mdY HM"
+      ),
+      tz = "UTC"
+    )
+  )
+
+  coalesce(fecha_excel, fecha_texto)
+}
+
+datos_tipos <- datos_homologados |>
+  mutate(
+    fecha_hora = convertir_fecha_hora(fecha_hora),
+    across(
+      all_of(variables_medicion),
+      ~ suppressWarnings(parse_number(.x))
+    )
+  )
+```
+
+
+```{r}
+#| label: verificacion-tipos
+#| output: false
+fechas_no_convertidas <- sum(
+  !is.na(datos_homologados$fecha_hora) &
+    str_squish(datos_homologados$fecha_hora) != "" &
+    is.na(datos_tipos$fecha_hora)
+)
+
+resumen_tipos <- tibble(
+  Elemento = c(
+    "Año",
+    "Estacion",
+    "fecha_hora",
+    "Variables de medición"
+  ),
+  Resultado = c(
+    class(datos_tipos$Año)[1],
+    class(datos_tipos$Estacion)[1],
+    class(datos_tipos$fecha_hora)[1],
+    paste0(
+      sum(map_lgl(datos_tipos[variables_medicion], is.numeric)),
+      "/",
+      length(variables_medicion),
+      " numéricas"
+    )
+  )
+)
+
+resumen_fechas <- tibble(
+  Primera_fecha = min(datos_tipos$fecha_hora, na.rm = TRUE),
+  Ultima_fecha = max(datos_tipos$fecha_hora, na.rm = TRUE),
+  Fechas_no_convertidas = fechas_no_convertidas
+)
+
+knitr::kable(
+  resumen_tipos,
+  caption = "Tipos de datos después de la transformación"
+)
+
+knitr::kable(
+  resumen_fechas,
+  caption = "Verificación de la conversión de fecha y hora"
+)
+```
+
+
+
+```{r}
+#| label: diagnostico-faltantes-banderas
+#| output: false
+resumen_faltantes <- map_dfr(
+  variables_medicion,
+  function(variable) {
+    original <- datos_homologados[[variable]]
+    numerico <- datos_tipos[[variable]]
+    texto <- str_squish(original)
+
+    no_numericos <- sum(
+      !is.na(original) &
+        texto != "" &
+        is.na(numerico)
+    )
+    bandera_9999 <- sum(numerico == -9999, na.rm = TRUE)
+
+    tibble(
+      Variable = variable,
+      Faltantes = sum(is.na(numerico)),
+      No_numericos = no_numericos,
+      Bandera_menos9999 = bandera_9999,
+      Porcentaje_faltante = round(
+        (sum(is.na(numerico)) + bandera_9999) /
+          nrow(datos_tipos) * 100,
+        2
+      )
+    )
+  }
+)
+
+knitr::kable(
+  resumen_faltantes,
+  caption = "Diagnóstico inicial de valores faltantes y banderas por variable"
+)
+```
+
+
+```{r}
+#| label: diagnostico-duplicados
+#| output: false
+duplicados <- datos_tipos |>
+  count(Estacion, fecha_hora, name = "n") |>
+  filter(!is.na(fecha_hora), n > 1)
+
+resumen_duplicados <- tibble(
+  Combinaciones_duplicadas = nrow(duplicados),
+  Registros_involucrados = sum(duplicados$n)
+)
+
+knitr::kable(
+  resumen_duplicados,
+  caption = "Verificación de registros duplicados"
+)
+```
+
+
+
+```{r}
+#| label: faltantes-o3-estacion-anio
+#| output: false
+o3_estacion_anio <- datos_tipos |>
+  group_by(Año, Estacion) |>
+  summarise(
+    Registros = n(),
+    O3_disponibles = sum(!is.na(O3)),
+    O3_faltantes = sum(is.na(O3)),
+    Porcentaje_faltante = round(mean(is.na(O3)) * 100, 2),
+    .groups = "drop"
+  )
+
+porcentaje_o3_estacion_anio <- o3_estacion_anio |>
+  select(Año, Estacion, Porcentaje_faltante) |>
+  pivot_wider(
+    names_from = Estacion,
+    values_from = Porcentaje_faltante
+  )
+
+knitr::kable(
+  porcentaje_o3_estacion_anio,
+  caption = "Porcentaje de O3 faltante por año y estación"
+)
+```
+
+
+```{r}
+#| label: bloques-faltantes-o3
+#| output: false
+datos_o3_2021 <- datos_tipos |>
+  filter(Año >= 2021, !is.na(fecha_hora)) |>
+  select(Estacion, fecha_hora, O3)
+
+horas_completas <- seq(
+  min(datos_o3_2021$fecha_hora, na.rm = TRUE),
+  max(datos_o3_2021$fecha_hora, na.rm = TRUE),
+  by = "hour"
+)
+
+serie_o3_horaria <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_completas
+) |>
+  left_join(
+    datos_o3_2021,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    faltante = is.na(O3),
+    bloque = cumsum(
+      faltante != lag(faltante, default = FALSE)
+    )
+  ) |>
+  ungroup()
+
+bloques_o3 <- serie_o3_horaria |>
+  filter(faltante) |>
+  group_by(Estacion, bloque) |>
+  summarise(
+    Inicio = min(fecha_hora),
+    Fin = max(fecha_hora),
+    Horas = n(),
+    .groups = "drop"
+  )
+
+bloques_o3 |>
+  arrange(desc(Horas)) |>
+  slice_head(n = 10) |>
+  mutate(Año = lubridate::year(Inicio)) |>
+  select(Estacion, Año, Inicio, Fin, Horas) |>
+  knitr::kable(
+    caption = "Diez bloques consecutivos de O3 faltante más largos desde 2021"
+  )
+```
+
+
+
+```{r}
+#| label: base-preliminar-modelado
+#| output: false
+datos_base_modelado <- datos_tipos |>
+  filter(Año >= 2021) |>
+  mutate(
+    across(
+      all_of(variables_medicion),
+      ~ na_if(.x, -9999)
+    )
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+resumen_base_modelado <- tibble(
+  Registros = nrow(datos_base_modelado),
+  Desde = min(datos_base_modelado$fecha_hora, na.rm = TRUE),
+  Hasta = max(datos_base_modelado$fecha_hora, na.rm = TRUE),
+  Estaciones = n_distinct(datos_base_modelado$Estacion)
+)
+
+knitr::kable(
+  resumen_base_modelado,
+  caption = "Base preliminar para el modelado de O3"
+)
+```
+
+
+
+```{r}
+#| label: diagnostico-valores-extremos
+#| output: false
+limites_modelado <- tribble(
+  ~Año, ~Variable, ~Min_permitido, ~Max_permitido,
+  2021, "PM10", 0, 800,   2021, "PM2.5", 0, 325, 2021, "O3", 0, 175,
+  2021, "NO", 0, 350,     2021, "NO2", 0, 100,    2021, "NOX", 0, 400,
+  2021, "SO2", 0, 300,    2021, "CO", 0, 10,      2021, "RH", 0, 100,
+  2021, "WS", 0, 40,      2021, "TEMP", -6.5, 45, 2021, "SR", 0, 1,
+  2021, "BP", 690, 740,   2021, "WD", 0, 360,     2021, "RAINF", 0, 80,
+
+  2022, "PM10", 0, 999,   2022, "PM2.5", 0, 450, 2022, "O3", 0, 160,
+  2022, "NO", 0, 400,     2022, "NO2", 0, 175,    2022, "NOX", 0, 420,
+  2022, "SO2", 0, 200,    2022, "CO", 0, 8,       2022, "RH", 0, 100,
+  2022, "WS", 0, 35,      2022, "TEMP", -5, 45,   2022, "SR", 0, 1.25,
+  2022, "BP", 700, 740,   2022, "WD", 0, 360,     2022, "RAINF", 0, 25,
+
+  2023, "PM10", 0, 900,   2023, "PM2.5", 0, 800, 2023, "O3", 0, 175,
+  2023, "NO", 0, 500,     2023, "NO2", 0, 175,    2023, "NOX", 0, 500,
+  2023, "SO2", 0, 250,    2023, "CO", 0, 14,      2023, "RH", 0, 100,
+  2023, "WS", 0, 40,      2023, "TEMP", 0, 45,    2023, "SR", 0, 1,
+  2023, "BP", 690, 740,   2023, "WD", 0, 360,     2023, "RAINF", 0, 70,
+
+  2024, "PM10", 0, 999,   2024, "PM2.5", 0, 999, 2024, "O3", 0, 180,
+  2024, "NO", 0, 400,     2024, "NO2", 0, 130,    2024, "NOX", 0, 500,
+  2024, "SO2", 0, 150,    2024, "CO", 0, 18,      2024, "RH", 0, 100,
+  2024, "WS", 0, 38,      2024, "TEMP", -4, 45.5, 2024, "SR", 0, 1.26,
+  2024, "BP", 687.5, 740, 2024, "WD", 0, 360,     2024, "RAINF", 0, 50,
+
+  2025, "PM10", 0, 820,   2025, "PM2.5", 0, 350, 2025, "O3", 0, 185,
+  2025, "NO", 0, 350,     2025, "NO2", 0, 175,    2025, "NOX", 0, 400,
+  2025, "SO2", 0, 405,    2025, "CO", 0, 10,      2025, "RH", 0, 100,
+  2025, "WS", 0, 40,      2025, "TEMP", -4.5, 45, 2025, "SR", 0, 1.2,
+  2025, "BP", 688, 740,   2025, "WD", 0, 360,     2025, "RAINF", 0, 25
+)
+
+datos_extremos <- datos_base_modelado |>
+  select(Año, Estacion, all_of(variables_medicion)) |>
+  pivot_longer(
+    cols = all_of(variables_medicion),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  left_join(
+    limites_modelado,
+    by = c("Año", "Variable")
+  ) |>
+  mutate(
+    Fuera_de_rango = !is.na(Valor) &
+      (Valor < Min_permitido | Valor > Max_permitido)
+  )
+
+resumen_extremos <- datos_extremos |>
+  group_by(Variable) |>
+  summarise(
+    Min_observado = min(Valor, na.rm = TRUE),
+    P01 = quantile(Valor, 0.01, na.rm = TRUE),
+    Mediana = median(Valor, na.rm = TRUE),
+    P99 = quantile(Valor, 0.99, na.rm = TRUE),
+    Max_observado = max(Valor, na.rm = TRUE),
+    Fuera_de_rango = sum(Fuera_de_rango),
+    .groups = "drop"
+  ) |>
+  mutate(
+    across(
+      c(Min_observado, P01, Mediana, P99, Max_observado),
+      ~ round(.x, 2)
+    )
+  )
+
+knitr::kable(
+  resumen_extremos,
+  caption = "Diagnóstico de valores extremos en la base de modelado"
+)
+```
+
+```{r}
+#| label: extremos-fuera-rango-anio
+#| output: false
+fuera_rango_anio <- datos_extremos |>
+  group_by(Año, Variable) |>
+  summarise(
+    Fuera_de_rango = sum(Fuera_de_rango),
+    .groups = "drop"
+  ) |>
+  filter(Fuera_de_rango > 0) |>
+  arrange(desc(Fuera_de_rango), Año, Variable)
+
+knitr::kable(
+  fuera_rango_anio,
+  caption = "Valores fuera de rango por año y variable"
+)
+```
+
+```{r}
+#| label: extremos-sr-rh-estacion
+#| output: false
+extremos_sr_rh_estacion <- datos_extremos |>
+  filter(
+    Variable %in% c("SR", "RH"),
+    Fuera_de_rango
+  ) |>
+  group_by(Año, Estacion, Variable) |>
+  summarise(
+    Casos = n(),
+    Min_fuera = min(Valor),
+    Max_fuera = max(Valor),
+    .groups = "drop"
+  ) |>
+  arrange(Variable, Año, desc(Casos))
+
+knitr::kable(
+  extremos_sr_rh_estacion,
+  digits = 2,
+  caption = "Valores fuera de rango de SR y RH por año y estación"
+)
+```
+
+
+```{r}
+#| label: limpieza-valores-fuera-rango
+#| output: false
+datos_limpios <- datos_base_modelado
+
+
+for (i in seq_len(nrow(limites_modelado))) {
+  anio_i <- limites_modelado$Año[i]
+  variable_i <- limites_modelado$Variable[i]
+  min_i <- limites_modelado$Min_permitido[i]
+  max_i <- limites_modelado$Max_permitido[i]
+
+  invalido <-
+    datos_limpios$Año == anio_i &
+    !is.na(datos_limpios[[variable_i]]) &
+    (
+      datos_limpios[[variable_i]] < min_i |
+      datos_limpios[[variable_i]] > max_i
+    )
+
+  datos_limpios[[variable_i]][invalido] <- NA_real_
+}
+```
+
+```{r}
+#| label: verificacion-datos-limpios
+#| output: false
+verificacion_rangos <- pmap_dfr(
+  limites_modelado,
+  function(Año, Variable, Min_permitido, Max_permitido) {
+    x <- datos_limpios[[Variable]]
+    seleccion <- datos_limpios$Año == Año
+
+    tibble(
+      Año = Año,
+      Variable = Variable,
+      Fuera_de_rango = sum(
+        seleccion &
+          !is.na(x) &
+          (x < Min_permitido | x > Max_permitido)
+      )
+    )
+  }
+)
+
+resumen_limpieza <- tibble(
+  Registros = nrow(datos_limpios),
+  Valores_convertidos_a_NA = sum(datos_extremos$Fuera_de_rango),
+  Fuera_de_rango_restantes = sum(verificacion_rangos$Fuera_de_rango)
+)
+
+knitr::kable(
+  resumen_limpieza,
+  caption = "Verificación de la base limpia"
+)
+```
+
+```{r}
+#| label: variables-temporales-espaciales
+#| output: false
+datos_preparados <- datos_limpios |>
+  mutate(
+    Fecha = as.Date(fecha_hora),
+    Hora = lubridate::hour(fecha_hora),
+    Mes = lubridate::month(fecha_hora),
+    Dia_semana_num = lubridate::wday(fecha_hora, week_start = 1),
+    Dia_semana = factor(
+      Dia_semana_num,
+      levels = 1:7,
+      labels = c(
+        "Lunes", "Martes", "Miercoles", "Jueves",
+        "Viernes", "Sabado", "Domingo"
+      )
+    ),
+    Estacion = factor(
+      Estacion,
+      levels = estaciones_interes
+    ),
+    Hora_sin = sin(2 * pi * Hora / 24),
+    Hora_cos = cos(2 * pi * Hora / 24),
+    Mes_sin = sin(2 * pi * (Mes - 1) / 12),
+    Mes_cos = cos(2 * pi * (Mes - 1) / 12)
+  ) |>
+  select(-Dia_semana_num) |>
+  arrange(Estacion, fecha_hora)
+```
+
+```{r}
+#| label: verificacion-variables-temporales
+#| output: false
+resumen_variables_contexto <- tibble(
+  Variable = c(
+    "Fecha",
+    "Hora",
+    "Dia_semana",
+    "Mes",
+    "Estacion",
+    "Hora_sin / Hora_cos",
+    "Mes_sin / Mes_cos"
+  ),
+  Resultado = c(
+    paste(
+      min(datos_preparados$Fecha, na.rm = TRUE),
+      "a",
+      max(datos_preparados$Fecha, na.rm = TRUE)
+    ),
+    paste0(
+      min(datos_preparados$Hora, na.rm = TRUE),
+      "-",
+      max(datos_preparados$Hora, na.rm = TRUE)
+    ),
+    paste(levels(datos_preparados$Dia_semana), collapse = ", "),
+    paste0(
+      min(datos_preparados$Mes, na.rm = TRUE),
+      "-",
+      max(datos_preparados$Mes, na.rm = TRUE)
+    ),
+    paste(levels(datos_preparados$Estacion), collapse = ", "),
+    "Representacion ciclica de 24 horas",
+    "Representacion ciclica de 12 meses"
+  )
+)
+
+knitr::kable(
+  resumen_variables_contexto,
+  caption = "Variables temporales y espaciales preparadas"
+)
+```
+
+```{r}
+#| label: resumen-descriptivo-o3
+resumen_o3 <- datos_preparados |>
+  summarise(
+    Observaciones = sum(!is.na(O3)),
+    Media = mean(O3, na.rm = TRUE),
+    Mediana = median(O3, na.rm = TRUE),
+    Desv_estandar = sd(O3, na.rm = TRUE),
+    P25 = quantile(O3, 0.25, na.rm = TRUE),
+    P75 = quantile(O3, 0.75, na.rm = TRUE),
+    Minimo = min(O3, na.rm = TRUE),
+    Maximo = max(O3, na.rm = TRUE)
+  ) |>
+  mutate(
+    across(
+      -Observaciones,
+      ~ round(.x, 2)
+    )
+  )
+
+knitr::kable(
+  resumen_o3,
+  caption = "Resumen descriptivo de O3 entre 2021 y 2025"
+)
+```
+
+```{r}
+#| label: distribucion-o3
+#| fig-cap: "Distribución de las concentraciones horarias de O3"
+#| fig-width: 7
+#| fig-height: 4.5
+datos_preparados |>
+  filter(!is.na(O3)) |>
+  ggplot(aes(x = O3)) +
+  geom_histogram(bins = 40) +
+  labs(
+    x = "O3",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+#| label: resumen-o3-estacion
+resumen_o3_estacion <- datos_preparados |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = sum(!is.na(O3)),
+    Media = mean(O3, na.rm = TRUE),
+    Mediana = median(O3, na.rm = TRUE),
+    P25 = quantile(O3, 0.25, na.rm = TRUE),
+    P75 = quantile(O3, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    across(
+      c(Media, Mediana, P25, P75),
+      ~ round(.x, 2)
+    )
+  )
+
+knitr::kable(
+  resumen_o3_estacion,
+  caption = "Resumen de O3 por estación"
+)
+```
+
+```{r}
+#| label: distribucion-o3-estacion
+#| fig-cap: "Distribución de O3 por estación"
+#| fig-width: 7
+#| fig-height: 4.5
+datos_preparados |>
+  filter(!is.na(O3)) |>
+  ggplot(aes(x = Estacion, y = O3)) +
+  geom_boxplot(outlier.alpha = 0.15) +
+  labs(
+    x = "Estación",
+    y = "O3"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: patron-horario-o3
+o3_por_hora <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  group_by(Hora) |>
+  summarise(
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_hora |>
+    mutate(
+      Media = round(Media, 2),
+      Mediana = round(Mediana, 2)
+    ),
+  caption = "Concentración de O3 por hora del día"
+)
+```
+
+```{r}
+#| label: grafica-patron-horario-o3
+#| fig-cap: "Patrón horario de O3"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_por_hora |>
+  pivot_longer(
+    cols = c(Media, Mediana),
+    names_to = "Estadistico",
+    values_to = "O3"
+  ) |>
+  ggplot(aes(x = Hora, y = O3, linetype = Estadistico)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    x = "Hora del día",
+    y = "O3",
+    linetype = NULL
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: patron-horario-o3-por-anio
+o3_hora_anio <- datos_preparados |>
+  filter(
+    Año %in% 2021:2024,
+    !is.na(O3)
+  ) |>
+  group_by(Año, Hora) |>
+  summarise(
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+o3_hora_anio |>
+  select(Año, Hora, Media) |>
+  mutate(Media = round(Media, 2)) |>
+  pivot_wider(
+    names_from = Año,
+    values_from = Media
+  ) |>
+  knitr::kable(
+    caption = "Concentración media de O3 por hora y año"
+  )
+```
+
+```{r}
+#| label: grafica-patron-horario-o3-por-anio
+#| fig-cap: "Patrón horario de O3 en los años completos 2021-2024"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_hora_anio |>
+  mutate(Año = factor(Año)) |>
+  ggplot(aes(x = Hora, y = Media, color = Año, group = Año)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.8) +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    x = "Hora del día",
+    y = "O3 medio",
+    color = "Año"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: o3-alto-por-hora
+umbral_o3_alto <- quantile(
+  datos_preparados$O3,
+  0.75,
+  na.rm = TRUE
+)
+
+total_o3_altos <- datos_preparados |>
+  filter(!is.na(O3), O3 > umbral_o3_alto) |>
+  nrow()
+
+o3_alto_por_hora <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  group_by(Hora) |>
+  summarise(
+    Observaciones = n(),
+    O3_altos = sum(O3 > umbral_o3_alto),
+    Porcentaje_alto_en_hora = round(
+      mean(O3 > umbral_o3_alto) * 100,
+      1
+    ),
+    Participacion_del_total_alto = round(
+      O3_altos / total_o3_altos * 100,
+      1
+    ),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_alto_por_hora,
+  caption = paste0(
+    "Concentraciones superiores al tercer cuartil de O3 por hora (umbral = ",
+    round(umbral_o3_alto, 2),
+    ")"
+  )
+)
+```
+
+```{r}
+#| label: grafica-o3-alto-por-hora
+#| fig-cap: "Porcentaje de mediciones de O3 por encima del tercer cuartil según la hora"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_alto_por_hora |>
+  ggplot(aes(x = Hora, y = Porcentaje_alto_en_hora)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    x = "Hora del día",
+    y = "% de mediciones por encima de P75"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+#| label: comparacion-ventanas-diurnas
+ventanas_candidatas <- tribble(
+  ~Ventana, ~Hora_inicio, ~Hora_fin,
+  "09:00-20:00", 9, 20,
+  "10:00-20:00", 10, 20,
+  "10:00-19:00", 10, 19,
+  "11:00-19:00", 11, 19
+)
+
+resumen_ventanas <- pmap_dfr(
+  ventanas_candidatas,
+  function(Ventana, Hora_inicio, Hora_fin) {
+    dentro <- datos_preparados |>
+      filter(
+        !is.na(O3),
+        Hora >= Hora_inicio,
+        Hora <= Hora_fin
+      )
+
+    tibble(
+      Ventana = Ventana,
+      Horas_incluidas = Hora_fin - Hora_inicio + 1,
+      Observaciones_objetivo = nrow(dentro),
+      Porcentaje_datos_conservados = round(
+        100 * nrow(dentro) /
+          sum(!is.na(datos_preparados$O3)),
+        1
+      ),
+      O3_altos_incluidos = sum(dentro$O3 > umbral_o3_alto),
+      Cobertura_de_O3_altos = round(
+        100 * sum(dentro$O3 > umbral_o3_alto) /
+          total_o3_altos,
+        1
+      )
+    )
+  }
+)
+
+knitr::kable(
+  resumen_ventanas,
+  caption = "Comparación de ventanas candidatas para el objetivo diurno"
+)
+```
+
+
+```{r}
+#| label: patron-mensual-o3
+o3_por_mes <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  group_by(Mes) |>
+  summarise(
+    Observaciones = n(),
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_mes |>
+    mutate(
+      Media = round(Media, 2),
+      Mediana = round(Mediana, 2)
+    ),
+  caption = "Concentración de O3 por mes"
+)
+```
+
+```{r}
+#| label: grafica-patron-mensual-o3
+#| fig-cap: "Patrón mensual de O3"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_por_mes |>
+  pivot_longer(
+    cols = c(Media, Mediana),
+    names_to = "Estadistico",
+    values_to = "O3"
+  ) |>
+  ggplot(aes(x = Mes, y = O3, linetype = Estadistico)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = c(
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    )
+  ) +
+  labs(
+    x = "Mes",
+    y = "O3",
+    linetype = NULL
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: patron-mensual-o3-por-anio
+o3_mes_anio <- datos_preparados |>
+  filter(
+    Año %in% 2021:2024,
+    !is.na(O3)
+  ) |>
+  group_by(Año, Mes) |>
+  summarise(
+    Media = mean(O3),
+    .groups = "drop"
+  )
+
+o3_mes_anio |>
+  mutate(Media = round(Media, 2)) |>
+  pivot_wider(
+    names_from = Año,
+    values_from = Media
+  ) |>
+  knitr::kable(
+    caption = "Concentración media mensual de O3 por año"
+  )
+```
+
+```{r}
+#| label: grafica-patron-mensual-o3-por-anio
+#| fig-cap: "Patrón mensual de O3 en los años completos 2021-2024"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_mes_anio |>
+  mutate(Año = factor(Año)) |>
+  ggplot(aes(x = Mes, y = Media, color = Año, group = Año)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 2) +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = c(
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+    )
+  ) +
+  labs(
+    x = "Mes",
+    y = "O3 medio",
+    color = "Año"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: correlacion-o3-meteorologia
+variables_meteorologicas <- c("TEMP", "RH", "SR", "WS", "BP", "RAINF")
+
+correlaciones_o3_meteo <- map_dfr(
+  variables_meteorologicas,
+  function(variable) {
+    pares <- tibble(
+      O3 = datos_preparados$O3,
+      X = datos_preparados[[variable]]
+    ) |>
+      drop_na()
+
+    tibble(
+      Variable = variable,
+      Observaciones = nrow(pares),
+      Correlacion = cor(
+        pares$O3,
+        pares$X,
+        method = "pearson"
+      )
+    )
+  }
+) |>
+  arrange(desc(abs(Correlacion)))
+
+knitr::kable(
+  correlaciones_o3_meteo |>
+    mutate(Correlacion = round(Correlacion, 3)),
+  caption = "Correlación de Pearson entre O3 y variables meteorológicas"
+)
+```
+
+
+
+```{r}
+#| label: grafica-correlacion-o3-meteorologia
+#| fig-cap: "Correlación de O3 con variables meteorológicas"
+#| fig-width: 7
+#| fig-height: 4.5
+correlaciones_o3_meteo |>
+  mutate(
+    Variable = forcats::fct_reorder(Variable, abs(Correlacion))
+  ) |>
+  ggplot(aes(x = Variable, y = Correlacion)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Correlación de Pearson"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: relaciones-o3-meteorologia
+#| fig-cap: "Relación de O3 con las variables meteorológicas de mayor correlación"
+#| fig-width: 8
+#| fig-height: 5
+variables_meteo_principales <- correlaciones_o3_meteo |>
+  slice_max(
+    order_by = abs(Correlacion),
+    n = 3,
+    with_ties = FALSE
+  ) |>
+  pull(Variable)
+
+set.seed(123)
+
+muestra_meteorologia <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  slice_sample(n = 10000) |>
+  select(O3, all_of(variables_meteo_principales)) |>
+  pivot_longer(
+    cols = all_of(variables_meteo_principales),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  filter(!is.na(Valor))
+
+ggplot(
+  muestra_meteorologia,
+  aes(x = Valor, y = O3)
+) +
+  geom_point(alpha = 0.08, size = 0.5) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8
+  ) +
+  facet_wrap(~Variable, scales = "free_x") +
+  labs(
+    x = NULL,
+    y = "O3"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+#| label: preparacion-direccion-viento
+datos_preparados <- datos_preparados |>
+  mutate(
+    WD_sin = sin(2 * pi * WD / 360),
+    WD_cos = cos(2 * pi * WD / 360),
+    Sector_viento = case_when(
+      is.na(WD) ~ NA_character_,
+      WD >= 337.5 | WD < 22.5 ~ "N",
+      WD < 67.5 ~ "NE",
+      WD < 112.5 ~ "E",
+      WD < 157.5 ~ "SE",
+      WD < 202.5 ~ "S",
+      WD < 247.5 ~ "SO",
+      WD < 292.5 ~ "O",
+      TRUE ~ "NO"
+    ),
+    Sector_viento = factor(
+      Sector_viento,
+      levels = c("N", "NE", "E", "SE", "S", "SO", "O", "NO")
+    )
+  )
+```
+
+```{r}
+#| label: o3-por-direccion-viento
+o3_por_direccion <- datos_preparados |>
+  filter(!is.na(O3), !is.na(Sector_viento)) |>
+  group_by(Sector_viento) |>
+  summarise(
+    Observaciones = n(),
+    Media = mean(O3),
+    Mediana = median(O3),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  o3_por_direccion |>
+    mutate(
+      Media = round(Media, 2),
+      Mediana = round(Mediana, 2)
+    ),
+  caption = "Concentración de O3 según la dirección del viento"
+)
+```
+
+```{r}
+#| label: grafica-o3-direccion-viento
+#| fig-cap: "Concentración media de O3 según la dirección del viento"
+#| fig-width: 7
+#| fig-height: 4.5
+o3_por_direccion |>
+  ggplot(aes(x = Sector_viento, y = Media)) +
+  geom_col() +
+  labs(
+    x = "Dirección del viento",
+    y = "O3 medio"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: correlacion-o3-contaminantes
+variables_contaminantes <- c(
+  "CO", "NO", "NO2", "NOX", "PM10", "PM2.5", "SO2"
+)
+
+correlaciones_o3_contaminantes <- map_dfr(
+  variables_contaminantes,
+  function(variable) {
+    pares <- tibble(
+      O3 = datos_preparados$O3,
+      X = datos_preparados[[variable]]
+    ) |>
+      drop_na()
+
+    tibble(
+      Variable = variable,
+      Observaciones = nrow(pares),
+      Correlacion = cor(
+        pares$O3,
+        pares$X,
+        method = "pearson"
+      )
+    )
+  }
+) |>
+  arrange(desc(abs(Correlacion)))
+
+knitr::kable(
+  correlaciones_o3_contaminantes |>
+    mutate(Correlacion = round(Correlacion, 3)),
+  caption = "Correlación de Pearson entre O3 y otros contaminantes"
+)
+```
+
+
+```{r}
+#| label: grafica-correlacion-o3-contaminantes
+#| fig-cap: "Correlación de O3 con otros contaminantes"
+#| fig-width: 7
+#| fig-height: 4.5
+correlaciones_o3_contaminantes |>
+  mutate(
+    Variable = forcats::fct_reorder(Variable, abs(Correlacion))
+  ) |>
+  ggplot(aes(x = Variable, y = Correlacion)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = "Correlación de Pearson"
+  ) +
+  theme_minimal()
+```
+
+
+
+```{r}
+#| label: relaciones-o3-contaminantes
+#| fig-cap: "Relación de O3 con los contaminantes de mayor correlación"
+#| fig-width: 8
+#| fig-height: 5
+contaminantes_principales <- correlaciones_o3_contaminantes |>
+  slice_max(
+    order_by = abs(Correlacion),
+    n = 3,
+    with_ties = FALSE
+  ) |>
+  pull(Variable)
+
+set.seed(123)
+
+muestra_contaminantes <- datos_preparados |>
+  filter(!is.na(O3)) |>
+  slice_sample(n = 10000) |>
+  select(O3, all_of(contaminantes_principales)) |>
+  pivot_longer(
+    cols = all_of(contaminantes_principales),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  filter(!is.na(Valor))
+
+ggplot(
+  muestra_contaminantes,
+  aes(x = Valor, y = O3)
+) +
+  geom_point(alpha = 0.08, size = 0.5) +
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.8
+  ) +
+  facet_wrap(~Variable, scales = "free_x") +
+  labs(
+    x = NULL,
+    y = "O3"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+#| label: serie-o3-rezagos-entrenamiento
+datos_o3_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  select(Estacion, fecha_hora, O3)
+
+horas_entrenamiento <- seq(
+  as.POSIXct("2021-01-01 00:00:00", tz = "UTC"),
+  as.POSIXct("2023-12-31 23:00:00", tz = "UTC"),
+  by = "hour"
+)
+
+serie_o3_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_o3_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_lag_1 = lag(O3, 1),
+    O3_lag_2 = lag(O3, 2),
+    O3_lag_3 = lag(O3, 3),
+    O3_lag_4 = lag(O3, 4),
+    O3_lag_5 = lag(O3, 5),
+    O3_lag_6 = lag(O3, 6),
+    O3_lag_7 = lag(O3, 7),
+    O3_lag_8 = lag(O3, 8),
+    O3_lag_9 = lag(O3, 9),
+    O3_lag_10 = lag(O3, 10),
+    O3_lag_11 = lag(O3, 11),
+    O3_lag_12 = lag(O3, 12),
+    O3_lag_13 = lag(O3, 13),
+    O3_lag_14 = lag(O3, 14),
+    O3_lag_15 = lag(O3, 15),
+    O3_lag_16 = lag(O3, 16),
+    O3_lag_17 = lag(O3, 17),
+    O3_lag_18 = lag(O3, 18),
+    O3_lag_19 = lag(O3, 19),
+    O3_lag_20 = lag(O3, 20),
+    O3_lag_21 = lag(O3, 21),
+    O3_lag_22 = lag(O3, 22),
+    O3_lag_23 = lag(O3, 23),
+    O3_lag_24 = lag(O3, 24)
+  ) |>
+  ungroup()
+```
+
+
+
+```{r}
+#| label: correlacion-rezagos-o3
+correlaciones_rezagos_o3 <- map_dfr(
+  1:24,
+  function(h) {
+    columna <- paste0("O3_lag_", h)
+
+    pares <- serie_o3_entrenamiento |>
+      select(O3, all_of(columna)) |>
+      drop_na()
+
+    tibble(
+      Rezago_h = h,
+      Observaciones = nrow(pares),
+      Correlacion = cor(
+        pares$O3,
+        pares[[columna]],
+        method = "pearson"
+      )
+    )
+  }
+)
+
+knitr::kable(
+  correlaciones_rezagos_o3 |>
+    mutate(Correlacion = round(Correlacion, 3)),
+  caption = "Correlación de O3 con sus valores de 1 a 24 horas anteriores"
+)
+```
+
+```{r}
+#| label: grafica-correlacion-rezagos-o3
+#| fig-cap: "Persistencia temporal del O3 entre 1 y 24 horas"
+#| fig-width: 7
+#| fig-height: 4.5
+correlaciones_rezagos_o3 |>
+  ggplot(aes(x = Rezago_h, y = Correlacion)) +
+  geom_line(linewidth = 0.9) +
+  geom_point() +
+  scale_x_continuous(breaks = 1:24) +
+  labs(
+    x = "Horas de rezago",
+    y = "Correlación con O3 actual"
+  ) +
+  theme_minimal()
+```
+
+
+
+```{r}
+#| label: correlacion-rezagos-o3-estacion
+correlaciones_rezagos_estacion <- map_dfr(
+  1:24,
+  function(h) {
+    columna <- paste0("O3_lag_", h)
+
+    serie_o3_entrenamiento |>
+      group_by(Estacion) |>
+      summarise(
+        Observaciones = sum(
+          !is.na(O3) & !is.na(.data[[columna]])
+        ),
+        Correlacion = cor(
+          O3,
+          .data[[columna]],
+          use = "complete.obs"
+        ),
+        .groups = "drop"
+      ) |>
+      mutate(Rezago_h = h)
+  }
+)
+
+correlaciones_rezagos_estacion |>
+  ggplot(
+    aes(
+      x = Rezago_h,
+      y = Correlacion,
+      color = Estacion,
+      group = Estacion
+    )
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.4) +
+  scale_x_continuous(breaks = 1:24) +
+  labs(
+    x = "Horas de rezago",
+    y = "Correlación con O3 actual",
+    color = "Estación"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+#| label: correlacion-meteorologia-o3-futuro
+variables_meteo_horizonte <- c(
+  "TEMP", "RH", "SR", "WS", "BP", "RAINF", "WD_sin", "WD_cos"
+)
+
+datos_meteo_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    O3,
+    across(all_of(variables_meteo_horizonte))
+  )
+
+serie_meteo_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_meteo_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+correlaciones_meteo_futuro <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- serie_meteo_entrenamiento |>
+      group_by(Estacion) |>
+      mutate(O3_futuro = lead(O3, h)) |>
+      ungroup()
+
+    map_dfr(
+      variables_meteo_horizonte,
+      function(variable) {
+        pares <- base_h |>
+          select(O3_futuro, all_of(variable)) |>
+          drop_na()
+
+        tibble(
+          Horizonte_h = h,
+          Variable = variable,
+          Observaciones = nrow(pares),
+          Correlacion = cor(
+            pares$O3_futuro,
+            pares[[variable]],
+            method = "pearson"
+          )
+        )
+      }
+    )
+  }
+)
+```
+
+```{r}
+#| label: tabla-meteorologia-o3-futuro
+correlaciones_meteo_futuro |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(Horizonte_h, Variable, Correlacion) |>
+  mutate(Correlacion = round(Correlacion, 3)) |>
+  pivot_wider(
+    names_from = Horizonte_h,
+    values_from = Correlacion,
+    names_prefix = "h_"
+  ) |>
+  knitr::kable(
+    caption = "Correlación de variables meteorológicas actuales con O3 futuro"
+  )
+```
+
+```{r}
+#| label: grafica-meteorologia-o3-futuro
+#| fig-cap: "Relación de variables meteorológicas actuales con O3 a distintos horizontes"
+#| fig-width: 8
+#| fig-height: 7
+correlaciones_meteo_futuro |>
+  ggplot(aes(x = Horizonte_h, y = Correlacion)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  facet_wrap(~Variable, ncol = 2) +
+  scale_x_continuous(breaks = c(1, 6, 12, 18, 24)) +
+  labs(
+    x = "Horizonte de predicción (horas)",
+    y = "Correlación con O3 futuro"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: correlacion-contaminantes-o3-futuro
+datos_contaminantes_entrenamiento <- datos_preparados |>
+  filter(Año %in% 2021:2023) |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    O3,
+    across(all_of(variables_contaminantes))
+  )
+
+serie_contaminantes_entrenamiento <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_entrenamiento
+) |>
+  left_join(
+    datos_contaminantes_entrenamiento,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora)
+
+correlaciones_contaminantes_futuro <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- serie_contaminantes_entrenamiento |>
+      group_by(Estacion) |>
+      mutate(O3_futuro = lead(O3, h)) |>
+      ungroup()
+
+    map_dfr(
+      variables_contaminantes,
+      function(variable) {
+        pares <- base_h |>
+          select(O3_futuro, all_of(variable)) |>
+          drop_na()
+
+        tibble(
+          Horizonte_h = h,
+          Variable = variable,
+          Observaciones = nrow(pares),
+          Correlacion = cor(
+            pares$O3_futuro,
+            pares[[variable]],
+            method = "pearson"
+          )
+        )
+      }
+    )
+  }
+)
+```
+
+```{r}
+#| label: tabla-contaminantes-o3-futuro
+correlaciones_contaminantes_futuro |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(Horizonte_h, Variable, Correlacion) |>
+  mutate(Correlacion = round(Correlacion, 3)) |>
+  pivot_wider(
+    names_from = Horizonte_h,
+    values_from = Correlacion,
+    names_prefix = "h_"
+  ) |>
+  knitr::kable(
+    caption = "Correlación de contaminantes actuales con O3 futuro"
+  )
+```
+
+```{r}
+#| label: grafica-contaminantes-o3-futuro
+#| fig-cap: "Relación de contaminantes actuales con O3 a distintos horizontes"
+#| fig-width: 8
+#| fig-height: 7
+correlaciones_contaminantes_futuro |>
+  ggplot(aes(x = Horizonte_h, y = Correlacion)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.2) +
+  facet_wrap(~Variable, ncol = 2) +
+  scale_x_continuous(breaks = c(1, 6, 12, 18, 24)) +
+  labs(
+    x = "Horizonte de predicción (horas)",
+    y = "Correlación con O3 futuro"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+#| label: seleccion-preliminar-predictores
+seleccion_predictores <- tribble(
+  ~Grupo, ~Variables, ~Decision, ~Justificacion,
+  "Temporal", "Hora_sin, Hora_cos, Mes_sin, Mes_cos", "Incluir", "O3 presenta ciclos diario y anual marcados",
+  "Espacial", "Estacion", "Incluir", "Existen diferencias sistematicas entre estaciones",
+  "Historia de O3", "O3(t), O3(t-1), O3(t-2), O3(t-3), O3(t-24)", "Incluir y validar", "Fuerte persistencia de corto plazo y señal diaria a 24 h",
+  "Meteorologia", "SR, TEMP, RH, WS", "Incluir", "Son las asociaciones meteorologicas mas fuertes con O3 actual y futuro",
+  "Direccion del viento", "WD_sin, WD_cos", "Incluir y validar", "La concentracion de O3 cambia segun la direccion del viento",
+  "Contaminantes", "NOX", "Comparar con y sin", "Es el contaminante con mayor señal, pero tiene muchos faltantes",
+  "Baja prioridad", "BP, RAINF, CO, PM10, PM2.5, SO2", "No incluir inicialmente", "Presentan asociaciones lineales debiles con O3 futuro",
+  "Redundantes con NOX", "NO, NO2", "No incluir inicialmente junto con NOX", "Tienen señal similar y representan procesos relacionados"
+)
+
+knitr::kable(
+  seleccion_predictores,
+  caption = "Selección preliminar de variables para el modelado"
+)
+```
+
+```{r}
+#| label: base-origen-modelado
+variables_origen_modelado <- c(
+  "O3", "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+)
+
+datos_origen_modelado <- datos_preparados |>
+  transmute(
+    Estacion = as.character(Estacion),
+    fecha_hora,
+    across(all_of(variables_origen_modelado))
+  )
+
+horas_modelado <- seq(
+  as.POSIXct("2021-01-01 00:00:00", tz = "UTC"),
+  as.POSIXct("2025-06-30 23:00:00", tz = "UTC"),
+  by = "hour"
+)
+
+base_origen_modelado <- expand_grid(
+  Estacion = estaciones_interes,
+  fecha_hora = horas_modelado
+) |>
+  left_join(
+    datos_origen_modelado,
+    by = c("Estacion", "fecha_hora")
+  ) |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_t = O3,
+    O3_lag_1 = lag(O3, 1),
+    O3_lag_2 = lag(O3, 2),
+    O3_lag_3 = lag(O3, 3),
+    O3_lag_24 = lag(O3, 24)
+  ) |>
+  ungroup() |>
+  select(-O3) |>
+  mutate(
+    Estacion = factor(Estacion, levels = estaciones_interes)
+  )
+
+resumen_base_origen <- tibble(
+  Registros = nrow(base_origen_modelado),
+  Estaciones = n_distinct(base_origen_modelado$Estacion),
+  Desde = min(base_origen_modelado$fecha_hora),
+  Hasta = max(base_origen_modelado$fecha_hora)
+)
+
+knitr::kable(
+  resumen_base_origen,
+  caption = "Estructura de la base de origen para el modelado"
+)
+```
+
+```{r}
+#| label: funcion-base-por-horizonte
+predictores_principales <- c(
+  "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "Hora_sin_obj", "Hora_cos_obj", "Mes_sin_obj", "Mes_cos_obj"
+)
+
+construir_base_horizonte <- function(h, incluir_nox = FALSE) {
+  base_h <- base_origen_modelado |>
+    group_by(Estacion) |>
+    mutate(
+      O3_objetivo = lead(O3_t, h)
+    ) |>
+    ungroup() |>
+    mutate(
+      Horizonte_h = h,
+      fecha_objetivo = fecha_hora + lubridate::hours(h),
+      Año_objetivo = lubridate::year(fecha_objetivo),
+      Hora_objetivo = lubridate::hour(fecha_objetivo),
+      Mes_objetivo = lubridate::month(fecha_objetivo),
+      Hora_sin_obj = sin(2 * pi * Hora_objetivo / 24),
+      Hora_cos_obj = cos(2 * pi * Hora_objetivo / 24),
+      Mes_sin_obj = sin(2 * pi * (Mes_objetivo - 1) / 12),
+      Mes_cos_obj = cos(2 * pi * (Mes_objetivo - 1) / 12),
+      Periodo = case_when(
+        Año_objetivo %in% 2021:2023 ~ "Entrenamiento",
+        Año_objetivo == 2024 ~ "Validacion",
+        Año_objetivo == 2025 ~ "Prueba",
+        TRUE ~ NA_character_
+      )
+    ) |>
+    filter(
+      !is.na(Periodo),
+      between(Hora_objetivo, 10, 20)
+    )
+
+  variables_modelo <- predictores_principales
+
+  if (incluir_nox) {
+    variables_modelo <- c(variables_modelo, "NOX")
+  }
+
+  base_h |>
+    select(
+      Periodo,
+      Año_objetivo,
+      Estacion,
+      fecha_hora,
+      fecha_objetivo,
+      Horizonte_h,
+      O3_objetivo,
+      all_of(variables_modelo)
+    )
+}
+```
+
+```{r}
+#| label: disponibilidad-base-formal
+resumen_disponibilidad_modelado <- expand_grid(
+  Horizonte_h = 1:24,
+  Version = c("Principal", "Con_NOX")
+) |>
+  pmap_dfr(
+    function(Horizonte_h, Version) {
+      incluir_nox <- Version == "Con_NOX"
+      base_h <- construir_base_horizonte(
+        Horizonte_h,
+        incluir_nox = incluir_nox
+      )
+
+      variables_requeridas <- predictores_principales
+      if (incluir_nox) {
+        variables_requeridas <- c(variables_requeridas, "NOX")
+      }
+
+      base_h |>
+        mutate(
+          Caso_completo = if_all(
+            all_of(c("O3_objetivo", variables_requeridas)),
+            ~ !is.na(.x)
+          )
+        ) |>
+        group_by(Periodo) |>
+        summarise(
+          Objetivos_disponibles = sum(!is.na(O3_objetivo)),
+          Casos_completos = sum(Caso_completo),
+          Cobertura_pct = round(
+            100 * Casos_completos / Objetivos_disponibles,
+            1
+          ),
+          .groups = "drop"
+        ) |>
+        mutate(
+          Horizonte_h = Horizonte_h,
+          Version = Version
+        )
+    }
+  )
+```
+
+```{r}
+#| label: tabla-disponibilidad-base-formal
+resumen_disponibilidad_modelado |>
+  filter(Horizonte_h %in% c(1, 6, 12, 24)) |>
+  select(
+    Periodo,
+    Horizonte_h,
+    Version,
+    Objetivos_disponibles,
+    Casos_completos,
+    Cobertura_pct
+  ) |>
+  pivot_wider(
+    names_from = Version,
+    values_from = c(Casos_completos, Cobertura_pct),
+    names_sep = "_"
+  ) |>
+  arrange(Periodo, Horizonte_h) |>
+  knitr::kable(
+    caption = "Disponibilidad de casos completos para el objetivo diurno de 10:00 a 20:00"
+  )
+```
+
+
+```{r}
+#| label: diagnostico-faltantes-predictores
+variables_diagnostico <- c(
+  "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+)
+
+diagnostico_faltantes_predictores <- map_dfr(
+  1:24,
+  function(h) {
+    base_h <- construir_base_horizonte(
+      h,
+      incluir_nox = TRUE
+    ) |>
+      filter(!is.na(O3_objetivo))
+
+    map_dfr(
+      variables_diagnostico,
+      function(variable) {
+        base_h |>
+          group_by(Periodo) |>
+          summarise(
+            Objetivos_disponibles = n(),
+            Faltantes = sum(is.na(.data[[variable]])),
+            Porcentaje_faltante = round(
+              mean(is.na(.data[[variable]])) * 100,
+              1
+            ),
+            .groups = "drop"
+          ) |>
+          mutate(
+            Horizonte_h = h,
+            Variable = variable
+          )
+      }
+    )
+  }
+)
+
+resumen_faltantes_predictores <- diagnostico_faltantes_predictores |>
+  group_by(Periodo, Variable) |>
+  summarise(
+    Faltante_promedio_pct = round(mean(Porcentaje_faltante), 1),
+    Faltante_min_pct = min(Porcentaje_faltante),
+    Faltante_max_pct = max(Porcentaje_faltante),
+    .groups = "drop"
+  )
+
+resumen_faltantes_predictores |>
+  select(Periodo, Variable, Faltante_promedio_pct) |>
+  pivot_wider(
+    names_from = Periodo,
+    values_from = Faltante_promedio_pct
+  ) |>
+  mutate(
+    Maximo = pmax(
+      Entrenamiento,
+      Validacion,
+      Prueba,
+      na.rm = TRUE
+    )
+  ) |>
+  arrange(desc(Maximo)) |>
+  select(-Maximo) |>
+  knitr::kable(
+    caption = "Porcentaje promedio de faltantes por predictor en los 24 horizontes"
+  )
+```
+
+
+```{r}
+#| label: cobertura-acumulada-predictores
+conjuntos_predictores <- list(
+  "O3 actual" = c("O3_t"),
+  "O3 actual + rezagos 1-3" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3"
+  ),
+  "+ rezago de 24 h" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24"
+  ),
+  "+ meteorologia" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+    "SR", "TEMP", "RH", "WS"
+  ),
+  "+ direccion del viento" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+    "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos"
+  ),
+  "+ NOX" = c(
+    "O3_t", "O3_lag_1", "O3_lag_2", "O3_lag_3", "O3_lag_24",
+    "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos", "NOX"
+  )
+)
+
+diagnostico_cobertura_grupos <- map_dfr(
+  c(1, 6, 12, 24),
+  function(h) {
+    base_h <- construir_base_horizonte(
+      h,
+      incluir_nox = TRUE
+    ) |>
+      filter(!is.na(O3_objetivo))
+
+    imap_dfr(
+      conjuntos_predictores,
+      function(variables, conjunto) {
+        base_h |>
+          mutate(
+            Caso_completo = if_all(
+              all_of(variables),
+              ~ !is.na(.x)
+            )
+          ) |>
+          group_by(Periodo) |>
+          summarise(
+            Objetivos_disponibles = n(),
+            Casos_completos = sum(Caso_completo),
+            Cobertura_pct = round(
+              100 * Casos_completos / Objetivos_disponibles,
+              1
+            ),
+            .groups = "drop"
+          ) |>
+          mutate(
+            Horizonte_h = h,
+            Conjunto = conjunto
+          )
+      }
+    )
+  }
+)
+
+diagnostico_cobertura_grupos |>
+  filter(Horizonte_h %in% c(1, 12, 24)) |>
+  select(Horizonte_h, Conjunto, Periodo, Cobertura_pct) |>
+  pivot_wider(
+    names_from = Periodo,
+    values_from = Cobertura_pct
+  ) |>
+  arrange(Horizonte_h, factor(Conjunto, levels = names(conjuntos_predictores))) |>
+  knitr::kable(
+    caption = "Cobertura acumulada al agregar grupos de predictores"
+  )
+```
+
+
+```{r}
+#| label: exportar-base-modelado
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+saveRDS(
+  base_origen_modelado,
+  ruta_base_modelado
+)
+
+resumen_exportacion_modelado <- tibble(
+  Archivo = "data/base_modelado_o3.rds",
+  Registros = nrow(base_origen_modelado),
+  Estaciones = n_distinct(base_origen_modelado$Estacion),
+  Desde = min(base_origen_modelado$fecha_hora),
+  Hasta = max(base_origen_modelado$fecha_hora),
+  O3_t_disponible_pct = round(
+    mean(!is.na(base_origen_modelado$O3_t)) * 100,
+    1
+  )
+)
+
+knitr::kable(
+  resumen_exportacion_modelado,
+  caption = "Base exportada para los archivos de modelado"
+)
+```
+
+El archivo `data/base_modelado_o3.rds` es un producto derivado y reproducible. Se genera al renderizar este reporte después de cualquier cambio en la preparación de datos. Por ello no es necesario reconstruir la limpieza ni los rezagos dentro de cada archivo de modelado.
+
+------------------------------------------------------------------------
+
+# Red Neuronal (!!!!)
+
+```{r}
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(tibble)
+library(ggplot2)
+library(keras3)
+
+base_ann <- map_dfr(
+  1:24,
+  ~ construir_base_horizonte(
+    h = .x,
+    incluir_nox = TRUE
+  )
+) |>
+  arrange(
+    Estacion,
+    fecha_hora,
+    Horizonte_h
+  )
+
+variables_imputar <- c(
+  "SR", "TEMP", "RH", "WS",
+  "WD_sin", "WD_cos", "NOX"
+)
+
+origenes_ann <- base_ann |>
+  select(
+    Estacion,
+    fecha_hora,
+    all_of(variables_imputar)
+  ) |>
+  distinct() |>
+  mutate(
+    Año_origen = year(fecha_hora),
+    Mes_origen = month(fecha_hora),
+    Hora_origen = hour(fecha_hora)
+  )
+
+medianas_clima <- origenes_ann |>
+  filter(Año_origen %in% 2021:2024) |>
+  group_by(
+    Estacion,
+    Mes_origen,
+    Hora_origen
+  ) |>
+  summarise(
+    across(
+      all_of(variables_imputar),
+      ~ median(.x, na.rm = TRUE),
+      .names = "{.col}_med"
+    ),
+    .groups = "drop"
+  )
+
+origenes_ann_imputados <- origenes_ann |>
+  mutate(
+    SR_faltante = as.integer(is.na(SR)),
+    TEMP_faltante = as.integer(is.na(TEMP)),
+    RH_faltante = as.integer(is.na(RH)),
+    WS_faltante = as.integer(is.na(WS)),
+    WD_sin_faltante = as.integer(is.na(WD_sin)),
+    WD_cos_faltante = as.integer(is.na(WD_cos)),
+    NOX_faltante = as.integer(is.na(NOX))
+  ) |>
+  left_join(
+    medianas_clima,
+    by = c(
+      "Estacion",
+      "Mes_origen",
+      "Hora_origen"
+    )
+  ) |>
+  mutate(
+    SR = coalesce(SR, SR_med),
+    TEMP = coalesce(TEMP, TEMP_med),
+    RH = coalesce(RH, RH_med),
+    WS = coalesce(WS, WS_med),
+    WD_sin = coalesce(WD_sin, WD_sin_med),
+    WD_cos = coalesce(WD_cos, WD_cos_med),
+    NOX = coalesce(NOX, NOX_med)
+  ) |>
+  select(
+    -Año_origen,
+    -Mes_origen,
+    -Hora_origen,
+    -ends_with("_med")
+  )
+
+base_ann_imputada <- base_ann |>
+  select(
+    -all_of(variables_imputar)
+  ) |>
+  left_join(
+    origenes_ann_imputados,
+    by = c(
+      "Estacion",
+      "fecha_hora"
+    )
+  ) |>
+  arrange(
+    Estacion,
+    fecha_hora,
+    Horizonte_h
+  )
+
+base_ann_modelo <- base_ann_imputada |>
+  filter(
+    !is.na(O3_objetivo),
+    !is.na(O3_t),
+    !is.na(O3_lag_1),
+    !is.na(O3_lag_2),
+    !is.na(O3_lag_3),
+    !is.na(O3_lag_24)
+  )
+
+train_ann <- base_ann_modelo |>
+  filter(Periodo %in% c(
+    "Entrenamiento",
+    "Validacion"
+  ))
+
+prueba_ann <- base_ann_modelo |>
+  filter(Periodo == "Prueba")
+
+crear_dummies_estacion <- function(datos) {
+
+  dummies <- model.matrix(
+    ~ Estacion - 1,
+    data = datos
+  ) |>
+    as.data.frame()
+
+  bind_cols(
+    datos |> select(-Estacion),
+    dummies
+  )
+}
+
+train_ann <- crear_dummies_estacion(train_ann)
+prueba_ann <- crear_dummies_estacion(prueba_ann)
+
+variables_normalizar <- c(
+  "SR", "TEMP", "RH", "WS", "NOX",
+  "O3_t", "O3_lag_1", "O3_lag_2",
+  "O3_lag_3", "O3_lag_24",
+  "O3_objetivo"
+)
+
+parametros_normalizacion <- train_ann |>
+  summarise(
+    across(
+      all_of(variables_normalizar),
+      list(
+        min = ~ min(.x, na.rm = TRUE),
+        max = ~ max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  )
+
+train_ann_norm <- train_ann
+prueba_ann_norm <- prueba_ann
+
+for (variable in variables_normalizar) {
+
+  minimo <- parametros_normalizacion[[paste0(variable, "_min")]]
+
+  maximo <- parametros_normalizacion[[paste0(variable, "_max")]]
+
+  train_ann_norm[[variable]] <-
+    (train_ann[[variable]] - minimo) /
+    (maximo - minimo)
+
+  prueba_ann_norm[[variable]] <-
+    (prueba_ann[[variable]] - minimo) /
+    (maximo - minimo)
+}
+
+train_ann_norm <- train_ann_norm |>
+  mutate(
+    Horizonte_h = (Horizonte_h - 1) / 23
+  )
+
+prueba_ann_norm <- prueba_ann_norm |>
+  mutate(
+    Horizonte_h = (Horizonte_h - 1) / 23
+  )
+
+variables_estacion <- grep(
+  "^Estacion",
+  names(train_ann_norm),
+  value = TRUE
+)
+
+predictores_ann <- c(
+  "SR", "TEMP", "RH", "WS",
+  "WD_sin", "WD_cos", "NOX",
+  "Hora_sin_obj", "Hora_cos_obj",
+  "Mes_sin_obj", "Mes_cos_obj",
+  "O3_t", "O3_lag_1", "O3_lag_2",
+  "O3_lag_3", "O3_lag_24",
+  "Horizonte_h",
+  "SR_faltante", "TEMP_faltante",
+  "RH_faltante", "WS_faltante",
+  "WD_sin_faltante", "WD_cos_faltante",
+  "NOX_faltante",
+  variables_estacion
+)
+
+x_train <- as.matrix(
+  train_ann_norm[, predictores_ann]
+)
+
+y_train <- train_ann_norm$O3_objetivo
+
+x_test <- as.matrix(
+  prueba_ann_norm[, predictores_ann]
+)
+
+y_test <- prueba_ann_norm$O3_objetivo
+
+o3_train_real <- train_ann$O3_objetivo
+
+q75 <- quantile(
+  o3_train_real,
+  0.75,
+  na.rm = TRUE
+)
+
+q90 <- quantile(
+  o3_train_real,
+  0.90,
+  na.rm = TRUE
+)
+
+pesos_train <- case_when(
+  o3_train_real >= q90 ~ 4,
+  o3_train_real >= q75 ~ 1.5,
+  TRUE ~ 1
+)
+
+o3_min <- parametros_normalizacion$O3_objetivo_min
+o3_max <- parametros_normalizacion$O3_objetivo_max
+
+desnormalizar_o3 <- function(x) {
+  x * (o3_max - o3_min) + o3_min
+}
+
+set.seed(123)
+
+modelo_final_ann <- keras_model_sequential(
+  input_shape = c(ncol(x_train))
+) |>
+  layer_dense(
+    units = 7,
+    activation = "tanh"
+  ) |>
+  layer_dense(
+    units = 1,
+    activation = "linear"
+  )
+
+modelo_final_ann |>
+  compile(
+    optimizer = optimizer_adam(
+      learning_rate = 0.001
+    ),
+    loss = "mse"
+  )
+
+historial_ann <- modelo_final_ann |>
+  fit(
+    x = x_train,
+    y = y_train,
+    sample_weight = pesos_train,
+    epochs = 50,
+    batch_size = 4096,
+    verbose = 0
+  )
+
+pred_train_norm <- modelo_final_ann |>
+  predict(
+    x_train,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+pred_test_norm <- modelo_final_ann |>
+  predict(
+    x_test,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+real_train <- desnormalizar_o3(
+  y_train
+)
+
+pred_train <- desnormalizar_o3(
+  pred_train_norm
+)
+
+real_test <- desnormalizar_o3(
+  y_test
+)
+
+pred_test <- desnormalizar_o3(
+  pred_test_norm
+)
+
+RMSE_test <- sqrt(
+  mean(
+    (real_test - pred_test)^2
+  )
+)
+
+MAE_test <- mean(
+  abs(
+    real_test - pred_test
+  )
+)
+
+resultados_test_ann <- tibble(
+  Modelo = "ANN 7 neuronas",
+  RMSE = RMSE_test,
+  MAE = MAE_test
+)
+
+resultados_test_ann
+
+metricas_train_test <- tibble(
+  Conjunto = c(
+    "Entrenamiento",
+    "Prueba"
+  ),
+  RMSE = c(
+    sqrt(
+      mean(
+        (real_train - pred_train)^2
+      )
+    ),
+    RMSE_test
+  ),
+  MAE = c(
+    mean(
+      abs(
+        real_train - pred_train
+      )
+    ),
+    MAE_test
+  )
+)
+
+metricas_train_test
+
+resultados_pred_ann <- prueba_ann_norm |>
+  mutate(
+    Horizonte_original = round(
+      Horizonte_h * 23 + 1
+    ),
+    O3_real = real_test,
+    O3_predicho = pred_test,
+    Error = O3_real - O3_predicho
+  )
+
+metricas_horizonte_ann <- resultados_pred_ann |>
+  group_by(
+    Horizonte_original
+  ) |>
+  summarise(
+    MAE = mean(abs(Error)),
+    RMSE = sqrt(mean(Error^2)),
+    .groups = "drop"
+  )
+
+metricas_horizonte_ann
+
+metricas_horizonte_ann |>
+  ggplot(
+    aes(
+      x = Horizonte_original,
+      y = RMSE
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:24
+  ) +
+  labs(
+    title = "RMSE de la ANN según horizonte de predicción",
+    x = "Horizonte de predicción (horas)",
+    y = "RMSE"
+  ) +
+  theme_minimal()
+
+metricas_horizonte_ann |>
+  ggplot(
+    aes(
+      x = Horizonte_original,
+      y = MAE
+    )
+  ) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(
+    breaks = 1:24
+  ) +
+  labs(
+    title = "MAE de la ANN según horizonte de predicción",
+    x = "Horizonte de predicción (horas)",
+    y = "MAE"
+  ) +
+  theme_minimal()
+
+comparacion_train <- tibble(
+  Real = real_train,
+  Predicho = pred_train,
+  Conjunto = "Entrenamiento"
+)
+
+comparacion_test <- tibble(
+  Real = real_test,
+  Predicho = pred_test,
+  Conjunto = "Prueba"
+)
+
+set.seed(123)
+
+comparacion_train <- comparacion_train |>
+  slice_sample(
+    n = min(
+      3000,
+      nrow(comparacion_train)
+    )
+  )
+
+comparacion_test <- comparacion_test |>
+  slice_sample(
+    n = min(
+      3000,
+      nrow(comparacion_test)
+    )
+  )
+
+comparacion <- bind_rows(
+  comparacion_train,
+  comparacion_test
+)
+
+ggplot(
+  comparacion,
+  aes(
+    x = Real,
+    y = Predicho
+  )
+) +
+  geom_point(
+    alpha = 0.25
+  ) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed"
+  ) +
+  facet_wrap(
+    ~ Conjunto
+  ) +
+  labs(
+    title = "O3 real vs O3 predicho",
+    x = "O3 real",
+    y = "O3 predicho"
+  ) +
+  theme_minimal()
+
+umbral_alto <- quantile(
+  real_test,
+  0.90,
+  na.rm = TRUE
+)
+
+evaluacion_altos <- tibble(
+  Real = real_test,
+  Predicho = pred_test
+) |>
+  mutate(
+    Grupo = if_else(
+      Real >= umbral_alto,
+      "O3 alto",
+      "O3 normal"
+    ),
+    Error = Real - Predicho
+  ) |>
+  group_by(
+    Grupo
+  ) |>
+  summarise(
+    Observaciones = n(),
+    MAE = mean(
+      abs(Error)
+    ),
+    RMSE = sqrt(
+      mean(Error^2)
+    ),
+    Sesgo = mean(Error),
+    .groups = "drop"
+  )
+
+evaluacion_altos
+```
+
+## NOTA:
+
+# Los valores númericos pueden cambiar al momento de guardar por la aleatoridad proporcionadad por las librerías
+
+## Justificación
+
+Se utilizó una red neuronal artificial feedforward como uno de los modelos de predicción de O3. La metodología se planteó en base al trabajo de Cifuentes et al. (2021) ya que les resultó con mucho éxito. A diferencia de otros modelos, la red neuronal no necesita demostrar normalidad en los residuos ni linealidad ni homoscedasticidad. Sin embargo, si se tomaron precauciones antes de aplicar el modelo. Por ejemplo, se respetó la temporalidad de los datos porque no suponemos independencia temporal. También, todas las estadísticas utilizadas para la normalización y la imputación fueron calculadas a partir del periodo de entrenamiento. Aparte, las variables numéricas utilizadas por la red fueron normalizadas y las variables meteorológicas faltantes se imputaron mediante medianas históricas calculadas según estación, mes y hora. En cambio, los valores faltantes de O3 utilizados como respuesta o como rezagos esenciales no fueron imputados
+
+La separación de los datos se realizó diviendo la base de datos: 2021, 2022 y 2023 fueron utilizados para entrenamiento, 2024 para validación y selección del modelo y 2025 para el conjunto final de prueba. Esto evita utilizar información futura para entrenar o seleccionar el modelo. La arquitectura final utiliza una capa oculta de 7 neuronas con función de activación **tanh** y una neurona de salida con activación lineal. Es necesaria la salida lineal ya que se desea predecir una variable continua. El número de neuronas se seleccionó mediante el desempeño en el conjunto de validación con el conjunto de datos de 2024, probando desde 2 hasta 10 neuronas. Este modelo presentó el mejor desempeño por lo que fue seleccionada, aunque no estuvo muy lejos de los demás. Después de haber usado el modelo, se observó que el error incrementaba en las concentraciones más altas de ozono y por eso se le asignó un peso mayor (4) al 10% superior de las concentraciones observadas durante entrenamiento.
+
+En el conjunto de entrenamiento se obtuvo un RMSE aproximado de 11.54 y un MAE aproximado de 8.53, mientras que en el conjunto independiente de prueba de 2025 se obtuvo un RMSE de 13.53 y un MAE de 9.99. La diferencia entre los conjuntos es normal e indica una peqeuña pérdida de precisión al utilizar datos no observados previamente, pero no muestra evidencia de un sobreajuste relevante. Si existe una limitación en el modelo, como ya se mencinó, este pierde precisión al modelar los valores más altos de O3. El O3 alto (\>90%) tiene un RMSE aproximado de 16.87 y un MAE aproximado de 22.6. También el sesgo incrementa en un 18.09 comparadao al sesgo del O3 normal (0% - 90%).
+
+```{r}
+set.seed(123)
+
+n_importancia <- min(
+  100000,
+  nrow(x_test)
+)
+
+indices_importancia <- sample(
+  seq_len(nrow(x_test)),
+  n_importancia
+)
+
+x_imp <- x_test[
+  indices_importancia,
+  ,
+  drop = FALSE
+]
+
+y_imp <- y_test[
+  indices_importancia
+]
+
+real_imp <- desnormalizar_o3(
+  y_imp
+)
+
+pred_base_norm <- modelo_final_ann |>
+  predict(
+    x_imp,
+    verbose = 0
+  ) |>
+  as.numeric()
+
+pred_base <- desnormalizar_o3(
+  pred_base_norm
+)
+
+rmse_base <- sqrt(
+  mean(
+    (real_imp - pred_base)^2
+  )
+)
+
+importancia_variables <- lapply(
+  seq_along(predictores_ann),
+  function(j) {
+
+    x_permutado <- x_imp
+
+    x_permutado[, j] <- sample(
+      x_permutado[, j]
+    )
+
+    pred_perm_norm <- modelo_final_ann |>
+      predict(
+        x_permutado,
+        verbose = 0
+      ) |>
+      as.numeric()
+
+    pred_perm <- desnormalizar_o3(
+      pred_perm_norm
+    )
+
+    rmse_perm <- sqrt(
+      mean(
+        (real_imp - pred_perm)^2
+      )
+    )
+
+    tibble(
+      Variable = predictores_ann[j],
+      RMSE_permutado = rmse_perm,
+      Importancia = rmse_perm - rmse_base
+    )
+  }
+) |>
+  bind_rows() |>
+  arrange(
+    desc(Importancia)
+  )
+
+importancia_variables
+
+ggplot(
+  importancia_variables |>
+    slice_head(n = 15),
+  aes(
+    x = reorder(
+      Variable,
+      Importancia
+    ),
+    y = Importancia
+  )
+) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Importancia de variables en la ANN",
+    x = "Variable",
+    y = "Incremento del RMSE al permutar"
+  ) +
+  theme_minimal()
+
+```
+
+La importancia de las variables se evaluó mediante Permutation Importance. Los resultados muestran que la hora objetivo es la variable más importante del modelo. Esto confirma lo que se observó en el análisis exploratorio de los datos. El estado actual del O3 y las estaciones también constituyen gran parte de la predicción.
+
+Se van a tomar en cuenta las siguientes cosas para la última mejora del modelo antes del informe final:
+
+- Ajuste de pesos
+- Selección de variables
+- Ajuste de hiperparámetros
+- Análisis del error
