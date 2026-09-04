@@ -2486,9 +2486,7 @@ Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., et al. (2021). 
 Hoffmann, B., Boogaard, H., de Nazelle, A., Andersen, Z. J., Abramson, M., Brauer, M., et al. (2021). *WHO Air Quality Guidelines 2021–Aiming for Healthier Air for all: A Joint Statement by Medical, Public Health, Scientific Societies and Patient Representative Organisations*. International Journal of Public Health, 66, 1604465.
 
 
-a
 ```{r}
-
 library(dplyr)
 library(purrr)
 library(lubridate)
@@ -3000,37 +2998,38 @@ evaluacion_altos <- tibble(
 evaluacion_altos
 ```
 
+## NOTA:
 
+# Los valores númericos pueden cambiar al momento de guardar por la aleatoridad proporcionadad por las librerías
 
 ## Justificación
 
-Se utilizó una red neuronal artificial feedforward como uno de los modelos de predicción de O3. La metodología se planteó en base al trabajo de Cifuentes et al. (2021) ya que les resultó con mucho éxito. 
+Se utilizó una red neuronal artificial feedforward como uno de los modelos de predicción de O3. La metodología se planteó en base al trabajo de Cifuentes et al. (2021) ya que les resultó con mucho éxito. A diferencia de otros modelos, la red neuronal no necesita demostrar normalidad en los residuos ni linealidad ni homoscedasticidad. Sin embargo, si se tomaron precauciones antes de aplicar el modelo. Por ejemplo, se respetó la temporalidad de los datos porque no suponemos independencia temporal. También, todas las estadísticas utilizadas para la normalización y la imputación fueron calculadas a partir del periodo de entrenamiento. Aparte, las variables numéricas utilizadas por la red fueron normalizadas y las variables meteorológicas faltantes se imputaron mediante medianas históricas calculadas según estación, mes y hora. En cambio, los valores faltantes de O3 utilizados como respuesta o como rezagos esenciales no fueron imputados
 
 La separación de los datos se realizó diviendo la base de datos: 2021, 2022 y 2023 fueron utilizados para entrenamiento, 2024 para validación y selección del modelo y 2025 para el conjunto final de prueba. Esto evita utilizar información futura para entrenar o seleccionar el modelo. La arquitectura final utiliza una capa oculta de 7 neuronas con función de activación **tanh** y una neurona de salida con activación lineal. Es necesaria la salida lineal ya que se desea predecir una variable continua. El número de neuronas se seleccionó mediante el desempeño en el conjunto de validación con el conjunto de datos de 2024, probando desde 2 hasta 10 neuronas. Este modelo presentó el mejor desempeño por lo que fue seleccionada, aunque no estuvo muy lejos de los demás. Después de haber usado el modelo, se observó que el error incrementaba en las concentraciones más altas de ozono y por eso se le asignó un peso mayor (4) al 10% superior de las concentraciones observadas durante entrenamiento. 
 
 En el conjunto de entrenamiento se obtuvo un RMSE aproximado de 11.54 y un MAE aproximado de 8.53, mientras que en el conjunto independiente de prueba de 2025 se obtuvo un RMSE de 13.53 y un MAE de 9.99. La diferencia entre los conjuntos es normal e indica una peqeuña pérdida de precisión al utilizar datos no observados previamente, pero no muestra evidencia de un sobreajuste relevante. Si existe una limitación en el modelo, como ya se mencinó, este pierde precisión al modelar los valores más altos de O3. El O3 alto (>90%) tiene un RMSE aproximado de 16.87 y un MAE aproximado de 22.6. También el sesgo incrementa en un 18.09 comparadao al sesgo del O3 normal (0% - 90%).
 
 ```{r}
-
 set.seed(123)
 
 n_importancia <- min(
   100000,
-  nrow(x_val)
+  nrow(x_test)
 )
 
 indices_importancia <- sample(
-  seq_len(nrow(x_val)),
+  seq_len(nrow(x_test)),
   n_importancia
 )
 
-x_imp <- x_val[
+x_imp <- x_test[
   indices_importancia,
   ,
   drop = FALSE
 ]
 
-y_imp <- y_val[
+y_imp <- y_test[
   indices_importancia
 ]
 
@@ -3096,33 +3095,33 @@ importancia_variables <- lapply(
 
 importancia_variables
 
-```
-
-```{r}
-library(ggplot2)
-
-importancia_variables |>
-  slice_head(n = 15) |>
-  ggplot(
-    aes(
-      x = reorder(
-        Variable,
-        Importancia
-      ),
-      y = Importancia
-    )
-  ) +
+ggplot(
+  importancia_variables |>
+    slice_head(n = 15),
+  aes(
+    x = reorder(
+      Variable,
+      Importancia
+    ),
+    y = Importancia
+  )
+) +
   geom_col() +
   coord_flip() +
   labs(
     title = "Importancia de variables en la ANN",
     x = "Variable",
-    y = "Incremento en RMSE al permutar"
+    y = "Incremento del RMSE al permutar"
   ) +
   theme_minimal()
 
 ```
 
 
+La importancia de las variables se evaluó mediante Permutation Importance. Los resultados muestran que la hora objetivo es la variable más importante del modelo. Esto confirma lo que se observó en el análisis exploratorio de los datos. El estado actual del O3 y las estaciones también constituyen gran parte de la predicción.
 
+Se van a tomar en cuenta las siguientes cosas para la última mejora del modelo antes del informe final:
+
+- Ajuste de pesos
+- Selección de variables
 
