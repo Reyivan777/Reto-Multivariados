@@ -165,9 +165,8 @@ La cantidad de objetivos debe coincidir con la obtenida en `reporte.qmd` para el
 
 Antes de XGBoost se calcula una referencia mínima. Para una hora de anticipación, el modelo de persistencia supone que la concentración dentro de una hora será igual a la concentración actual:
 
-$$
-\widehat{O_3}(t+1) = O_3(t)
-$$
+$$\widehat{O_3}(t+1) = O_3(t)
+$$$$\widehat{O_3}(t+1) = O_3(t)$$
 
 Primero se define una función pequeña para calcular las dos métricas que utilizaremos en todos los modelos: MAE y RMSE.
 
