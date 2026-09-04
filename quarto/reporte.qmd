@@ -3124,4 +3124,7 @@ Se van a tomar en cuenta las siguientes cosas para la última mejora del modelo 
 
 - Ajuste de pesos
 - Selección de variables
+- Ajuste de hiperparámetros
+- Análisis del error
+
 
