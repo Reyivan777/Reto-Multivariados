@@ -1,0 +1,262 @@
+name: Agregar tuning XGBoost
+
+on:
+  push:
+    branches: [trunk]
+    paths:
+      - ".github/workflows/tmp_tuning_xgb.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  tuning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Agregar tuning reducido de hiperparametros
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("quarto/xgboost.qmd")
+          texto = path.read_text(encoding="utf-8")
+
+          bloque = r'''
+## Ajuste reducido de hiperparámetros
+
+Después de comprobar que la configuración inicial supera a persistencia y que la importancia de las variables cambia con el horizonte, se realiza un ajuste pequeño de hiperparámetros. El objetivo no es explorar cientos de combinaciones, sino comprobar si cambios razonables en la complejidad y velocidad de aprendizaje mejoran el RMSE de validación sin aumentar innecesariamente el tiempo de ejecución.
+
+Se mantienen fijos `objective = "reg:squarederror"`, `eval_metric = "rmse"` y `lambda = 1`. Se prueban seis configuraciones adicionales alrededor del modelo inicial, modificando `eta`, `max_depth`, `min_child_weight`, `subsample` y `colsample_bytree`. El número de árboles continúa determinado por `early stopping`.
+
+```{r}
+#| label: configuraciones-tuning-xgboost
+configuraciones_tuning <- tribble(
+  ~Configuracion, ~eta, ~max_depth, ~min_child_weight, ~subsample, ~colsample_bytree,
+  "T1", 0.05, 4, 5, 0.8, 0.8,
+  "T2", 0.05, 8, 5, 0.8, 0.8,
+  "T3", 0.03, 6, 5, 0.8, 0.8,
+  "T4", 0.10, 6, 5, 0.8, 0.8,
+  "T5", 0.05, 6, 10, 0.8, 0.8,
+  "T6", 0.05, 6, 5, 0.7, 0.7
+)
+
+knitr::kable(
+  configuraciones_tuning,
+  caption = "Configuraciones adicionales evaluadas en el tuning reducido"
+)
+```
+
+La búsqueda se realiza por separado para `h = 1, 6, 12 y 24`, porque el análisis anterior mostró que la información utilizada por el modelo cambia considerablemente con la distancia de pronóstico. Para cada horizonte se construyen una sola vez las matrices de entrenamiento y validación y después se reutilizan en todas las configuraciones.
+
+```{r}
+#| label: funciones-tuning-xgboost
+preparar_horizonte_tuning <- function(h) {
+  base_h <- construir_base_horizonte(h) |>
+    filter(!is.na(O3_objetivo))
+
+  entrenamiento_h <- base_h |>
+    filter(Periodo == "Entrenamiento")
+
+  validacion_h <- base_h |>
+    filter(Periodo == "Validacion")
+
+  list(
+    validacion = validacion_h,
+    dtrain = xgb.DMatrix(
+      data = crear_matriz_xgb(entrenamiento_h),
+      label = entrenamiento_h$O3_objetivo,
+      missing = NA
+    ),
+    dval = xgb.DMatrix(
+      data = crear_matriz_xgb(validacion_h),
+      label = validacion_h$O3_objetivo,
+      missing = NA
+    )
+  )
+}
+
+evaluar_configuracion_tuning <- function(datos_h, h, configuracion) {
+  parametros_h <- list(
+    objective = "reg:squarederror",
+    eval_metric = "rmse",
+    eta = configuracion$eta,
+    max_depth = configuracion$max_depth,
+    min_child_weight = configuracion$min_child_weight,
+    subsample = configuracion$subsample,
+    colsample_bytree = configuracion$colsample_bytree,
+    lambda = 1
+  )
+
+  set.seed(123)
+
+  modelo_h <- xgb.train(
+    params = parametros_h,
+    data = datos_h$dtrain,
+    nrounds = 1000,
+    evals = list(
+      entrenamiento = datos_h$dtrain,
+      validacion = datos_h$dval
+    ),
+    early_stopping_rounds = 30,
+    verbose = 0
+  )
+
+  registro_h <- as_tibble(attr(modelo_h, "evaluation_log"))
+  columna_rmse_h <- names(registro_h)[
+    str_detect(names(registro_h), "^validacion.*rmse$")
+  ]
+
+  if (length(columna_rmse_h) != 1) {
+    stop("No se pudo identificar la columna de RMSE de validación durante el tuning.")
+  }
+
+  indice_mejor_h <- which.min(registro_h[[columna_rmse_h]])
+  predicciones_h <- predict(modelo_h, datos_h$dval)
+  indices_comunes_h <- which(!is.na(datos_h$validacion$O3_t))
+
+  metricas_comunes_h <- calcular_metricas(
+    datos_h$validacion$O3_objetivo[indices_comunes_h],
+    predicciones_h[indices_comunes_h]
+  )
+
+  tibble(
+    Horizonte_h = h,
+    Configuracion = configuracion$Configuracion,
+    eta = configuracion$eta,
+    max_depth = configuracion$max_depth,
+    min_child_weight = configuracion$min_child_weight,
+    subsample = configuracion$subsample,
+    colsample_bytree = configuracion$colsample_bytree,
+    Mejor_iteracion = registro_h$iter[indice_mejor_h],
+    RMSE_validacion = registro_h[[columna_rmse_h]][indice_mejor_h],
+    MAE_comun = metricas_comunes_h$MAE,
+    RMSE_comun = metricas_comunes_h$RMSE
+  )
+}
+```
+
+El siguiente bloque ejecuta las seis configuraciones para los cuatro horizontes representativos. La selección se hace con el menor `RMSE_validacion` de 2024. El conjunto de 2025 permanece completamente fuera de este proceso.
+
+```{r}
+#| label: ejecutar-tuning-xgboost
+resultados_tuning <- map_dfr(
+  c(1, 6, 12, 24),
+  function(h) {
+    datos_h <- preparar_horizonte_tuning(h)
+
+    map_dfr(
+      seq_len(nrow(configuraciones_tuning)),
+      function(i) {
+        evaluar_configuracion_tuning(
+          datos_h,
+          h,
+          configuraciones_tuning[i, ]
+        )
+      }
+    )
+  }
+)
+
+mejores_tuning <- resultados_tuning |>
+  group_by(Horizonte_h) |>
+  slice_min(
+    order_by = RMSE_validacion,
+    n = 1,
+    with_ties = FALSE
+  ) |>
+  ungroup()
+
+mejores_tuning |>
+  select(
+    Horizonte_h,
+    Configuracion,
+    eta,
+    max_depth,
+    min_child_weight,
+    subsample,
+    colsample_bytree,
+    Mejor_iteracion,
+    RMSE_validacion
+  ) |>
+  mutate(RMSE_validacion = round(RMSE_validacion, 3)) |>
+  knitr::kable(
+    caption = "Mejor configuración del tuning reducido por horizonte"
+  )
+```
+
+Finalmente se compara el mejor modelo encontrado en el tuning contra la configuración inicial sobre el mismo subconjunto de observaciones donde también puede calcularse persistencia. Una mejora positiva indica que el tuning redujo el error respecto al XGBoost inicial.
+
+```{r}
+#| label: comparacion-tuning-inicial
+comparacion_tuning <- mejores_tuning |>
+  select(
+    Horizonte_h,
+    Configuracion,
+    MAE_tuning = MAE_comun,
+    RMSE_tuning = RMSE_comun
+  ) |>
+  left_join(
+    resultados_horizontes |>
+      select(
+        Horizonte_h,
+        MAE_inicial = MAE_XGBoost,
+        RMSE_inicial = RMSE_XGBoost
+      ),
+    by = "Horizonte_h"
+  ) |>
+  mutate(
+    Mejora_MAE_pct = 100 *
+      (MAE_inicial - MAE_tuning) / MAE_inicial,
+    Mejora_RMSE_pct = 100 *
+      (RMSE_inicial - RMSE_tuning) / RMSE_inicial
+  )
+
+comparacion_tuning |>
+  mutate(
+    across(
+      c(MAE_inicial, MAE_tuning, RMSE_inicial, RMSE_tuning),
+      ~ round(.x, 3)
+    ),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(
+    caption = "Configuración inicial frente al mejor tuning en 2024"
+  )
+```
+
+Este tuning es deliberadamente reducido. Si las mejoras son pequeñas, se conservará una configuración simple y se evitará una búsqueda más costosa. Si algún horizonte muestra una reducción clara del error, esa configuración servirá como referencia para extender el modelado a los 24 horizontes.
+'''
+
+          marcador = "\n# Evaluación\n"
+          if "#| label: configuraciones-tuning-xgboost" not in texto:
+              if marcador not in texto:
+                  raise RuntimeError("No se encontró la sección Evaluación en xgboost.qmd")
+              texto = texto.replace(
+                  marcador,
+                  "\n" + bloque.strip() + "\n\n# Evaluación\n",
+                  1
+              )
+
+          texto = texto.replace(
+              "La configuración inicial ya se evalúa sobre **2024** en horizontes de 1, 6, 12 y 24 horas. Además, se compara la importancia de variables entre estos horizontes para entender cómo cambia la información utilizada por el modelo antes de ajustar hiperparámetros.",
+              "La configuración inicial ya se evalúa sobre **2024** en horizontes de 1, 6, 12 y 24 horas. Además, se compara la importancia de variables y se realiza un tuning reducido por horizonte para comprobar si ajustes razonables de los hiperparámetros reducen el error antes de extender el modelo a los 24 horizontes."
+          )
+
+          path.write_text(texto, encoding="utf-8")
+          Path(".github/workflows/tmp_tuning_xgb.yml").unlink()
+          PY
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add quarto/xgboost.qmd .github/workflows/tmp_tuning_xgb.yml
+          git commit -m "Agrega tuning reducido de XGBoost"
+          git push
