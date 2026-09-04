@@ -200,7 +200,6 @@ tabla_smooths <- tibble(
 res_gam <- residuals(modelo_gam_validacion, type = "deviance")
 fit_gam <- fitted(modelo_gam_validacion)
 
-# Cobertura del GAM frente a objetivos disponibles
 cobertura_gam <- base_h24 |>
   mutate(Caso_GAM = if_all(all_of(predictores_gam), ~ !is.na(.x))) |>
   group_by(Periodo) |>
@@ -361,7 +360,6 @@ metricas_xgb_hora <- test_xgb_oficial |>
     .groups = "drop"
   )
 
-# GAM definitivo usando la familia seleccionada solo con 2024
 train_gam_final <- base_h24 |>
   filter(Año_objetivo %in% 2021:2024) |>
   drop_na(all_of(predictores_gam))
@@ -703,9 +701,11 @@ XGBoost supera a persistencia en las cuatro estaciones. La reducción de RMSE va
 metricas_xgb_hora |>
   select(Hora_objetivo, RMSE_Persistencia, RMSE_XGBoost) |>
   pivot_longer(-Hora_objetivo, names_to = "Modelo", values_to = "RMSE") |>
-  mutate(Modelo = recode(Modelo,
-                          RMSE_Persistencia = "Persistencia diaria",
-                          RMSE_XGBoost = "XGBoost")) |>
+  mutate(Modelo = dplyr::recode(
+    Modelo,
+    RMSE_Persistencia = "Persistencia diaria",
+    RMSE_XGBoost = "XGBoost"
+  )) |>
   ggplot(aes(Hora_objetivo, RMSE, linetype = Modelo, shape = Modelo)) +
   geom_line(linewidth = 0.7) +
   geom_point(size = 1.8) +
