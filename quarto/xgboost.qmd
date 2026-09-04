@@ -12,40 +12,30 @@ execute:
   message: false
 ---
 
-<<<<<<< HEAD
-
-html:
-    toc: true
-    toc-depth: 3
-    
-    
-# Objetivo de este archivo
-=======
 # Objetivo del modelo
->>>>>>> 723496856deb3cf27d7a758031aa8bf08022ab51
 
-Este archivo se concentra en una sola tarea: **predecir la concentración horaria de O3 con 24 horas de anticipación** para las estaciones `NTE`, `NTE2`, `NO` y `NE`, considerando como horas objetivo el intervalo de 10:00 a 20:00.
+Este archivo concentra todo el desarrollo, validación y prueba final del modelo XGBoost para una sola tarea: **predecir la concentración horaria de O3 con 24 horas de anticipación** para las estaciones `NTE`, `NTE2`, `NO` y `NE`, considerando como horas objetivo el intervalo de 10:00 a 20:00.
 
-La decisión de fijar el horizonte en 24 horas surge del análisis previo de los horizontes de 1 a 24 horas. Ese diagnóstico mostró que la estructura diaria del O3 es especialmente útil cuando el origen y el objetivo corresponden a la misma hora en días consecutivos. Por ello, en lugar de mantener 24 problemas de predicción distintos, se reformula el modelo alrededor de un único objetivo:
+La decisión de fijar el horizonte en 24 horas surge del análisis previo de los horizontes de 1 a 24 horas. Ese diagnóstico mostró que la estructura diaria del O3 es especialmente útil cuando el origen y el objetivo corresponden a la misma hora en días consecutivos. Por ello, el problema se reformula alrededor de un único objetivo:
 
 $$
 O3_{t+24}
 $$
 
-En este planteamiento, `O3_t` ya no se interpreta únicamente como el valor actual, sino como **el O3 observado exactamente 24 horas antes del objetivo**. Esta alineación permite aprovechar de manera directa la periodicidad diaria identificada en el análisis exploratorio.
+En este planteamiento, `O3_t` corresponde exactamente al O3 observado 24 horas antes del objetivo y funciona como la referencia diaria más directa.
 
-La separación temporal se mantiene sin cambios:
+La separación temporal es:
 
-- entrenamiento: 2021-2023;
+- entrenamiento inicial: 2021-2023;
 - validación y selección del modelo: 2024;
 - prueba final: 2025;
 - horas objetivo: 10:00-20:00.
 
-El conjunto de 2025 permanece completamente fuera del desarrollo presentado en este archivo.
+Las decisiones de variables, hiperparámetros y número de iteraciones se cierran utilizando 2024. Después, el modelo definitivo se vuelve a entrenar con 2021-2024 y se evalúa una sola vez sobre 2025.
 
 # Carga de la base de modelado
 
-La limpieza, homologación y construcción de la cuadrícula horaria permanecen documentadas en `reporte.qmd`. Este archivo parte directamente de `data/base_modelado_o3.rds`, por lo que no repite la preparación de los datos originales.
+La limpieza, homologación y construcción de la cuadrícula horaria permanecen documentadas en `reporte.qmd`. Este archivo parte directamente de `data/base_modelado_o3.rds`.
 
 ```{r}
 #| label: configuracion
@@ -72,7 +62,7 @@ if (!file.exists(ruta_base_modelado)) {
 base_origen_modelado <- readRDS(ruta_base_modelado)
 ```
 
-Antes de continuar se verifica que estén disponibles las variables necesarias para el nuevo planteamiento.
+Antes de continuar se verifica que estén disponibles las variables necesarias.
 
 ```{r}
 #| label: verificacion-base
@@ -99,16 +89,16 @@ if (length(faltantes_estructura) > 0) {
 
 ## Historial diario alineado
 
-Para un objetivo fijo de 24 horas, el valor de `O3_t` corresponde exactamente a la misma hora del día anterior al objetivo. A partir de la cuadrícula horaria también se construyen valores de O3 de dos, tres y cuatro días antes del objetivo.
+Para un objetivo fijo de 24 horas, `O3_t` corresponde a la misma hora del día anterior al objetivo. También se construyen valores de O3 de dos, tres y cuatro días antes del objetivo.
 
-Si el objetivo fuera, por ejemplo, martes a las 15:00, las variables alineadas representarían:
+Si el objetivo fuera martes a las 15:00:
 
 - `O3_alineado_1d`: lunes 15:00;
 - `O3_alineado_2d`: domingo 15:00;
 - `O3_alineado_3d`: sábado 15:00;
 - `O3_alineado_4d`: viernes 15:00.
 
-Todos estos valores son conocidos en el momento de realizar la predicción, por lo que no existe fuga de información.
+Todos estos valores son conocidos al momento de realizar la predicción.
 
 ```{r}
 #| label: base-h24
@@ -146,8 +136,6 @@ base_h24 <- base_origen_modelado |>
   )
 ```
 
-La siguiente tabla confirma cuántos objetivos están disponibles en cada periodo. La separación se realiza con el año del **objetivo**, no con el año del origen, para evitar mezclar información entre entrenamiento, validación y prueba en los límites temporales.
-
 ```{r}
 #| label: resumen-base-h24
 base_h24 |>
@@ -163,13 +151,13 @@ base_h24 |>
 
 # Modelo de referencia
 
-El punto de comparación natural para este problema es la **persistencia diaria**. Como el objetivo se encuentra exactamente 24 horas adelante, la predicción más simple consiste en asumir que mañana a la misma hora el O3 será igual al observado hoy:
+La referencia natural es la **persistencia diaria**:
 
 $$
 \widehat{O3}_{t+24}=O3_t
 $$
 
-Este baseline ya incorpora la periodicidad diaria y, por tanto, es una referencia exigente para el XGBoost.
+Es decir, se asume que mañana a la misma hora el O3 será igual al observado hoy.
 
 ```{r}
 #| label: funcion-metricas
@@ -182,7 +170,7 @@ calcular_metricas <- function(observado, predicho) {
 ```
 
 ```{r}
-#| label: persistencia-diaria
+#| label: persistencia-validacion
 validacion_h24 <- base_h24 |>
   filter(Periodo == "Validacion")
 
@@ -204,18 +192,16 @@ metricas_persistencia_h24 <- calcular_metricas(
 
 ## Predictores
 
-El modelo utiliza información que estaría disponible 24 horas antes del objetivo. El grupo principal está formado por el historial diario alineado de O3. También se conserva el contexto inmediato de las horas anteriores al origen, las condiciones meteorológicas observadas en `t`, la estación y la estructura temporal conocida del instante objetivo.
+El modelo utiliza información disponible 24 horas antes del objetivo:
 
-Los predictores son:
-
-- O3 de la misma hora uno, dos, tres y cuatro días antes del objetivo;
-- O3 de 1, 2 y 3 horas antes del origen como contexto reciente;
-- radiación solar, temperatura, humedad relativa y velocidad del viento observadas en `t`;
-- componentes seno y coseno de la dirección del viento;
+- O3 de la misma hora uno, dos, tres y cuatro días antes;
+- O3 de 1, 2 y 3 horas antes del origen;
+- radiación solar, temperatura, humedad relativa y velocidad del viento en `t`;
+- dirección del viento mediante seno y coseno;
 - hora y mes del objetivo;
 - estación de monitoreo.
 
-No se utilizan condiciones meteorológicas reales de `t+24`, porque no estarían disponibles al momento de generar la predicción.
+No se utilizan condiciones meteorológicas reales de `t+24`, porque no estarían disponibles al generar el pronóstico.
 
 ```{r}
 #| label: predictores-xgboost
@@ -243,12 +229,10 @@ crear_matriz_xgb <- function(datos) {
 }
 ```
 
-## Configuración inicial
-
-Se mantiene como punto de partida la configuración que ya había mostrado un comportamiento estable durante la exploración anterior. Los `NA` de los predictores no se imputan; XGBoost los maneja de forma nativa.
+## Configuración inicial y validación 2024
 
 ```{r}
-#| label: entrenamiento-inicial-h24
+#| label: entrenamiento-inicial
 entrenamiento_h24 <- base_h24 |>
   filter(Periodo == "Entrenamiento")
 
@@ -293,10 +277,8 @@ modelo_xgb_h24 <- xgb.train(
 )
 ```
 
-`early_stopping_rounds = 30` utiliza únicamente 2024 para detener el entrenamiento cuando el RMSE de validación deja de mejorar. El conjunto de 2025 no participa en esta decisión.
-
 ```{r}
-#| label: resumen-entrenamiento-h24
+#| label: resumen-entrenamiento
 registro_h24 <- as_tibble(
   attr(modelo_xgb_h24, "evaluation_log")
 )
@@ -316,26 +298,12 @@ indice_mejor_h24 <- which.min(
 mejor_iteracion_h24 <- registro_h24$iter[indice_mejor_h24]
 mejor_rmse_validacion_h24 <-
   registro_h24[[columna_rmse_validacion]][indice_mejor_h24]
-
-resumen_entrenamiento_h24 <- tibble(
-  Observaciones_entrenamiento = nrow(entrenamiento_h24),
-  Observaciones_validacion = nrow(validacion_h24),
-  Mejor_iteracion = mejor_iteracion_h24,
-  Mejor_RMSE_validacion = round(mejor_rmse_validacion_h24, 3)
-)
-
-knitr::kable(
-  resumen_entrenamiento_h24,
-  caption = "Resumen del XGBoost reformulado para 24 horas"
-)
 ```
 
-# Comparación con persistencia diaria
-
-XGBoost puede producir predicciones aun cuando `O3_t` esté ausente, mientras que la persistencia diaria necesita ese valor. Para que la comparación sea justa, MAE y RMSE se calculan sobre las mismas observaciones de 2024 donde `O3_alineado_1d` está disponible.
+## Comparación con persistencia diaria
 
 ```{r}
-#| label: comparacion-inicial
+#| label: comparacion-validacion
 pred_xgb_validacion_h24 <- predict(
   modelo_xgb_h24,
   dval_h24
@@ -370,11 +338,11 @@ knitr::kable(
 )
 ```
 
-Esta comparación responde directamente a la nueva pregunta del proyecto: si la periodicidad diaria ya proporciona una predicción razonable mediante `O3_t`, XGBoost debe demostrar que el historial adicional, la meteorología y la estructura temporal permiten mejorar esa referencia.
+En 2024, la persistencia diaria obtiene MAE de **11.444** y RMSE de **15.749**, mientras que el XGBoost reformulado obtiene MAE de **10.055** y RMSE de **13.611**. Esto representa reducciones aproximadas de **12.1% en MAE** y **13.6% en RMSE**.
+
+Por tanto, el O3 de la misma hora del día anterior es una referencia fuerte, pero XGBoost logra mejorarla al combinar la periodicidad diaria con días anteriores, el comportamiento reciente del O3, la meteorología disponible y la estructura temporal.
 
 # Importancia de variables
-
-Después de evaluar el desempeño se revisa qué información utiliza realmente el nuevo modelo. La medida principal es `Gain`, que resume cuánto contribuye una variable a reducir la función de error cuando se utiliza en las divisiones de los árboles. No debe interpretarse como causalidad física.
 
 ```{r}
 #| label: importancia-h24
@@ -416,13 +384,13 @@ importancia_h24 |>
   theme_minimal()
 ```
 
-En particular, interesa comprobar si los valores de O3 alineados por día concentran una parte importante del `Gain` y cuánto aportan las variables meteorológicas y el contexto horario adicional.
+`O3_alineado_1d` concentra **55.64% del Gain** y es el predictor principal. Los cuatro valores diarios alineados suman aproximadamente **70.4% del Gain**, lo que confirma que la historia del O3 a la misma hora de días anteriores concentra la mayor parte de la señal predictiva.
 
-# Tuning reducido para 24 horas
+También aparecen `O3_lag_1`, `TEMP`, `SR`, `RH`, `WS`, la hora objetivo y el mes, por lo que el modelo utiliza información complementaria para corregir la referencia del día anterior. Estas importancias describen uso predictivo dentro del modelo y no causalidad física.
 
-El cambio de predictores invalida cualquier selección de hiperparámetros realizada con el planteamiento anterior. Por ello se repite un tuning pequeño, ahora **exclusivamente para el horizonte de 24 horas**.
+# Tuning reducido
 
-Se prueban seis configuraciones alrededor del modelo inicial. El objetivo sigue siendo evitar una búsqueda exhaustiva y comprobar si cambios moderados en la complejidad o regularización producen una mejora clara en 2024.
+Se realiza un tuning pequeño únicamente para 24 horas.
 
 ```{r}
 #| label: configuraciones-tuning
@@ -434,11 +402,6 @@ configuraciones_tuning <- tribble(
   "T4", 0.10, 6, 5, 0.8, 0.8,
   "T5", 0.05, 6, 10, 0.8, 0.8,
   "T6", 0.05, 6, 5, 0.7, 0.7
-)
-
-knitr::kable(
-  configuraciones_tuning,
-  caption = "Configuraciones adicionales para el tuning del modelo a 24 horas"
 )
 ```
 
@@ -475,10 +438,6 @@ entrenar_configuracion_h24 <- function(configuracion) {
     str_detect(names(registro), "^validacion.*rmse$")
   ]
 
-  if (length(columna_rmse) != 1) {
-    stop("No se pudo identificar el RMSE de validación durante el tuning.")
-  }
-
   indice_mejor <- which.min(registro[[columna_rmse]])
   predicciones <- predict(modelo, dval_h24)
 
@@ -501,8 +460,6 @@ entrenar_configuracion_h24 <- function(configuracion) {
   )
 }
 ```
-
-Para no volver a entrenar la configuración inicial, su resultado ya calculado se agrega directamente a la tabla de tuning.
 
 ```{r}
 #| label: ejecutar-tuning
@@ -541,14 +498,201 @@ resultados_tuning_h24 |>
   )
 ```
 
-La primera fila de esta tabla será la mejor configuración según el RMSE de validación 2024. Solo si la mejora es suficientemente clara se justificará reemplazar la configuración inicial.
+La mejor configuración es **T1**, con `eta = 0.05`, `max_depth = 4`, `min_child_weight = 5`, `subsample = 0.8` y `colsample_bytree = 0.8`. Su mejor iteración es 119. Sobre el subconjunto común obtiene MAE de **10.035** y RMSE de **13.560**.
 
-# Estado del modelado
+La mejora frente a la configuración inicial es pequeña, pero T1 utiliza árboles menos profundos y obtiene un desempeño ligeramente mejor. Por ello se adopta como configuración definitiva.
 
-A partir de esta reformulación, el problema deja de ser una colección de 24 horizontes y se convierte en un único pronóstico diario alineado:
+## Configuración definitiva
 
-$$
-\boxed{O3_{t+24}}
-$$
+```{r}
+#| label: parametros-finales
+parametros_finales <- list(
+  objective = "reg:squarederror",
+  eval_metric = "rmse",
+  eta = 0.05,
+  max_depth = 4,
+  min_child_weight = 5,
+  subsample = 0.8,
+  colsample_bytree = 0.8,
+  lambda = 1
+)
 
-La validación de 2024 debe utilizarse para decidir si el historial diario alineado mejora el modelo y para cerrar la configuración definitiva. **2025 continúa reservado para una única prueba final**, por lo que no debe utilizarse para modificar predictores, hiperparámetros ni decisiones metodológicas.
+iteraciones_finales <- 119
+```
+
+A partir de este punto quedan congelados objetivo, predictores, hiperparámetros e iteraciones.
+
+# Prueba final en 2025
+
+Una vez cerradas todas las decisiones con 2024, el modelo definitivo se vuelve a entrenar usando toda la información disponible de **2021-2024** y se evalúa una sola vez sobre **2025**. No se utiliza `early stopping` sobre 2025 ni se modifican decisiones después de observar sus resultados.
+
+```{r}
+#| label: base-prueba-final
+base_final <- base_h24 |>
+  mutate(
+    Periodo_final = case_when(
+      Año_objetivo %in% 2021:2024 ~ "Entrenamiento_final",
+      Año_objetivo == 2025 ~ "Prueba_final",
+      TRUE ~ NA_character_
+    )
+  )
+
+entrenamiento_final <- base_final |>
+  filter(Periodo_final == "Entrenamiento_final")
+
+prueba_final <- base_final |>
+  filter(Periodo_final == "Prueba_final")
+```
+
+```{r}
+#| label: entrenamiento-definitivo
+dtrain_final <- xgb.DMatrix(
+  data = crear_matriz_xgb(entrenamiento_final),
+  label = entrenamiento_final$O3_objetivo,
+  missing = NA
+)
+
+dtest_final <- xgb.DMatrix(
+  data = crear_matriz_xgb(prueba_final),
+  label = prueba_final$O3_objetivo,
+  missing = NA
+)
+
+set.seed(123)
+
+modelo_final <- xgb.train(
+  params = parametros_finales,
+  data = dtrain_final,
+  nrounds = iteraciones_finales,
+  verbose = 0
+)
+
+pred_xgb_2025 <- predict(
+  modelo_final,
+  dtest_final
+)
+```
+
+## Desempeño global
+
+```{r}
+#| label: metricas-prueba-final
+resultados_prueba <- prueba_final |>
+  mutate(
+    Pred_XGBoost = pred_xgb_2025
+  ) |>
+  filter(!is.na(O3_alineado_1d))
+
+metricas_persistencia_2025 <- calcular_metricas(
+  resultados_prueba$O3_objetivo,
+  resultados_prueba$O3_alineado_1d
+)
+
+metricas_xgb_2025 <- calcular_metricas(
+  resultados_prueba$O3_objetivo,
+  resultados_prueba$Pred_XGBoost
+)
+
+comparacion_final_2025 <- tibble(
+  Modelo = c("Persistencia diaria", "XGBoost final"),
+  Observaciones = nrow(resultados_prueba),
+  MAE = c(
+    metricas_persistencia_2025$MAE,
+    metricas_xgb_2025$MAE
+  ),
+  RMSE = c(
+    metricas_persistencia_2025$RMSE,
+    metricas_xgb_2025$RMSE
+  )
+)
+
+comparacion_final_2025 |>
+  mutate(
+    MAE = round(MAE, 3),
+    RMSE = round(RMSE, 3)
+  ) |>
+  knitr::kable(
+    caption = "Prueba final 2025: persistencia diaria frente a XGBoost"
+  )
+```
+
+```{r}
+#| label: mejora-final
+mejora_final <- tibble(
+  Mejora_MAE_pct = 100 *
+    (metricas_persistencia_2025$MAE - metricas_xgb_2025$MAE) /
+    metricas_persistencia_2025$MAE,
+  Mejora_RMSE_pct = 100 *
+    (metricas_persistencia_2025$RMSE - metricas_xgb_2025$RMSE) /
+    metricas_persistencia_2025$RMSE
+)
+
+mejora_final |>
+  mutate(across(everything(), ~ round(.x, 1))) |>
+  knitr::kable(
+    caption = "Reducción final del error de XGBoost respecto a persistencia diaria"
+  )
+```
+
+En la prueba final se evaluaron **7,333 observaciones** de 2025. La persistencia diaria obtiene MAE de **13.787** y RMSE de **18.975**, mientras que XGBoost obtiene MAE de **11.864** y RMSE de **16.229**.
+
+Esto equivale a una reducción de **13.9% en MAE** y **14.5% en RMSE** respecto a la persistencia diaria. Por tanto, la ventaja observada durante la validación de 2024 se mantiene en datos completamente fuera de muestra.
+
+Los errores absolutos son mayores en 2025 que en 2024. El RMSE del XGBoost pasa de aproximadamente **13.56** en validación a **16.23** en prueba final, pero la persistencia diaria también empeora de **15.75** a **18.98**. Esto indica que 2025 fue un periodo más difícil de predecir en términos absolutos, sin que desaparezca la ventaja relativa de XGBoost.
+
+De hecho, la reducción relativa del RMSE se mantiene muy estable: alrededor de **13.9% en validación** y **14.5% en prueba final**. Esta consistencia es una señal favorable de generalización.
+
+## Desempeño por estación
+
+```{r}
+#| label: metricas-estacion-2025
+metricas_estacion_2025 <- resultados_prueba |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = n(),
+    MAE_Persistencia = mean(abs(O3_objetivo - O3_alineado_1d)),
+    MAE_XGBoost = mean(abs(O3_objetivo - Pred_XGBoost)),
+    RMSE_Persistencia = sqrt(mean((O3_objetivo - O3_alineado_1d)^2)),
+    RMSE_XGBoost = sqrt(mean((O3_objetivo - Pred_XGBoost)^2)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    Mejora_MAE_pct = 100 *
+      (MAE_Persistencia - MAE_XGBoost) / MAE_Persistencia,
+    Mejora_RMSE_pct = 100 *
+      (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
+  )
+
+metricas_estacion_2025 |>
+  mutate(
+    across(
+      c(
+        MAE_Persistencia, MAE_XGBoost,
+        RMSE_Persistencia, RMSE_XGBoost
+      ),
+      ~ round(.x, 3)
+    ),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(
+    caption = "Prueba final 2025 por estación"
+  )
+```
+
+XGBoost supera a persistencia en las cuatro estaciones:
+
+- **NTE:** el RMSE baja de 17.977 a 15.387, una mejora de **14.4%**.
+- **NTE2:** el RMSE baja de 18.854 a 16.003, una mejora de **15.1%**.
+- **NO:** el RMSE baja de 19.635 a 17.052, una mejora de **13.2%**.
+- **NE:** el RMSE baja de 19.486 a 16.486, una mejora de **15.4%**.
+
+La mejora no depende de una sola estación. `NO` es la estación con la menor reducción relativa del error, aunque XGBoost también supera claramente a persistencia. `NE` presenta la mayor reducción porcentual tanto en MAE como en RMSE.
+
+# Conclusión
+
+El XGBoost reformulado a 24 horas supera de manera consistente a la persistencia diaria tanto en validación 2024 como en la prueba final 2025. El modelo aprovecha principalmente la periodicidad diaria del O3: aproximadamente 70% del `Gain` proviene de valores de O3 alineados con la misma hora de días anteriores, mientras que el comportamiento reciente, la meteorología y las variables temporales aportan información complementaria.
+
+En 2025, XGBoost reduce el MAE de 13.787 a 11.864 y el RMSE de 18.975 a 16.229, equivalentes a mejoras de **13.9% y 14.5%**, respectivamente. Además, la mejora se observa en las cuatro estaciones, lo que respalda que el resultado global no está concentrado en una sola zona de monitoreo.
+
+La prueba final confirma que el modelo conserva su ventaja fuera de muestra. A partir de estos resultados no se deben reajustar variables, hiperparámetros ni iteraciones utilizando 2025; cualquier modificación posterior correspondería a una nueva versión del modelo y requeriría una nueva evaluación independiente.
