@@ -1,0 +1,15 @@
+---
+title: "reg_lineal_o3"
+format: html
+editor: visual
+---
+
+## Objetivo de este archivo
+
+Este archivo construye, ajusta y evalúa un modelo de **Regresión Lineal
+Múltiple (MLR)** para predecir la concentración de O3 una hora hacia adelante.
+Este es el **primer modelo del proyecto**: una técnica clásica de dependencia,
+interpretable, que permite establecer una primera referencia de qué tan bien
+se puede predecir O3 a partir de variables meteorológicas y de la historia
+reciente del propio contaminante, antes de explorar técnicas más complejas.
+
