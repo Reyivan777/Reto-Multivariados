@@ -12,17 +12,7 @@ execute:
   message: false
 ---
 
-<<<<<<< HEAD
-
-html:
-    toc: true
-    toc-depth: 3
-    
-    
-# Objetivo de este archivo
-=======
 # Objetivo del modelo
->>>>>>> 723496856deb3cf27d7a758031aa8bf08022ab51
 
 Este archivo se concentra en una sola tarea: **predecir la concentración horaria de O3 con 24 horas de anticipación** para las estaciones `NTE`, `NTE2`, `NO` y `NE`, considerando como horas objetivo el intervalo de 10:00 a 20:00.
 
@@ -370,7 +360,9 @@ knitr::kable(
 )
 ```
 
-Esta comparación responde directamente a la nueva pregunta del proyecto: si la periodicidad diaria ya proporciona una predicción razonable mediante `O3_t`, XGBoost debe demostrar que el historial adicional, la meteorología y la estructura temporal permiten mejorar esa referencia.
+La persistencia diaria obtiene un MAE de **11.444** y un RMSE de **15.749**, mientras que el XGBoost reformulado reduce estos errores a **10.055** y **13.611**, respectivamente. Sobre las mismas 15,210 observaciones de validación, esto representa una reducción aproximada de **12.1% en MAE** y **13.6% en RMSE** respecto a la referencia diaria.
+
+Por tanto, el valor de O3 de la misma hora del día anterior constituye una referencia fuerte, pero no explica por sí solo todo el comportamiento del día siguiente. El XGBoost logra mejorarla al combinar esa periodicidad con días anteriores, el comportamiento reciente del O3, las condiciones meteorológicas disponibles en el origen y la estructura temporal del objetivo.
 
 # Importancia de variables
 
@@ -416,7 +408,11 @@ importancia_h24 |>
   theme_minimal()
 ```
 
-En particular, interesa comprobar si los valores de O3 alineados por día concentran una parte importante del `Gain` y cuánto aportan las variables meteorológicas y el contexto horario adicional.
+La importancia confirma que la reformulación está alineada con la estructura temporal del problema. `O3_alineado_1d`, que corresponde a la misma hora del día anterior al objetivo, concentra **55.64% del Gain** y es por amplio margen el predictor principal.
+
+Además, `O3_alineado_2d`, `O3_alineado_3d` y `O3_alineado_4d` también aparecen entre las variables más importantes. En conjunto, los cuatro valores diarios alineados suman aproximadamente **70.4% del Gain**. Esto indica que la historia del O3 en la misma hora de días anteriores concentra la mayor parte de la señal predictiva del modelo.
+
+El modelo no depende únicamente de esta periodicidad. `O3_lag_1` es la segunda variable individual más importante, y también aparecen `TEMP`, `SR`, `RH`, `WS`, la hora objetivo y el mes. Estas variables aportan información complementaria que permite corregir la referencia del día anterior cuando las condiciones cambian. Como en todo análisis de importancia de XGBoost, estos valores describen el uso predictivo dentro del modelo y no deben interpretarse como efectos causales.
 
 # Tuning reducido para 24 horas
 
@@ -541,7 +537,31 @@ resultados_tuning_h24 |>
   )
 ```
 
-La primera fila de esta tabla será la mejor configuración según el RMSE de validación 2024. Solo si la mejora es suficientemente clara se justificará reemplazar la configuración inicial.
+La mejor configuración del tuning es **T1**, con `eta = 0.05`, `max_depth = 4`, `min_child_weight = 5`, `subsample = 0.8` y `colsample_bytree = 0.8`. Su mejor iteración en validación es 119 y alcanza un RMSE de validación de **13.658**. Sobre el subconjunto común obtiene MAE de **10.035** y RMSE de **13.560**.
+
+La mejora respecto a la configuración inicial es pequeña: aproximadamente **0.2% en MAE** y **0.4% en RMSE** sobre las observaciones comunes. Sin embargo, T1 utiliza árboles menos profundos (`max_depth = 4` en lugar de 6) y obtiene un desempeño ligeramente mejor. Por esta razón se adopta T1 como configuración definitiva, privilegiando un modelo más simple sin sacrificar precisión.
+
+## Configuración definitiva
+
+A partir de este punto quedan congelados el objetivo, los predictores y los hiperparámetros. La configuración seleccionada es:
+
+```{r}
+#| label: parametros-finales
+parametros_finales <- list(
+  objective = "reg:squarederror",
+  eval_metric = "rmse",
+  eta = 0.05,
+  max_depth = 4,
+  min_child_weight = 5,
+  subsample = 0.8,
+  colsample_bytree = 0.8,
+  lambda = 1
+)
+
+iteraciones_finales <- 119
+```
+
+La evaluación de 2025 deberá utilizar estas decisiones sin volver a seleccionar variables, ajustar hiperparámetros ni escoger el número de iteraciones a partir del conjunto de prueba.
 
 # Estado del modelado
 
@@ -551,4 +571,6 @@ $$
 \boxed{O3_{t+24}}
 $$
 
-La validación de 2024 debe utilizarse para decidir si el historial diario alineado mejora el modelo y para cerrar la configuración definitiva. **2025 continúa reservado para una única prueba final**, por lo que no debe utilizarse para modificar predictores, hiperparámetros ni decisiones metodológicas.
+La validación 2024 confirma que el historial diario alineado es la estructura central del modelo y que XGBoost mejora de forma clara la persistencia diaria. La configuración **T1** queda seleccionada como versión definitiva por combinar un desempeño ligeramente mejor con árboles menos profundos.
+
+Con esto queda cerrada la etapa de desarrollo y selección de XGBoost. **2025 continúa reservado para una única prueba final** y sus resultados no deberán utilizarse para modificar predictores, hiperparámetros, iteraciones ni decisiones metodológicas.
