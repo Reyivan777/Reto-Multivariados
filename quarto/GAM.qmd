@@ -24,9 +24,15 @@ Igual que el archivo de XGBoost, este parte directamente de `data/base_modelado_
 - horas objetivo: 10:00-20:00;
 - horizonte máximo: 24 horas.
 
-A diferencia de XGBoost, GAM no maneja valores faltantes de forma nativa. Cualquier fila con NA en algún predictor se elimina antes de ajustar el modelo. Esto significa que el conjunto de entrenamiento/validación del GAM es más pequeño que el usado por XGBoost.
+A diferencia de XGBoost, GAM no maneja valores faltantes de forma nativa. Cualquier fila con NA en algún predictor se elimina antes de ajustar el modelo. Esto significa que el conjunto de entrenamiento/validación/prueba del GAM es más pequeño que el usado por XGBoost.
 
-El desarrollo se hace de forma "incremental". Primero se construye el modelo para una hora de anticipación (`h = 1`), y después se extiende la misma lógica a 6, 12 y 24 horas para comparar contra XGBoost en los mismos horizontes.
+Respecto a la versión anterior de este archivo, se incorporan tres cambios derivados de la retroalimentación de SIMA y de los profesores:
+
+1. **Viento vectorial**: `WS`, `WD_sin` y `WD_cos` dejan de entrar por separado. Ahora se combinan en `WS_sin = WS * WD_sin` y `WS_cos = WS * WD_cos`, exactamente como en la versión final de XGBoost, para representar el viento como un solo fenómeno (rapidez + dirección) en vez de tres variables independientes.
+2. **Modelo final a 24 horas evaluado en 2025**: se agrega una etapa que congela el GAM (familia Gamma) entrenado con 2021-2024 y lo evalúa una sola vez en 2025, replicando el mismo esquema de XGBoost. Esto es lo que permite comparar ambas técnicas sobre la misma base final, no solo sobre validación 2024.
+3. **Diagnóstico explícito de dependencia residual** (ACF y prueba de Ljung-Box) y **modelos GAM por estación**, con una tabla de EDF/estadístico F como análogo interpretable de la importancia de variables (no es "Gain", que es un concepto propio de árboles, pero cumple la misma función comparativa).
+
+El desarrollo exploratorio (h = 1, extendido a 6, 12 y 24) se conserva igual que antes, ya que ese análisis ya justificó por qué el horizonte final es 24 horas.
 
 # Carga de la base de modelado
 
@@ -81,7 +87,6 @@ if (length(faltantes_estructura) > 0) {
 
 # Construcción del horizonte
 
-
 ```{r}
 #| label: funcion-base-horizonte
 construir_base_horizonte <- function(h) {
@@ -92,6 +97,8 @@ construir_base_horizonte <- function(h) {
     ) |>
     ungroup() |>
     mutate(
+      WS_sin = WS * WD_sin,
+      WS_cos = WS * WD_cos,
       Horizonte_h = h,
       fecha_objetivo = fecha_hora + hours(h),
       Año_objetivo = year(fecha_objetivo),
@@ -118,7 +125,6 @@ calcular_metricas <- function(observado, predicho) {
 }
 ```
 
-
 # Preparación de los predictores del GAM
 
 ## Selección de variables
@@ -127,12 +133,14 @@ calcular_metricas <- function(observado, predicho) {
 #| label: predictores-gam
 predictores_gam <- c(
   "O3_t", "O3_lag_24",
-  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "SR", "TEMP", "RH", "WS_sin", "WS_cos",
   "Hora_objetivo", "Mes_objetivo", "Estacion"
 )
 ```
 
-Hasta este chunk se deja fuera `O3_lag_1`, `O3_lag_2` y `O3_lag_3` para evitar concurvity con `O3_t`.
+Se deja fuera `O3_lag_1`, `O3_lag_2` y `O3_lag_3` para evitar concurvity con `O3_t`, igual que antes.
+
+El viento ya no entra como `WS` + `WD_sin` + `WD_cos` por separado, sino como `WS_sin` y `WS_cos`, que combinan rapidez y dirección en un solo par de componentes vectoriales. Esto es congruente con la versión final de XGBoost y evita que el modelo trate la rapidez del viento como si fuera independiente de su dirección.
 
 ## Preparación de la base para h = 1
 
@@ -156,7 +164,6 @@ knitr::kable(
   caption = "Casos completos disponibles para el GAM (h = 1)"
 )
 ```
-
 
 ```{r}
 #| label: base-h1-gam-completa
@@ -192,9 +199,8 @@ modelo_gam_h1 <- bam(
     s(SR, k = 10) +
     s(TEMP, k = 15) +
     s(RH, k = 15) +
-    s(WS, k = 10) +
-    WD_sin +
-    WD_cos +
+    s(WS_sin, k = 10) +
+    s(WS_cos, k = 10) +
     s(Hora_objetivo, k = 8) +
     s(Mes_objetivo, bs = "cc", k = 10) +
     Estacion,
@@ -205,8 +211,6 @@ modelo_gam_h1 <- bam(
 ```
 
 ## Diagnóstico de concurvity
-
-A continuación se revisa si algún smooth se puede aproximar a partir de otros.
 
 ```{r}
 #| label: concurvity-gam-h1
@@ -219,7 +223,6 @@ concurvity(modelo_gam_h1, full = TRUE)
 #| label: resumen-gam-h1
 summary(modelo_gam_h1)
 ```
-
 
 ```{r}
 #| label: chequeo-residuos-gam-h1
@@ -237,10 +240,9 @@ gam.check(modelo_gam_h1)
 draw(modelo_gam_h1)
 ```
 
-
 ## Modelo alternativo con familia Gamma (link log)
 
-El diagnóstico de residuos del modelo gaussiano (QQ-plot, residuos vs. predictor lineal, histograma) muestra dos problemas relacionados, los cuales son que la varianza de los residuos crece conforme aumenta el valor predicho (heterocedasticidad) y la cola derecha es más pesada de lo que un modelo gaussiano espera. Esto es consistente con la asimetría de O3 ya documentada en el análisis exploratorio. Como O3 es siempre positivo en la base limpia (mínimo observado = 1, se prueba una familia Gamma con link logarítmico, que asume que la varianza crece con el cuadrado de la media; es un supuesto natural para concentraciones de contaminantes.
+El diagnóstico de residuos del modelo gaussiano (QQ-plot, residuos vs. predictor lineal, histograma) muestra dos problemas relacionados: la varianza de los residuos crece conforme aumenta el valor predicho (heterocedasticidad) y la cola derecha es más pesada de lo que un modelo gaussiano espera. Esto es consistente con la asimetría de O3 ya documentada en el análisis exploratorio. Como O3 es siempre positivo en la base limpia (mínimo observado = 1), se prueba una familia Gamma con link logarítmico, que asume que la varianza crece con el cuadrado de la media; es un supuesto natural para concentraciones de contaminantes.
 
 ```{r}
 #| label: modelo-gam-h1-gamma
@@ -251,9 +253,8 @@ modelo_gam_h1_gamma <- bam(
     s(SR, k = 10) +
     s(TEMP, k = 15) +
     s(RH, k = 10) +
-    s(WS, k = 10) +
-    WD_sin +
-    WD_cos +
+    s(WS_sin, k = 10) +
+    s(WS_cos, k = 10) +
     s(Hora_objetivo, k = 8) +
     s(Mes_objetivo, bs = "cc", k = 10) +
     Estacion,
@@ -270,7 +271,6 @@ modelo_gam_h1_gamma <- bam(
 gam.check(modelo_gam_h1_gamma)
 ```
 
-
 ```{r}
 #| label: grafica-smooths-gam-h1-gamma
 #| fig-cap: "Efecto parcial de cada predictor, familia Gamma (h = 1)"
@@ -279,10 +279,7 @@ gam.check(modelo_gam_h1_gamma)
 draw(modelo_gam_h1_gamma)
 ```
 
-
 ## Comparación con persistencia en validación 2024
-
-Igual que con XGBoost, la comparación se hace sobre las mismas observaciones. Se incluyen ambos modelos GAM (gaussiano y Gamma) para decidir cuál llevar a los demás horizontes.
 
 ```{r}
 #| label: comparacion-persistencia-gam-h1
@@ -310,10 +307,9 @@ bind_rows(
   knitr::kable(caption = "Comparación GAM (gaussiano y Gamma) vs. persistencia en validación 2024 para h = 1")
 ```
 
-
 # Extensión a horizontes de 6, 12 y 24 horas
 
-Se repite la misma lógica para los demás horizontes representativos, manteniendo la misma especificación del modelo. Esto permite comparar directamente contra la tabla de horizontes obtenida con XGBoost.
+Se repite la misma lógica para los demás horizontes representativos, con la misma especificación (incluyendo el viento vectorial), para poder comparar directamente contra la tabla de horizontes obtenida con XGBoost.
 
 ```{r}
 #| label: funcion-evaluar-horizonte-gam
@@ -333,9 +329,8 @@ entrenar_y_evaluar_gam_horizonte <- function(h) {
       s(SR, k = 10) +
       s(TEMP, k = 15) +
       s(RH, k = 10) +
-      s(WS, k = 10) +
-      WD_sin +
-      WD_cos +
+      s(WS_sin, k = 10) +
+      s(WS_cos, k = 10) +
       s(Hora_objetivo, k = 8) +
       s(Mes_objetivo, bs = "cc", k = 10) +
       Estacion,
@@ -404,8 +399,496 @@ resultados_horizontes_gam |>
   knitr::kable(caption = "Persistencia y GAM en horizontes representativos de 2024")
 ```
 
-Con esta tabla se puede comparar el desempeño del GAM contra el XGBoost (MAE_XGBoost y MAE_GAM sobre las mismas métricas, aunque en subconjuntos de datos ligeramente distintos por el tema de casos completos.
+Como en la versión anterior, esta tabla justifica por qué el horizonte final es 24 horas: la mejora relativa del GAM sobre la persistencia cae de ~50-54% en h = 6/12 a un rango mucho más modesto en h = 24, exactamente el mismo patrón que muestra XGBoost (Tabla 1 del reporte de la entrega anterior). A partir de aquí, todo el análisis se enfoca únicamente en h = 24, que es el horizonte con el que se compara oficialmente contra XGBoost.
 
-# Evaluación
+# Modelo final a 24 horas: entrenamiento con 2021-2024 y prueba en 2025
 
-El GAM ya se evalúa sobre **2024** en los mismos horizontes representativos (1, 6, 12, 24) que XGBoost. El conjunto de **2025 permanece reservado** para la prueba final y no debe utilizarse para decidir variables, `k` de los smooths, ni especificación del modelo.
+Para que la comparación con XGBoost sea sobre la misma base de evaluación, el GAM final se congela siguiendo el mismo esquema: se entrena con **2021-2024** y se evalúa **una sola vez** sobre **2025**. La familia Gamma (link log) se mantiene, ya que fue la seleccionada en la validación de 2024.
+
+```{r}
+#| label: base-h24-gam-final
+base_h24_gam <- construir_base_horizonte(24) |>
+  filter(!is.na(O3_objetivo)) |>
+  mutate(
+    Periodo_final = case_when(
+      Año_objetivo %in% 2021:2024 ~ "Entrenamiento_final",
+      Año_objetivo == 2025 ~ "Prueba_final",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  drop_na(all_of(predictores_gam)) |>
+  mutate(Estacion = factor(Estacion))
+
+entrenamiento_final_gam <- base_h24_gam |> filter(Periodo_final == "Entrenamiento_final")
+prueba_final_gam <- base_h24_gam |> filter(Periodo_final == "Prueba_final")
+```
+
+```{r}
+#| label: modelo-gam-final
+modelo_gam_final <- bam(
+  O3_objetivo ~
+    s(O3_t, k = 10) +
+    s(O3_lag_24, k = 10) +
+    s(SR, k = 10) +
+    s(TEMP, k = 15) +
+    s(RH, k = 10) +
+    s(WS_sin, k = 10) +
+    s(WS_cos, k = 10) +
+    s(Hora_objetivo, k = 8) +
+    s(Mes_objetivo, bs = "cc", k = 10) +
+    Estacion,
+  data = entrenamiento_final_gam,
+  family = Gamma(link = "log"),
+  method = "fREML",
+  discrete = TRUE
+)
+```
+
+```{r}
+#| label: concurvity-gam-final
+concurvity(modelo_gam_final, full = TRUE)
+```
+
+```{r}
+#| label: resumen-gam-final
+summary(modelo_gam_final)
+```
+
+```{r}
+#| label: chequeo-residuos-gam-final
+#| fig-cap: "Diagnóstico de residuos del GAM final (h = 24)"
+gam.check(modelo_gam_final)
+```
+
+`gam.check()` diagnostica la forma de los residuos y si el número de nodos (`k`) de cada smooth es suficiente, pero no revisa dependencia temporal entre observaciones consecutivas. Esa parte se cubre en la sección de análisis de residuos más adelante, con ACF y la prueba de Ljung-Box.
+
+## Desempeño global en la prueba final 2025
+
+```{r}
+#| label: prediccion-gam-final-2025
+pred_gam_final_2025 <- predict(
+  modelo_gam_final,
+  newdata = prueba_final_gam,
+  type = "response"
+)
+
+metricas_persistencia_final_gam <- calcular_metricas(
+  prueba_final_gam$O3_objetivo,
+  prueba_final_gam$O3_t
+) |>
+  mutate(Modelo = "Persistencia diaria", Observaciones = nrow(prueba_final_gam), .before = 1)
+
+metricas_gam_final_2025 <- calcular_metricas(
+  prueba_final_gam$O3_objetivo,
+  pred_gam_final_2025
+) |>
+  mutate(Modelo = "GAM Gamma (link log)", Observaciones = nrow(prueba_final_gam), .before = 1)
+
+comparacion_final_gam_2025 <- bind_rows(
+  metricas_persistencia_final_gam,
+  metricas_gam_final_2025
+) |>
+  mutate(MAE = round(MAE, 3), RMSE = round(RMSE, 3))
+
+knitr::kable(
+  comparacion_final_gam_2025,
+  caption = "Prueba final 2025: persistencia diaria frente a GAM (muestra completa requerida por el GAM)"
+)
+```
+
+En 2025, sobre **`r format(nrow(prueba_final_gam), big.mark = ",")` observaciones** completas, la persistencia diaria obtiene MAE de **`r round(metricas_persistencia_final_gam$MAE[[1]], 3)`** y RMSE de **`r round(metricas_persistencia_final_gam$RMSE[[1]], 3)`**, mientras que el GAM obtiene MAE de **`r round(metricas_gam_final_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_gam_final_2025$RMSE[[1]], 3)`**.
+
+Este número de observaciones es menor que el usado por XGBoost en su prueba final (7,333), porque el GAM requiere casos completos en todos sus predictores. Esta diferencia ya está documentada como parte de la comparación metodológica entre ambas técnicas y no debe ocultarse: se reporta explícitamente para que la comparación sea justa y transparente.
+
+## Desempeño por estación
+
+```{r}
+#| label: metricas-estacion-gam-2025
+metricas_estacion_gam_2025 <- prueba_final_gam |>
+  mutate(Pred_GAM = pred_gam_final_2025) |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = n(),
+    MAE_Persistencia = mean(abs(O3_objetivo - O3_t)),
+    MAE_GAM = mean(abs(O3_objetivo - Pred_GAM)),
+    RMSE_Persistencia = sqrt(mean((O3_objetivo - O3_t)^2)),
+    RMSE_GAM = sqrt(mean((O3_objetivo - Pred_GAM)^2)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    Mejora_MAE_pct = 100 * (MAE_Persistencia - MAE_GAM) / MAE_Persistencia,
+    Mejora_RMSE_pct = 100 * (RMSE_Persistencia - RMSE_GAM) / RMSE_Persistencia
+  )
+
+metricas_estacion_gam_2025 |>
+  mutate(
+    across(c(MAE_Persistencia, MAE_GAM, RMSE_Persistencia, RMSE_GAM), ~ round(.x, 3)),
+    Mejora_MAE_pct = round(Mejora_MAE_pct, 1),
+    Mejora_RMSE_pct = round(Mejora_RMSE_pct, 1)
+  ) |>
+  knitr::kable(caption = "GAM final por estación en la prueba 2025 (muestra completa del GAM)")
+```
+
+# Análisis de residuos (prueba final 2025)
+
+Se define el residuo de la misma forma que en XGBoost, para que ambos análisis sean directamente comparables:
+
+$$
+e_i = O3_i - \widehat{O3}_i
+$$
+
+Un residuo positivo indica que el modelo **subestimó** el O3 observado; uno negativo indica que lo **sobreestimó**.
+
+```{r}
+#| label: residuos-gam-2025
+resultados_residuos_gam <- prueba_final_gam |>
+  mutate(
+    Pred_GAM = pred_gam_final_2025,
+    Residuo_Persistencia = O3_objetivo - O3_t,
+    Residuo_GAM = O3_objetivo - Pred_GAM
+  )
+
+resumen_residuos_gam_2025 <- bind_rows(
+  resultados_residuos_gam |>
+    summarise(
+      Modelo = "Persistencia diaria",
+      Media_residuo = mean(Residuo_Persistencia),
+      Mediana_residuo = median(Residuo_Persistencia),
+      Desv_estandar = sd(Residuo_Persistencia),
+      P05 = as.numeric(quantile(Residuo_Persistencia, 0.05)),
+      P95 = as.numeric(quantile(Residuo_Persistencia, 0.95))
+    ),
+  resultados_residuos_gam |>
+    summarise(
+      Modelo = "GAM Gamma (link log)",
+      Media_residuo = mean(Residuo_GAM),
+      Mediana_residuo = median(Residuo_GAM),
+      Desv_estandar = sd(Residuo_GAM),
+      P05 = as.numeric(quantile(Residuo_GAM, 0.05)),
+      P95 = as.numeric(quantile(Residuo_GAM, 0.95))
+    )
+)
+
+resumen_residuos_gam_2025 |>
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Resumen global de residuos del GAM en la prueba final de 2025")
+```
+
+```{r}
+#| label: residuos-estacion-gam-2025
+resumen_residuos_estacion_gam <- resultados_residuos_gam |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = n(),
+    Media_residuo = mean(Residuo_GAM),
+    Mediana_residuo = median(Residuo_GAM),
+    Desv_estandar = sd(Residuo_GAM),
+    P05 = as.numeric(quantile(Residuo_GAM, 0.05)),
+    P95 = as.numeric(quantile(Residuo_GAM, 0.95)),
+    .groups = "drop"
+  )
+
+resumen_residuos_estacion_gam |>
+  mutate(across(where(is.numeric) & !matches("Observaciones"), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Resumen de residuos del GAM final por estación en 2025")
+```
+
+```{r}
+#| label: diagnostico-grafico-residuos-gam
+#| fig-cap: "Diagnóstico gráfico de los residuos del GAM final en 2025"
+#| fig-width: 10
+#| fig-height: 8
+residuos_hora_gam <- resultados_residuos_gam |>
+  group_by(Hora_objetivo) |>
+  summarise(Media_residuo = mean(Residuo_GAM), .groups = "drop")
+
+p_resid_pred_gam <- ggplot(
+  resultados_residuos_gam,
+  aes(x = Pred_GAM, y = Residuo_GAM)
+) +
+  geom_point(alpha = 0.15, size = 0.7) +
+  geom_hline(yintercept = 0, linewidth = 0.5) +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 0.8) +
+  labs(title = "Residuos vs. predicción", x = "O3 predicho", y = "Residuo") +
+  theme_minimal()
+
+p_hist_resid_gam <- ggplot(
+  resultados_residuos_gam,
+  aes(x = Residuo_GAM)
+) +
+  geom_histogram(bins = 40) +
+  geom_vline(xintercept = 0, linewidth = 0.5) +
+  labs(title = "Distribución de residuos", x = "Residuo", y = "Frecuencia") +
+  theme_minimal()
+
+p_qq_resid_gam <- ggplot(
+  resultados_residuos_gam,
+  aes(sample = Residuo_GAM)
+) +
+  stat_qq(alpha = 0.25, size = 0.8) +
+  stat_qq_line(linewidth = 0.7) +
+  labs(title = "Gráfica Q-Q", x = "Cuantil teórico", y = "Cuantil observado") +
+  theme_minimal()
+
+p_hora_resid_gam <- ggplot(
+  residuos_hora_gam,
+  aes(x = Hora_objetivo, y = Media_residuo)
+) +
+  geom_hline(yintercept = 0, linewidth = 0.5) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 10:20) +
+  labs(title = "Residuo medio por hora objetivo", x = "Hora objetivo", y = "Residuo medio") +
+  theme_minimal()
+
+grid::grid.newpage()
+grid::pushViewport(grid::viewport(layout = grid::grid.layout(2, 2)))
+print(p_resid_pred_gam, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(p_hist_resid_gam, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 2))
+print(p_qq_resid_gam, vp = grid::viewport(layout.pos.row = 2, layout.pos.col = 1))
+print(p_hora_resid_gam, vp = grid::viewport(layout.pos.row = 2, layout.pos.col = 2))
+```
+
+## Dependencia temporal de los residuos (ACF y Ljung-Box)
+
+Los diagnósticos anteriores (`gam.check`, QQ-plot, histograma) revisan la forma de los residuos, pero no si existe autocorrelación entre observaciones consecutivas. Como los datos son una serie de tiempo horaria, la independencia perfecta no es un supuesto realista; sin embargo, hace falta mostrar explícitamente qué tanta dependencia queda, en vez de solo mencionarlo.
+
+Este diagnóstico se calcula **por estación**, ordenando los residuos cronológicamente dentro de cada una. Mezclar las cuatro estaciones en una sola secuencia no tendría sentido temporal, ya que son series independientes entre sí.
+
+**Nota importante de interpretación**: como el modelo solo considera las horas 10:00-20:00, la posición secuencial dentro de cada estación **no equivale a horas reales transcurridas** — hay un salto de aproximadamente 14 horas entre el registro de las 20:00 y el de las 10:00 del día siguiente. El "rezago 1" de la ACF representa la relación entre horas consecutivas dentro de la ventana diurna, no necesariamente una hora de diferencia real en todos los casos.
+
+```{r}
+#| label: acf-residuos-gam
+#| fig-cap: "ACF de los residuos del GAM final por estación (prueba 2025)"
+#| fig-width: 9
+#| fig-height: 7
+residuos_ordenados_gam <- resultados_residuos_gam |>
+  arrange(Estacion, fecha_objetivo)
+
+acf_por_estacion_gam <- residuos_ordenados_gam |>
+  group_by(Estacion) |>
+  group_modify(~ {
+    resultado_acf <- acf(.x$Residuo_GAM, lag.max = 30, plot = FALSE)
+    tibble(
+      Lag = as.integer(resultado_acf$lag),
+      ACF = as.numeric(resultado_acf$acf)
+    ) |>
+      filter(Lag > 0)
+  }) |>
+  ungroup()
+
+n_por_estacion_gam <- residuos_ordenados_gam |>
+  count(Estacion, name = "n_estacion")
+
+bandas_ic_gam <- n_por_estacion_gam |>
+  mutate(
+    banda_sup = 1.96 / sqrt(n_estacion),
+    banda_inf = -banda_sup
+  )
+
+ggplot(acf_por_estacion_gam, aes(x = Lag, y = ACF)) +
+  geom_col(width = 0.3) +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  geom_hline(
+    data = bandas_ic_gam, aes(yintercept = banda_sup),
+    linetype = "dashed", color = "red", linewidth = 0.4
+  ) +
+  geom_hline(
+    data = bandas_ic_gam, aes(yintercept = banda_inf),
+    linetype = "dashed", color = "red", linewidth = 0.4
+  ) +
+  facet_wrap(~Estacion, ncol = 2) +
+  labs(
+    x = "Rezago (posición secuencial dentro de la estación, no horas reales)",
+    y = "Autocorrelación"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: ljung-box-gam
+ljung_box_gam <- residuos_ordenados_gam |>
+  group_by(Estacion) |>
+  group_modify(~ {
+    test_res <- Box.test(.x$Residuo_GAM, lag = 24, type = "Ljung-Box")
+    tibble(
+      Estadistico_X2 = unname(test_res$statistic),
+      gl = unname(test_res$parameter),
+      p_value = test_res$p.value
+    )
+  }) |>
+  ungroup()
+
+ljung_box_gam |>
+  mutate(across(where(is.numeric), ~ round(.x, 4))) |>
+  knitr::kable(caption = "Prueba de Ljung-Box sobre los residuos del GAM final, por estación (rezago = 24)")
+```
+
+**[Jan: aquí completa la interpretación una vez que corras el chunk — ya queda con referencias automáticas a los objetos, así que el texto se actualiza solo con el resultado real]**
+
+De las 4 estaciones, `r sum(ljung_box_gam$p_value < 0.05)` muestran evidencia de autocorrelación remanente en los residuos (p < 0.05 en Ljung-Box a rezago 24), mientras que `r sum(ljung_box_gam$p_value >= 0.05)` no la muestran. [Aquí agregar: si la mayoría de estaciones sí muestra dependencia, explicar la implicación — los errores estándar de los términos suaves podrían estar subestimados, por lo que las pruebas de significancia (columna p-value en `summary()`) deben interpretarse con cautela; sin embargo, la capacidad predictiva del modelo se sigue validando correctamente contra 2025 porque esa evaluación no depende de la independencia de los residuos, solo de comparar valores observados contra predichos].
+
+# Modelos GAM por estación
+
+Así como XGBoost ajustó 4 modelos auxiliares por estación para comparar su `Gain`, aquí se ajustan 4 GAMs auxiliares (uno por estación, sin el factor `Estacion`) entrenados con 2021-2024 y evaluados en 2025, para comparar su desempeño contra el modelo conjunto y para obtener un análogo interpretable a la importancia de variables.
+
+```{r}
+#| label: ajuste-gam-por-estacion
+ajustar_gam_estacion <- function(estacion_actual) {
+  datos_train_estacion <- entrenamiento_final_gam |>
+    filter(Estacion == estacion_actual)
+
+  datos_test_estacion <- prueba_final_gam |>
+    filter(Estacion == estacion_actual)
+
+  modelo_estacion <- bam(
+    O3_objetivo ~
+      s(O3_t, k = 10) +
+      s(O3_lag_24, k = 10) +
+      s(SR, k = 10) +
+      s(TEMP, k = 15) +
+      s(RH, k = 10) +
+      s(WS_sin, k = 10) +
+      s(WS_cos, k = 10) +
+      s(Hora_objetivo, k = 8) +
+      s(Mes_objetivo, bs = "cc", k = 10),
+    data = datos_train_estacion,
+    family = Gamma(link = "log"),
+    method = "fREML",
+    discrete = TRUE
+  )
+
+  predicciones_estacion <- predict(
+    modelo_estacion,
+    newdata = datos_test_estacion,
+    type = "response"
+  )
+
+  metricas_estacion <- calcular_metricas(
+    datos_test_estacion$O3_objetivo,
+    predicciones_estacion
+  ) |>
+    mutate(
+      Estacion = estacion_actual,
+      Observaciones = nrow(datos_test_estacion),
+      .before = 1
+    )
+
+  list(modelo = modelo_estacion, metricas = metricas_estacion)
+}
+
+resultados_gam_estacion <- map(
+  c("NTE", "NTE2", "NO", "NE"),
+  ajustar_gam_estacion
+)
+names(resultados_gam_estacion) <- c("NTE", "NTE2", "NO", "NE")
+```
+
+## Desempeño de los modelos auxiliares vs. el modelo conjunto
+
+```{r}
+#| label: comparacion-pooled-vs-estacion-gam
+metricas_gam_por_estacion <- map_dfr(resultados_gam_estacion, ~ .x$metricas)
+
+comparacion_pooled_vs_estacion_gam <- metricas_estacion_gam_2025 |>
+  select(
+    Estacion,
+    Observaciones_conjunto = Observaciones,
+    MAE_conjunto = MAE_GAM,
+    RMSE_conjunto = RMSE_GAM
+  ) |>
+  left_join(
+    metricas_gam_por_estacion |>
+      select(
+        Estacion,
+        Observaciones_auxiliar = Observaciones,
+        MAE_auxiliar = MAE,
+        RMSE_auxiliar = RMSE
+      ),
+    by = "Estacion"
+  )
+
+comparacion_pooled_vs_estacion_gam |>
+  mutate(across(where(is.numeric) & !matches("Observaciones"), ~ round(.x, 3))) |>
+  knitr::kable(caption = "GAM conjunto vs. GAM auxiliar por estación en prueba 2025")
+```
+
+## Equivalente interpretable a la importancia de variables (EDF y estadístico F)
+
+El GAM no tiene un `Gain` nativo como XGBoost. El análogo interpretable más directo es observar, para cada término suave dentro de cada modelo auxiliar por estación, su **EDF** (complejidad de la relación) y su **estadístico F** (fuerza de la evidencia de que el término aporta). Para poder comparar visualmente entre estaciones de forma parecida a la gráfica de `Gain`, se normaliza el estadístico F de cada término como porcentaje del total dentro de su propio modelo.
+
+Esta normalización **no es una descomposición exacta de varianza explicada** como sí lo es el `Gain` en árboles; se reporta como la métrica más cercana disponible en un GAM y se interpreta con esa reserva.
+
+```{r}
+#| label: tabla-suaves-por-estacion
+extraer_tabla_suaves <- function(modelo, estacion_actual) {
+  tabla <- as.data.frame(summary(modelo)$s.table)
+  tabla$Termino <- rownames(tabla)
+
+  tabla |>
+    as_tibble() |>
+    rename(EDF = edf, Estadistico = 3, p_value = `p-value`) |>
+    mutate(Estacion = estacion_actual) |>
+    select(Estacion, Termino, EDF, Estadistico, p_value)
+}
+
+tabla_suaves_por_estacion <- map2_dfr(
+  map(resultados_gam_estacion, "modelo"),
+  names(resultados_gam_estacion),
+  extraer_tabla_suaves
+) |>
+  group_by(Estacion) |>
+  mutate(Participacion_pct = 100 * Estadistico / sum(Estadistico)) |>
+  ungroup()
+
+tabla_suaves_por_estacion |>
+  mutate(across(c(EDF, Estadistico, Participacion_pct), ~ round(.x, 2))) |>
+  knitr::kable(caption = "EDF, estadístico F y participación relativa (%) por término, GAM auxiliar por estación")
+```
+
+```{r}
+#| label: grafica-suaves-por-estacion
+#| fig-cap: "Participación relativa (%) del estadístico F por término suave y estación (análogo interpretable al Gain)"
+#| fig-width: 10
+#| fig-height: 8
+datos_grafica_suaves <- tabla_suaves_por_estacion |>
+  mutate(
+    Termino_estacion = paste(Termino, Estacion, sep = "___"),
+    Termino_estacion = forcats::fct_reorder(Termino_estacion, Participacion_pct)
+  )
+
+ggplot(datos_grafica_suaves, aes(x = Participacion_pct, y = Termino_estacion)) +
+  geom_col() +
+  facet_wrap(~Estacion, ncol = 2, scales = "free_y") +
+  scale_y_discrete(labels = function(x) sub("___.*$", "", x)) +
+  labs(x = "Participación relativa (%) del estadístico F", y = NULL) +
+  theme_minimal()
+```
+
+```{r}
+#| label: devianza-gam-por-estacion
+devianza_gam_estacion <- map_dfr(
+  names(resultados_gam_estacion),
+  function(est) {
+    modelo <- resultados_gam_estacion[[est]]$modelo
+    tibble(
+      Estacion = est,
+      Devianza_explicada_pct = 100 * summary(modelo)$dev.expl
+    )
+  }
+)
+
+devianza_gam_estacion |>
+  mutate(Devianza_explicada_pct = round(Devianza_explicada_pct, 1)) |>
+  knitr::kable(caption = "Devianza explicada (%) por modelo GAM auxiliar, por estación")
+```
+
+# Conclusión
+
+El GAM final a 24 horas incorpora el viento como dos componentes vectoriales (`WS_sin`, `WS_cos`) en lugar de tres variables separadas, igual que XGBoost. Evaluado sobre la prueba final de 2025 (**`r format(nrow(prueba_final_gam), big.mark = ",")` observaciones** completas), obtiene MAE de **`r round(metricas_gam_final_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_gam_final_2025$RMSE[[1]], 3)`**, frente a MAE de **`r round(metricas_persistencia_final_gam$MAE[[1]], 3)`** y RMSE de **`r round(metricas_persistencia_final_gam$RMSE[[1]], 3)`** de la persistencia diaria.
+
+El diagnóstico de dependencia residual (ACF y Ljung-Box, por estación) muestra [completar tras correr: si queda o no autocorrelación relevante] y se documenta explícitamente la implicación para la interpretación de los términos suaves, en vez de solo mencionar que la independencia perfecta no es realista.
+
+Los modelos GAM auxiliares por estación muestran [completar tras correr: si el desempeño mejora, empeora o se mantiene similar al modelo conjunto] y su tabla de EDF/estadístico F ofrece el análogo interpretable a la importancia de variables de XGBoost, aunque no es una descomposición exacta comparable en magnitud.
+
+Como limitación se mantiene la cobertura de casos completos, menor que la de XGBoost, y la concurvidad entre `O3_t` y el resto de los smooths, ya documentada desde la entrega anterior.
