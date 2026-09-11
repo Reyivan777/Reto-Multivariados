@@ -1,0 +1,44 @@
+name: Materializar diapositivas XGBoost fix
+
+on:
+  push:
+    branches:
+      - tmp-xgb-slides-upload
+    paths:
+      - ".github/workflows/materializar_xgb_slides_fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materializar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruir PNG
+        shell: bash
+        run: |
+          cat .github/xgb_slide_chunks/01.part*.txt | base64 -d > /tmp/01_xgboost_construccion.png
+          cat .github/xgb_slide_chunks/02.part*.txt | base64 -d > /tmp/02_xgboost_resultados.png
+          cat .github/xgb_slide_chunks/03.part*.txt | base64 -d > /tmp/03_xgboost_residuos.png
+          file /tmp/01_xgboost_construccion.png
+          file /tmp/02_xgboost_resultados.png
+          file /tmp/03_xgboost_residuos.png
+
+      - name: Publicar en trunk
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin trunk
+          git checkout trunk
+          git reset --hard origin/trunk
+          mkdir -p quarto/presentacion_xgboost
+          cp /tmp/01_xgboost_construccion.png quarto/presentacion_xgboost/01_xgboost_construccion.png
+          cp /tmp/02_xgboost_resultados.png quarto/presentacion_xgboost/02_xgboost_resultados.png
+          cp /tmp/03_xgboost_residuos.png quarto/presentacion_xgboost/03_xgboost_residuos.png
+          git add quarto/presentacion_xgboost/*.png
+          git commit -m "Agrega diapositivas finales XGBoost en PNG" || true
+          git push origin trunk
