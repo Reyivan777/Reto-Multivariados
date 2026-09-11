@@ -1,0 +1,48 @@
+from pathlib import Path
+
+path = Path("quarto/xgboost.qmd")
+text = path.read_text(encoding="utf-8")
+
+old_gain = """La comparación debe centrarse en qué predictores aparecen de forma consistente entre estaciones y cuáles cambian de posición. Como los cuatro paneles provienen de modelos auxiliares diferentes, el `Gain` se interpreta dentro de cada estación y no como una descomposición exacta del `Gain` del modelo global."""
+new_gain = """Los cuatro modelos auxiliares muestran un patrón muy consistente. `O3_alineado_1d` es, con diferencia, el predictor dominante en todas las estaciones, con un `Gain` entre aproximadamente 0.499 y 0.554. Después aparecen de manera recurrente `O3_lag_1` y `O3_alineado_2d`. Esto confirma que la señal más importante para el pronóstico a 24 horas es la persistencia temporal del O3, tanto a la misma hora del día anterior como en las horas inmediatamente previas al origen de la predicción.
+
+Las diferencias entre estaciones aparecen principalmente en predictores secundarios. `SR` entra entre las cinco variables con mayor `Gain` en `NO` (0.0487) y `NTE2` (0.0482), mientras que `Hora_cos_obj` aparece entre las cinco primeras en `NE` (0.0413) y `NTE` (0.0449). Las componentes del viento no aparecen entre las diez variables con mayor `Gain` de ninguno de los cuatro modelos auxiliares. Esto no significa que el viento carezca de importancia física para el transporte y dispersión del O3; indica que, dentro de este problema predictivo a 24 horas y una vez incorporada la historia del O3, su contribución predictiva incremental es menor que la de la persistencia, la radiación y la estructura temporal.
+
+Como los cuatro paneles provienen de modelos auxiliares diferentes, el `Gain` debe interpretarse dentro de cada estación y no como una descomposición exacta del `Gain` del modelo global."""
+
+if text.count(old_gain) != 1:
+    raise SystemExit("No se encontró de forma única el párrafo de interpretación de Gain.")
+text = text.replace(old_gain, new_gain, 1)
+
+old_station = """XGBoost obtiene menor RMSE que la persistencia en **`r sum(metricas_estacion_2025$RMSE_XGBoost < metricas_estacion_2025$RMSE_Persistencia)` de `r nrow(metricas_estacion_2025)` estaciones**. La mayor reducción relativa del RMSE aparece en **`r mejor_estacion_rmse$Estacion[[1]]`**, con **`r round(mejor_estacion_rmse$Mejora_RMSE_pct[[1]], 1)`%**, y la menor en **`r menor_estacion_rmse$Estacion[[1]]`**, con **`r round(menor_estacion_rmse$Mejora_RMSE_pct[[1]], 1)`%**."""
+new_station = old_station + """
+
+La mejora es consistente en las cuatro estaciones y en ambas métricas. `NE` presenta la mayor reducción relativa, con 16.1% tanto en MAE como en RMSE. `NO` muestra la mejora más moderada, con 11.9% en MAE y 13.9% en RMSE, pero aun así supera claramente a la persistencia diaria. Por tanto, la ganancia del XGBoost no depende de una sola estación, aunque su magnitud sí cambia espacialmente."""
+
+if text.count(old_station) != 1:
+    raise SystemExit("No se encontró de forma única el párrafo de desempeño por estación.")
+text = text.replace(old_station, new_station, 1)
+
+old_resid = """La interpretación conjunta revisa cuatro aspectos: sesgo global cercano a cero, ausencia de estructura marcada en residuos frente a predicciones, comportamiento de las colas de la distribución y posibles diferencias sistemáticas según la hora o la estación. Estos diagnósticos complementan al MAE y RMSE porque muestran **cómo** se distribuye el error, no solamente su magnitud media."""
+new_resid = """Globalmente, el residuo medio del XGBoost es **1.205** y la mediana es **-0.319**, por lo que los errores permanecen centrados cerca de cero, aunque existe una ligera tendencia promedio a subestimar el O3. La desviación estándar de los residuos baja de **18.976** con persistencia a **16.067** con XGBoost, consistente con la reducción observada en RMSE. Además, el percentil 5 mejora de **-32.000** a **-22.541**, mientras que el percentil 95 permanece alrededor de **31**. Esto indica que XGBoost reduce especialmente los errores negativos grandes, pero todavía conserva una cola positiva asociada con episodios que el modelo subestima.
+
+Por estación, `NTE` presenta el mayor sesgo medio hacia la subestimación, con un residuo medio de **2.164**, aunque también tiene la menor dispersión de residuos (**15.177**). `NTE2` es la estación con menor sesgo medio (**0.134**). `NO` presenta la mayor desviación estándar (**16.848**) y el mayor percentil 95 (**32.742**), por lo que sus errores son los más variables entre las cuatro estaciones. `NE` mantiene un comportamiento intermedio, con residuo medio de **1.078** y desviación estándar de **16.310**.
+
+Las gráficas muestran una limitación adicional. En residuos frente a predicción, la dispersión aumenta conforme crece el O3 predicho y la curva suavizada se eleva para concentraciones altas, señal de que los episodios de O3 elevado tienden a ser subestimados. El histograma está concentrado alrededor de cero, pero presenta una cola positiva más larga. La gráfica Q-Q también muestra desviaciones importantes en las colas; esto describe errores con valores extremos y cierta asimetría, aunque la normalidad no es un supuesto requerido por XGBoost.
+
+Finalmente, el residuo medio por hora es cercano a cero entre las 10:00 y 12:00, pero se vuelve positivo desde aproximadamente las 13:00 y alcanza su máximo alrededor de las 14:00-15:00. Esto indica una subestimación sistemática moderada durante las horas cercanas al pico diario de O3. En conjunto, el análisis de residuos respalda la mejora del XGBoost respecto a persistencia por su menor dispersión y errores generalmente centrados cerca de cero, pero también identifica como principal limitación la predicción de concentraciones altas y de las horas de mayor O3."""
+
+if text.count(old_resid) != 1:
+    raise SystemExit("No se encontró de forma única el párrafo de interpretación de residuos.")
+text = text.replace(old_resid, new_resid, 1)
+
+old_conclusion = """En 2025, XGBoost obtiene MAE de **`r round(metricas_xgb_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_xgb_2025$RMSE[[1]], 3)`**, equivalentes a mejoras de **`r round(mejora_final$Mejora_MAE_pct[[1]], 1)`%** y **`r round(mejora_final$Mejora_RMSE_pct[[1]], 1)`%** frente a persistencia. El análisis de residuos y la comparación de `Gain` por estación complementan estas métricas al revisar posibles sesgos, patrones de error y diferencias espaciales en la importancia de los predictores."""
+new_conclusion = """En 2025, XGBoost obtiene MAE de **`r round(metricas_xgb_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_xgb_2025$RMSE[[1]], 3)`**, equivalentes a mejoras de **`r round(mejora_final$Mejora_MAE_pct[[1]], 1)`%** y **`r round(mejora_final$Mejora_RMSE_pct[[1]], 1)`%** frente a persistencia. La mejora aparece en las cuatro estaciones, por lo que el resultado no depende de una sola zona de monitoreo.
+
+El análisis de residuos confirma una menor dispersión del error respecto a la persistencia y un centro cercano a cero, aunque revela una ligera subestimación promedio. La principal limitación se concentra en los valores altos de O3 y en las horas de 14:00 a 15:00, donde los residuos positivos son mayores. Por su parte, el análisis de `Gain` por estación confirma que la historia reciente y diaria del O3 domina el pronóstico, mientras que la importancia de variables secundarias como radiación solar y hora del día cambia entre estaciones."""
+
+if text.count(old_conclusion) != 1:
+    raise SystemExit("No se encontró de forma única la conclusión esperada.")
+text = text.replace(old_conclusion, new_conclusion, 1)
+
+path.write_text(text, encoding="utf-8")
