@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <style>
+    .title{font:700 48px Arial, sans-serif;fill:#10233a}.sub{font:400 24px Arial,sans-serif;fill:#46566b}.h{font:700 28px Arial,sans-serif;fill:#10233a}.body{font:400 23px Arial,sans-serif;fill:#26384d}.small{font:400 19px Arial,sans-serif;fill:#607086}.num{font:700 38px Arial,sans-serif;fill:#0b6b67}.card{fill:#f6f8fb;stroke:#d7dee8;stroke-width:2}.accent{fill:#e8f4f2;stroke:#9fcfc9;stroke-width:2}.line{stroke:#90a0b4;stroke-width:4;fill:none;stroke-linecap:round}.pill{fill:#eef3f8;stroke:#d7dee8;stroke-width:1.5}
+  </style>
+  <text x="80" y="86" class="title">XGBoost: cómo se construyó el modelo</text>
+  <text x="80" y="128" class="sub">Pronóstico de O₃ a 24 horas en cuatro estaciones de monitoreo</text>
+  <text x="95" y="205" class="h">Estaciones analizadas</text>
+  <rect x="80" y="235" rx="22" ry="22" width="230" height="110" class="card"/><text x="195" y="302" text-anchor="middle" class="h">NTE</text>
+  <rect x="80" y="375" rx="22" ry="22" width="230" height="110" class="card"/><text x="195" y="442" text-anchor="middle" class="h">NTE2</text>
+  <rect x="80" y="515" rx="22" ry="22" width="230" height="110" class="card"/><text x="195" y="582" text-anchor="middle" class="h">NO</text>
+  <rect x="80" y="655" rx="22" ry="22" width="230" height="110" class="card"/><text x="195" y="722" text-anchor="middle" class="h">NE</text>
+  <path d="M310 290 C410 290 425 415 510 415" class="line"/>
+  <path d="M310 430 C410 430 425 430 510 430" class="line"/>
+  <path d="M310 570 C410 570 425 445 510 445" class="line"/>
+  <path d="M310 710 C410 710 425 460 510 460" class="line"/>
+  <rect x="510" y="300" rx="28" ry="28" width="360" height="290" class="accent"/>
+  <text x="690" y="360" text-anchor="middle" class="h">1 modelo global</text>
+  <text x="690" y="405" text-anchor="middle" class="body">Entrenado con las 4 estaciones</text>
+  <text x="690" y="455" text-anchor="middle" class="num">O₃ t+24 h</text>
+  <text x="690" y="505" text-anchor="middle" class="body">Es el modelo usado para</text>
+  <text x="690" y="538" text-anchor="middle" class="body">la predicción final</text>
+  <rect x="510" y="625" rx="22" ry="22" width="360" height="140" class="card"/>
+  <text x="690" y="678" text-anchor="middle" class="h">4 modelos auxiliares</text>
+  <text x="690" y="718" text-anchor="middle" class="body">Uno por estación, solo para</text>
+  <text x="690" y="750" text-anchor="middle" class="body">interpretar el Gain</text>
+  <rect x="950" y="210" rx="26" ry="26" width="560" height="555" class="card"/>
+  <text x="995" y="270" class="h">Qué variables dominaron</text>
+  <text x="995" y="310" class="sub">Patrón casi idéntico en las 4 estaciones</text>
+  <circle cx="1025" cy="385" r="25" fill="#0b6b67"/><text x="1025" y="394" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="white">1</text>
+  <text x="1070" y="380" class="h">O₃ del día anterior</text>
+  <text x="1070" y="416" class="body">misma hora · O3_alineado_1d</text>
+  <circle cx="1025" cy="500" r="25" fill="#0b6b67"/><text x="1025" y="509" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="white">2</text>
+  <text x="1070" y="495" class="h">O₃ reciente</text>
+  <text x="1070" y="531" class="body">rezago inmediato · O3_lag_1</text>
+  <circle cx="1025" cy="615" r="25" fill="#0b6b67"/><text x="1025" y="624" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="white">3</text>
+  <text x="1070" y="610" class="h">O₃ de dos días antes</text>
+  <text x="1070" y="646" class="body">misma hora · O3_alineado_2d</text>
+  <rect x="995" y="690" rx="18" ry="18" width="470" height="58" class="pill"/>
+  <text x="1230" y="727" text-anchor="middle" class="small">El viento sí entró al modelo, pero no estuvo en el top 10 de Gain</text>
+  <text x="80" y="840" class="small">Mensaje clave: la historia del O₃ fue la señal predictiva más estable entre estaciones.</text>
+</svg>
