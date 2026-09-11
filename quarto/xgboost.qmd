@@ -114,6 +114,8 @@ base_h24 <- base_origen_modelado |>
   ) |>
   ungroup() |>
   mutate(
+    WS_sin = WS * WD_sin,
+    WS_cos = WS * WD_cos,
     fecha_objetivo = fecha_hora + hours(24),
     Año_objetivo = year(fecha_objetivo),
     Hora_objetivo = hour(fecha_objetivo),
@@ -196,10 +198,18 @@ El modelo utiliza información disponible 24 horas antes del objetivo:
 
 - O3 de la misma hora uno, dos, tres y cuatro días antes;
 - O3 de 1, 2 y 3 horas antes del origen;
-- radiación solar, temperatura, humedad relativa y velocidad del viento en `t`;
-- dirección del viento mediante seno y coseno;
+- radiación solar, temperatura y humedad relativa en `t`;
+- viento en `t` mediante dos componentes que combinan rapidez y dirección: `WS_sin` y `WS_cos`;
 - hora y mes del objetivo;
 - estación de monitoreo.
+
+La versión anterior representaba el viento con tres variables: `WS`, `WD_sin` y `WD_cos`. En esta versión se integran rapidez y dirección en dos componentes:
+
+$$
+WS_{sin}=WS\,WD_{sin}, \qquad WS_{cos}=WS\,WD_{cos}
+$$
+
+Como `WD_sin` y `WD_cos` ya codifican circularmente la dirección, multiplicarlas por `WS` incorpora también la magnitud del viento. Las dos componentes conservan conjuntamente la información de rapidez y dirección.
 
 No se utilizan condiciones meteorológicas reales de `t+24`, porque no estarían disponibles al generar el pronóstico.
 
@@ -209,7 +219,7 @@ predictores_numericos <- c(
   "O3_alineado_1d", "O3_alineado_2d",
   "O3_alineado_3d", "O3_alineado_4d",
   "O3_lag_1", "O3_lag_2", "O3_lag_3",
-  "SR", "TEMP", "RH", "WS", "WD_sin", "WD_cos",
+  "SR", "TEMP", "RH", "WS_sin", "WS_cos",
   "Hora_sin_obj", "Hora_cos_obj", "Mes_sin_obj", "Mes_cos_obj"
 )
 
@@ -338,7 +348,7 @@ knitr::kable(
 )
 ```
 
-En 2024, la persistencia diaria obtiene MAE de **11.444** y RMSE de **15.749**, mientras que el XGBoost reformulado obtiene MAE de **10.055** y RMSE de **13.611**. Esto representa reducciones aproximadas de **12.1% en MAE** y **13.6% en RMSE**.
+En 2024, la persistencia diaria obtiene MAE de **`r round(metricas_persistencia_h24$MAE[[1]], 3)`** y RMSE de **`r round(metricas_persistencia_h24$RMSE[[1]], 3)`**, mientras que el XGBoost con viento vectorial obtiene MAE de **`r round(metricas_xgb_h24$MAE[[1]], 3)`** y RMSE de **`r round(metricas_xgb_h24$RMSE[[1]], 3)`**. Esto representa reducciones de **`r round(100 * (metricas_persistencia_h24$MAE[[1]] - metricas_xgb_h24$MAE[[1]]) / metricas_persistencia_h24$MAE[[1]], 1)`% en MAE** y **`r round(100 * (metricas_persistencia_h24$RMSE[[1]] - metricas_xgb_h24$RMSE[[1]]) / metricas_persistencia_h24$RMSE[[1]], 1)`% en RMSE**.
 
 Por tanto, el O3 de la misma hora del día anterior es una referencia fuerte, pero XGBoost logra mejorarla al combinar la periodicidad diaria con días anteriores, el comportamiento reciente del O3, la meteorología disponible y la estructura temporal.
 
@@ -351,6 +361,31 @@ importancia_h24 <- xgb.importance(
 ) |>
   as_tibble() |>
   arrange(desc(Gain))
+
+gain_o3_1d_h24 <- importancia_h24 |>
+  filter(Feature == "O3_alineado_1d") |>
+  summarise(Gain = sum(Gain)) |>
+  pull(Gain)
+
+gain_o3_diario_h24 <- importancia_h24 |>
+  filter(Feature %in% c(
+    "O3_alineado_1d", "O3_alineado_2d",
+    "O3_alineado_3d", "O3_alineado_4d"
+  )) |>
+  summarise(Gain = sum(Gain)) |>
+  pull(Gain)
+
+gain_ws_sin_h24 <- importancia_h24 |>
+  filter(Feature == "WS_sin") |>
+  summarise(Gain = sum(Gain)) |>
+  pull(Gain)
+
+gain_ws_cos_h24 <- importancia_h24 |>
+  filter(Feature == "WS_cos") |>
+  summarise(Gain = sum(Gain)) |>
+  pull(Gain)
+
+gain_viento_h24 <- gain_ws_sin_h24 + gain_ws_cos_h24
 
 importancia_h24 |>
   slice_head(n = 15) |>
@@ -384,9 +419,9 @@ importancia_h24 |>
   theme_minimal()
 ```
 
-`O3_alineado_1d` concentra **55.64% del Gain** y es el predictor principal. Los cuatro valores diarios alineados suman aproximadamente **70.4% del Gain**, lo que confirma que la historia del O3 a la misma hora de días anteriores concentra la mayor parte de la señal predictiva.
+`O3_alineado_1d` concentra **`r round(100 * gain_o3_1d_h24, 2)`% del Gain**. Los cuatro valores diarios alineados suman **`r round(100 * gain_o3_diario_h24, 2)`%**, por lo que la historia del O3 a la misma hora de días anteriores continúa concentrando una parte importante de la señal predictiva.
 
-También aparecen `O3_lag_1`, `TEMP`, `SR`, `RH`, `WS`, la hora objetivo y el mes, por lo que el modelo utiliza información complementaria para corregir la referencia del día anterior. Estas importancias describen uso predictivo dentro del modelo y no causalidad física.
+Las nuevas componentes `WS_sin` y `WS_cos` suman conjuntamente **`r round(100 * gain_viento_h24, 2)`% del Gain** (`WS_sin`: `r round(100 * gain_ws_sin_h24, 2)`%; `WS_cos`: `r round(100 * gain_ws_cos_h24, 2)`%). Esta suma permite evaluar el viento como un solo fenómeno representado mediante dos componentes. El `Gain` describe utilidad predictiva dentro del modelo y no importancia causal o física.
 
 # Tuning reducido
 
@@ -487,6 +522,9 @@ resultados_tuning_h24 <- map_dfr(
   bind_rows(resultado_inicial) |>
   arrange(RMSE_validacion)
 
+mejor_configuracion_h24 <- resultados_tuning_h24 |>
+  slice(1)
+
 resultados_tuning_h24 |>
   mutate(
     RMSE_validacion = round(RMSE_validacion, 3),
@@ -498,9 +536,9 @@ resultados_tuning_h24 |>
   )
 ```
 
-La mejor configuración es **T1**, con `eta = 0.05`, `max_depth = 4`, `min_child_weight = 5`, `subsample = 0.8` y `colsample_bytree = 0.8`. Su mejor iteración es 119. Sobre el subconjunto común obtiene MAE de **10.035** y RMSE de **13.560**.
+La mejor configuración es **`r mejor_configuracion_h24$Configuracion[[1]]`**, con `eta = `r mejor_configuracion_h24$eta[[1]]``, `max_depth = `r mejor_configuracion_h24$max_depth[[1]]``, `min_child_weight = `r mejor_configuracion_h24$min_child_weight[[1]]``, `subsample = `r mejor_configuracion_h24$subsample[[1]]`` y `colsample_bytree = `r mejor_configuracion_h24$colsample_bytree[[1]]``. Su mejor iteración es **`r mejor_configuracion_h24$Mejor_iteracion[[1]]`**. Sobre el subconjunto común obtiene MAE de **`r round(mejor_configuracion_h24$MAE_comun[[1]], 3)`** y RMSE de **`r round(mejor_configuracion_h24$RMSE_comun[[1]], 3)`**.
 
-La mejora frente a la configuración inicial es pequeña, pero T1 utiliza árboles menos profundos y obtiene un desempeño ligeramente mejor. Por ello se adopta como configuración definitiva.
+Esta configuración se selecciona únicamente con la validación de 2024 y se adopta para el reentrenamiento con 2021-2024.
 
 ## Configuración definitiva
 
@@ -509,15 +547,15 @@ La mejora frente a la configuración inicial es pequeña, pero T1 utiliza árbol
 parametros_finales <- list(
   objective = "reg:squarederror",
   eval_metric = "rmse",
-  eta = 0.05,
-  max_depth = 4,
-  min_child_weight = 5,
-  subsample = 0.8,
-  colsample_bytree = 0.8,
+  eta = mejor_configuracion_h24$eta[[1]],
+  max_depth = mejor_configuracion_h24$max_depth[[1]],
+  min_child_weight = mejor_configuracion_h24$min_child_weight[[1]],
+  subsample = mejor_configuracion_h24$subsample[[1]],
+  colsample_bytree = mejor_configuracion_h24$colsample_bytree[[1]],
   lambda = 1
 )
 
-iteraciones_finales <- 119
+iteraciones_finales <- mejor_configuracion_h24$Mejor_iteracion[[1]]
 ```
 
 A partir de este punto quedan congelados objetivo, predictores, hiperparámetros e iteraciones.
@@ -634,13 +672,9 @@ mejora_final |>
   )
 ```
 
-En la prueba final se evaluaron **7,333 observaciones** de 2025. La persistencia diaria obtiene MAE de **13.787** y RMSE de **18.975**, mientras que XGBoost obtiene MAE de **11.864** y RMSE de **16.229**.
+En la prueba final se evaluaron **`r format(nrow(resultados_prueba), big.mark = ",")` observaciones** de 2025. La persistencia diaria obtiene MAE de **`r round(metricas_persistencia_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_persistencia_2025$RMSE[[1]], 3)`**, mientras que XGBoost obtiene MAE de **`r round(metricas_xgb_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_xgb_2025$RMSE[[1]], 3)`**.
 
-Esto equivale a una reducción de **13.9% en MAE** y **14.5% en RMSE** respecto a la persistencia diaria. Por tanto, la ventaja observada durante la validación de 2024 se mantiene en datos completamente fuera de muestra.
-
-Los errores absolutos son mayores en 2025 que en 2024. El RMSE del XGBoost pasa de aproximadamente **13.56** en validación a **16.23** en prueba final, pero la persistencia diaria también empeora de **15.75** a **18.98**. Esto indica que 2025 fue un periodo más difícil de predecir en términos absolutos, sin que desaparezca la ventaja relativa de XGBoost.
-
-De hecho, la reducción relativa del RMSE se mantiene muy estable: alrededor de **13.9% en validación** y **14.5% en prueba final**. Esta consistencia es una señal favorable de generalización.
+Esto equivale a una reducción de **`r round(mejora_final$Mejora_MAE_pct[[1]], 1)`% en MAE** y **`r round(mejora_final$Mejora_RMSE_pct[[1]], 1)`% en RMSE** respecto a la persistencia diaria. El RMSE del XGBoost pasa de **`r round(mejor_configuracion_h24$RMSE_comun[[1]], 3)`** en validación 2024 a **`r round(metricas_xgb_2025$RMSE[[1]], 3)`** en prueba final.
 
 ## Desempeño por estación
 
@@ -663,6 +697,12 @@ metricas_estacion_2025 <- resultados_prueba |>
       (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
   )
 
+mejor_estacion_rmse <- metricas_estacion_2025 |>
+  slice_max(Mejora_RMSE_pct, n = 1, with_ties = FALSE)
+
+menor_estacion_rmse <- metricas_estacion_2025 |>
+  slice_min(Mejora_RMSE_pct, n = 1, with_ties = FALSE)
+
 metricas_estacion_2025 |>
   mutate(
     across(
@@ -680,19 +720,10 @@ metricas_estacion_2025 |>
   )
 ```
 
-XGBoost supera a persistencia en las cuatro estaciones:
-
-- **NTE:** el RMSE baja de 17.977 a 15.387, una mejora de **14.4%**.
-- **NTE2:** el RMSE baja de 18.854 a 16.003, una mejora de **15.1%**.
-- **NO:** el RMSE baja de 19.635 a 17.052, una mejora de **13.2%**.
-- **NE:** el RMSE baja de 19.486 a 16.486, una mejora de **15.4%**.
-
-La mejora no depende de una sola estación. `NO` es la estación con la menor reducción relativa del error, aunque XGBoost también supera claramente a persistencia. `NE` presenta la mayor reducción porcentual tanto en MAE como en RMSE.
+XGBoost obtiene menor RMSE que la persistencia en **`r sum(metricas_estacion_2025$RMSE_XGBoost < metricas_estacion_2025$RMSE_Persistencia)` de `r nrow(metricas_estacion_2025)` estaciones**. La mayor reducción relativa del RMSE aparece en **`r mejor_estacion_rmse$Estacion[[1]]`**, con **`r round(mejor_estacion_rmse$Mejora_RMSE_pct[[1]], 1)`%**, y la menor en **`r menor_estacion_rmse$Estacion[[1]]`**, con **`r round(menor_estacion_rmse$Mejora_RMSE_pct[[1]], 1)`%**.
 
 # Conclusión
 
-El XGBoost reformulado a 24 horas supera de manera consistente a la persistencia diaria tanto en validación 2024 como en la prueba final 2025. El modelo aprovecha principalmente la periodicidad diaria del O3: aproximadamente 70% del `Gain` proviene de valores de O3 alineados con la misma hora de días anteriores, mientras que el comportamiento reciente, la meteorología y las variables temporales aportan información complementaria.
+El XGBoost a 24 horas utiliza ahora el viento mediante dos componentes, `WS_sin` y `WS_cos`, en lugar de `WS`, `WD_sin` y `WD_cos`. En validación 2024, la configuración seleccionada obtiene MAE de **`r round(mejor_configuracion_h24$MAE_comun[[1]], 3)`** y RMSE de **`r round(mejor_configuracion_h24$RMSE_comun[[1]], 3)`**. Los cuatro valores diarios alineados de O3 concentran **`r round(100 * gain_o3_diario_h24, 2)`% del Gain**, mientras que las dos componentes del viento suman **`r round(100 * gain_viento_h24, 2)`%**.
 
-En 2025, XGBoost reduce el MAE de 13.787 a 11.864 y el RMSE de 18.975 a 16.229, equivalentes a mejoras de **13.9% y 14.5%**, respectivamente. Además, la mejora se observa en las cuatro estaciones, lo que respalda que el resultado global no está concentrado en una sola zona de monitoreo.
-
-La prueba final confirma que el modelo conserva su ventaja fuera de muestra. A partir de estos resultados no se deben reajustar variables, hiperparámetros ni iteraciones utilizando 2025; cualquier modificación posterior correspondería a una nueva versión del modelo y requeriría una nueva evaluación independiente.
+En 2025, XGBoost obtiene MAE de **`r round(metricas_xgb_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_xgb_2025$RMSE[[1]], 3)`**, equivalentes a mejoras de **`r round(mejora_final$Mejora_MAE_pct[[1]], 1)`%** y **`r round(mejora_final$Mejora_RMSE_pct[[1]], 1)`%** frente a persistencia.
