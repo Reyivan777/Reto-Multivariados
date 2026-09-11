@@ -1,0 +1,44 @@
+name: Materializar diapositivas XGBoost
+
+on:
+  push:
+    branches:
+      - tmp-xgb-slides-upload
+    paths:
+      - ".github/workflows/materializar_xgb_slides.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materializar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruir PNG
+        shell: bash
+        run: |
+          cat .github/xgb_slide_chunks/01.part*.txt | base64 -d > /tmp/01_xgboost_construccion.png
+          cat .github/xgb_slide_chunks/02.part*.txt | base64 -d > /tmp/02_xgboost_resultados.png
+          cat .github/xgb_slide_chunks/03.part*.txt | base64 -d > /tmp/03_xgboost_residuos.png
+          echo "ffed140e14413224eeb7abc8f14b9c18f26f65bdba81d16ddcec700fbf0dc95c  /tmp/01_xgboost_construccion.png" | sha256sum -c -
+          echo "e2aaebdff9cefc0e4581951b68227315a4ce3b8077a94b8c2fd0ef21a86862fb  /tmp/02_xgboost_resultados.png" | sha256sum -c -
+          echo "3caa03769f26324fd614c9d3d7b52a55ba45c1d2ed72c45f8c1ce163970e93b  /tmp/03_xgboost_residuos.png" | sha256sum -c -
+
+      - name: Publicar en trunk
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin trunk
+          git checkout trunk
+          git reset --hard origin/trunk
+          mkdir -p quarto/presentacion_xgboost
+          cp /tmp/01_xgboost_construccion.png quarto/presentacion_xgboost/
+          cp /tmp/02_xgboost_resultados.png quarto/presentacion_xgboost/
+          cp /tmp/03_xgboost_residuos.png quarto/presentacion_xgboost/
+          git add quarto/presentacion_xgboost/*.png
+          git commit -m "Agrega diapositivas finales XGBoost en PNG"
+          git push origin trunk
