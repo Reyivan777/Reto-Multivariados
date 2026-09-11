@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <style>
+    .title{font:700 48px Arial,sans-serif;fill:#10233a}.sub{font:400 24px Arial,sans-serif;fill:#46566b}.h{font:700 28px Arial,sans-serif;fill:#10233a}.body{font:400 23px Arial,sans-serif;fill:#26384d}.small{font:400 19px Arial,sans-serif;fill:#607086}.big{font:700 54px Arial,sans-serif;fill:#0b6b67}.warn{font:700 28px Arial,sans-serif;fill:#9b5b16}.card{fill:#f6f8fb;stroke:#d7dee8;stroke-width:2}.accent{fill:#e8f4f2;stroke:#9fcfc9;stroke-width:2}.warncard{fill:#fff5e8;stroke:#e8c28f;stroke-width:2}.barbase{fill:#b7c0cc}.barx{fill:#0b6b67}.line{stroke:#0b6b67;stroke-width:6;fill:none;stroke-linecap:round;stroke-linejoin:round}.axis{stroke:#d7dee8;stroke-width:2}
+  </style>
+  <text x="80" y="86" class="title">Residuos: menor dispersión, pero aún hay un patrón</text>
+  <text x="80" y="128" class="sub">El análisis del error complementa al MAE y RMSE</text>
+  <rect x="80" y="180" rx="24" ry="24" width="430" height="250" class="accent"/>
+  <text x="115" y="235" class="h">Sesgo global</text>
+  <text x="115" y="315" class="big">+1.205</text>
+  <text x="115" y="360" class="body">residuo medio</text>
+  <text x="115" y="402" class="small">Ligera tendencia a subestimar O₃</text>
+  <rect x="550" y="180" rx="24" ry="24" width="470" height="250" class="card"/>
+  <text x="585" y="235" class="h">Dispersión del error</text>
+  <text x="585" y="280" class="small">Desviación estándar de residuos</text>
+  <rect x="585" y="320" width="334" height="28" class="barbase"/><text x="930" y="343" class="body">18.976</text>
+  <rect x="585" y="375" width="283" height="28" class="barx"/><text x="880" y="398" class="body">16.067</text>
+  <text x="585" y="425" class="small">XGBoost reduce la variabilidad de los errores</text>
+  <rect x="1060" y="180" rx="24" ry="24" width="460" height="250" class="warncard"/>
+  <text x="1095" y="235" class="h">Principal limitación</text>
+  <text x="1095" y="295" class="warn">14:00–15:00</text>
+  <text x="1095" y="340" class="body">mayor subestimación promedio</text>
+  <text x="1095" y="385" class="small">También aumenta el error en episodios</text>
+  <text x="1095" y="414" class="small">con concentraciones altas de O₃</text>
+  <text x="80" y="510" class="h">Residuo medio por hora: patrón observado</text>
+  <line x1="120" y1="760" x2="1470" y2="760" class="axis"/>
+  <line x1="120" y1="545" x2="120" y2="760" class="axis"/>
+  <path d="M140 715 L265 690 L390 670 L515 615 L640 535 L765 530 L890 575 L1015 585 L1140 568 L1265 610 L1390 655" class="line"/>
+  <circle cx="640" cy="535" r="10" fill="#9b5b16"/><circle cx="765" cy="530" r="10" fill="#9b5b16"/>
+  <text x="702" y="575" text-anchor="middle" class="warn">pico de subestimación</text>
+  <text x="140" y="800" text-anchor="middle" class="small">10</text><text x="265" y="800" text-anchor="middle" class="small">11</text><text x="390" y="800" text-anchor="middle" class="small">12</text><text x="515" y="800" text-anchor="middle" class="small">13</text><text x="640" y="800" text-anchor="middle" class="small">14</text><text x="765" y="800" text-anchor="middle" class="small">15</text><text x="890" y="800" text-anchor="middle" class="small">16</text><text x="1015" y="800" text-anchor="middle" class="small">17</text><text x="1140" y="800" text-anchor="middle" class="small">18</text><text x="1265" y="800" text-anchor="middle" class="small">19</text><text x="1390" y="800" text-anchor="middle" class="small">20</text>
+  <text x="795" y="845" text-anchor="middle" class="small">Hora objetivo</text>
+  <text x="80" y="845" class="small">Residuo = observado − predicho; valores positivos indican subestimación.</text>
+</svg>
