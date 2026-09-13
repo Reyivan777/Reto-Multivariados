@@ -2,5 +2,7 @@ project:
   type: default
   output-dir: docs
 
+format: html
+
 execute:
   cache: true
