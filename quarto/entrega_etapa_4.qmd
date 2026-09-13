@@ -25,7 +25,8 @@ Fase 3: PCA cerrado con resultados reales.
 Fase 4: comparación final GAM vs. XGBoost cerrada con resultados de 2025.
 Fase 5: contexto espacial de las estaciones incorporado.
 Fase 6: preparación de datos y modelado final condensados.
-Pendiente: discusión, conclusiones, resumen, referencias y declaratoria de uso de IA.
+Fase 7: discusión y conclusiones finales redactadas.
+Pendiente: resumen de una página, referencias, declaratoria de uso de IA y auditoría final de extensión/formato.
 -->
 
 # Problema y objetivo final
@@ -217,9 +218,53 @@ En `NTE2` y `NO`, que concentran prácticamente toda la muestra común, XGBoost 
 
 Esta distribución constituye una **limitación importante de la comparación directa**: aunque el resultado global favorece ligeramente a XGBoost, la muestra común no representa de manera equilibrada a las cuatro estaciones. Por ello, la conclusión final debe separar dos ideas: XGBoost tiene una ligera ventaja en precisión sobre la muestra comparable y una ventaja clara en cobertura; no se debe afirmar que supera al GAM de manera uniforme en cada estación.
 
+# Discusión
+
+## Capacidad predictiva a 24 horas
+
+Los resultados muestran que la concentración diurna de O3 puede anticiparse a 24 horas con una mejora consistente respecto a una referencia simple de persistencia diaria. En la muestra común de 2025, la persistencia obtiene MAE de 14.144 y RMSE de 19.561, mientras que el GAM reduce estos errores a 12.270 y 16.620 y XGBoost a 12.110 y 16.579, respectivamente. La ganancia es relevante porque ambos modelos incorporan información adicional que mejora la predicción frente a asumir que la concentración del día siguiente será igual a la observada a la misma hora del día anterior.
+
+Sin embargo, la diferencia entre GAM y XGBoost es mucho menor que la diferencia de ambos frente a persistencia. XGBoost reduce el MAE del GAM alrededor de 1.3% y el RMSE alrededor de 0.25% en la muestra comparable. Por lo tanto, los resultados no justifican afirmar que uno de los dos enfoques sea claramente superior en precisión. El GAM alcanza un desempeño prácticamente equivalente mediante una estructura estadística interpretable, mientras que XGBoost obtiene una ligera ventaja numérica mediante una representación más flexible de interacciones y patrones no lineales.
+
+## Relación entre estructura multivariada y predicción
+
+El PCA ayuda a interpretar por qué la historia del O3 y la meteorología resultan útiles en los modelos. `PC1` agrupa en una misma dirección al O3 actual, su valor rezagado 24 horas, la temperatura y la radiación, mientras que la humedad se proyecta en sentido contrario. Esto confirma que una fracción importante de la variabilidad conjunta está asociada con un patrón donde persistencia del O3 y condiciones atmosféricas cambian de manera relacionada. Al mismo tiempo, `PC2` muestra que el viento contiene una dimensión de variabilidad relativamente distinta.
+
+Esta estructura también explica por qué la persistencia diaria constituye una referencia exigente. El O3 observado a la misma hora del día anterior ya resume una parte importante del comportamiento futuro. Para superar esa referencia, GAM y XGBoost deben aprovechar información adicional de meteorología, temporalidad y antecedentes del contaminante. La reducción cercana a 15% de RMSE respecto a persistencia indica que esas variables sí aportan señal predictiva adicional, aunque una parte importante de la dinámica siga estando determinada por la periodicidad diaria.
+
+## Precisión frente a cobertura
+
+La principal diferencia práctica entre los modelos aparece en la cantidad de observaciones que pueden utilizar. El GAM requiere casos completos y pudo evaluarse sobre 3,435 observaciones de 2025, mientras que XGBoost mantuvo 7,333 observaciones en su cobertura natural. Esta diferencia no debe confundirse con una ventaja directa en precisión, ya que las métricas calculadas sobre muestras distintas no son comparables de forma estricta; por esa razón la decisión de precisión se basa en la muestra común.
+
+Aun así, la cobertura tiene importancia operativa. Un modelo con buen error promedio pero incapaz de generar pronósticos cuando faltan algunos predictores tendría disponibilidad limitada en un sistema de monitoreo real. Desde esta perspectiva, XGBoost ofrece una ventaja práctica porque puede conservar predicciones ante valores faltantes sin requerir la eliminación completa del registro. El GAM, por otra parte, conserva la ventaja de permitir una interpretación explícita de efectos no lineales y constituye una referencia estadística útil para comprobar que el desempeño de XGBoost no depende únicamente de mayor complejidad.
+
+## Limitaciones
+
+La limitación principal es la disponibilidad desigual de datos entre años y estaciones. El año 2020 no pudo utilizarse por la ausencia casi total de O3 y, aun desde 2021, existen interrupciones prolongadas en algunas series. La comparación común de 2025 también está concentrada en `NTE2` y `NO`: `NE` aporta solo 13 observaciones y `NTE` ninguna. En consecuencia, no puede sostenerse que la ligera ventaja global de XGBoost se reproduzca de forma estable en las cuatro estaciones.
+
+Además, la prueba final de 2025 corresponde únicamente al periodo disponible hasta junio, por lo que no representa un año calendario completo. El análisis tampoco pretende establecer relaciones causales entre meteorología y O3: tanto el PCA como los modelos identifican estructura estadística y capacidad predictiva. Finalmente, los predictores meteorológicos utilizados corresponden a información conocida en el instante de origen; un sistema operativo a 24 horas podría beneficiarse de incorporar pronósticos meteorológicos futuros, algo que no se evaluó en este reto.
+
+## Recomendaciones y nuevas preguntas
+
+Para una aplicación posterior conviene priorizar la continuidad de las mediciones, porque mejorar la disponibilidad de O3 y variables meteorológicas permitiría evaluar los modelos de forma más equilibrada entre estaciones. Con los resultados actuales, XGBoost es el candidato más conveniente cuando la prioridad es mantener cobertura ante datos faltantes, mientras que GAM debe conservarse como modelo interpretable de referencia debido a su desempeño prácticamente equivalente.
+
+Como extensiones naturales del proyecto quedan tres preguntas. Primero, si incorporar pronósticos meteorológicos para las siguientes 24 horas puede mejorar el error frente a utilizar únicamente las condiciones observadas en el origen. Segundo, si modelos específicos por estación o enfoques espacio-temporales que aprovechen estaciones vecinas pueden mejorar el desempeño en zonas con menor cobertura. Tercero, si la evaluación cambia al enfocarse específicamente en episodios de O3 elevado, donde el costo de error puede ser distinto al representado por MAE y RMSE globales.
+
+# Conclusiones
+
+El objetivo final del proyecto fue determinar con qué precisión puede predecirse el O3 diurno con **24 horas de anticipación** en las estaciones `NTE`, `NTE2`, `NO` y `NE`. Sobre la muestra común de prueba de 2025, XGBoost obtuvo **MAE = 12.110** y **RMSE = 16.579**, mientras que el GAM obtuvo **MAE = 12.270** y **RMSE = 16.620**. Ambos superaron a la persistencia diaria, cuyo MAE fue 14.144 y RMSE 19.561. Por lo tanto, la información histórica de O3, meteorología, temporalidad y estación permite mejorar de manera medible un pronóstico simple basado únicamente en el día anterior.
+
+La comparación entre modelos muestra que **XGBoost presenta la mejor precisión, pero solo por un margen pequeño**. La diferencia frente al GAM es insuficiente para considerarlo claramente superior por error predictivo. Su ventaja más importante es la cobertura: en 2025 pudo evaluarse sobre 7,333 observaciones frente a 3,435 casos completos del GAM. En un escenario aplicado, esta capacidad para conservar predicciones cuando existen faltantes favorece a XGBoost, mientras que el GAM ofrece una alternativa casi igual de precisa y con mayor interpretabilidad estadística.
+
+El PCA complementa estos resultados al mostrar que la estructura multivariada no depende de una sola variable. El primer componente relaciona principalmente O3 actual, O3 rezagado 24 horas, temperatura, radiación y humedad, mientras que el viento aporta una dimensión adicional. Se requieren cinco componentes para superar 80% de varianza acumulada, lo que indica que existe redundancia entre algunas señales, pero también información distribuida entre distintos factores meteorológicos y temporales.
+
+La conclusión debe interpretarse dentro de las limitaciones de cobertura. La muestra común está dominada por `NTE2` y `NO`, mientras que `NE` aporta muy pocos registros y `NTE` ninguno; además, 2025 solo está disponible hasta junio. Por ello, los resultados respaldan la **viabilidad del pronóstico de O3 a 24 horas** dentro del periodo y las estaciones analizadas, pero no justifican todavía una generalización uniforme a toda la red SIMA ni un uso operativo sin validación adicional.
+
+En conjunto, el reto muestra que un enfoque que combine control de calidad, estructura temporal, análisis multivariado y modelos no lineales puede mejorar de forma consistente la predicción diaria de O3. El siguiente avance metodológico debería concentrarse menos en aumentar la complejidad del modelo y más en mejorar la cobertura de datos, incorporar información meteorológica futura y validar el desempeño durante un periodo anual completo y en un conjunto más equilibrado de estaciones.
+
 # Alcance y siguientes pasos
 
-Con la preparación, el PCA y la comparación predictiva ya cerrados, la metodología y los principales resultados cuantitativos de la Etapa 4 están definidos. El siguiente trabajo consiste en redactar la discusión y conclusiones finales y, a partir de ellas, construir el resumen de una página, revisar referencias, declaratoria de uso de IA y extensión total del documento.
+Con la discusión y conclusiones ya redactadas, la parte analítica principal de la Etapa 4 queda cerrada. El trabajo restante se concentra en la presentación final: redactar el resumen de una página, consolidar las referencias en formato APA, completar la declaratoria de uso de IA, agregar el enlace al código y verificar que el documento final cumpla con el límite de extensión y con los requisitos de formato.
 
 ## Fuentes incorporadas en esta fase
 
