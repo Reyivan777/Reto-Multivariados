@@ -20,9 +20,10 @@ execute:
 <!--
 Etapa 4.
 Fase 1: problema final fijado a 24 horas.
-Fase 2: modelos predictivos alineados al mismo horizonte y esquema temporal.
-Las fases posteriores incorporarán PCA, comparación global, resultados,
-discusión y conclusiones.
+Fase 2: modelos predictivos finales concentrados en GAM y XGBoost.
+Fase 3: PCA incorporado como técnica de interdependencia.
+Las fases posteriores integrarán comparación final, contexto de estaciones,
+resultados, discusión y conclusiones.
 -->
 
 # Problema y objetivo final
@@ -48,11 +49,11 @@ Desarrollar, comparar y evaluar modelos capaces de **predecir la concentración 
 ## Objetivos específicos
 
 1. Resumir la preparación y calidad de los datos utilizados para el modelado, incluyendo la decisión de excluir 2020 del problema predictivo final.
-2. Caracterizar la estructura multivariada de las variables relevantes mediante una técnica de interdependencia, sin perder de vista el objetivo predictivo de O3.
+2. Caracterizar la estructura multivariada de las variables relevantes mediante PCA como técnica de interdependencia, sin perder de vista el objetivo predictivo de O3.
 3. Construir predictores temporales que utilicen únicamente información disponible al momento de generar el pronóstico, incluyendo el historial reciente y diario de O3 y representaciones adecuadas de las variables meteorológicas y temporales.
-4. Ajustar y comparar una técnica estadística de dependencia vista en clase con modelos no lineales adicionales desarrollados por el equipo.
-5. Evaluar todos los modelos finales con una separación cronológica de los datos, manteniendo **2025 como conjunto de prueba final** y utilizando MAE y RMSE como métricas principales.
-6. Comparar el desempeño de los modelos contra una referencia de **persistencia diaria**, definida como el O3 observado a la misma hora del día anterior.
+4. Ajustar y evaluar un **GAM** como enfoque estadístico de dependencia no lineal e interpretable, y contrastar su desempeño con **XGBoost** como modelo predictivo flexible.
+5. Evaluar los modelos finales con una separación cronológica de los datos, manteniendo **2025 como conjunto de prueba final** y utilizando MAE y RMSE como métricas principales.
+6. Comparar el desempeño de GAM y XGBoost contra una referencia de **persistencia diaria**, definida como el O3 observado a la misma hora del día anterior.
 7. Analizar las variables más relevantes, las diferencias de desempeño entre estaciones y las principales limitaciones del pronóstico a 24 horas.
 
 ## Definición del problema predictivo
@@ -82,18 +83,25 @@ La separación de los datos será estrictamente cronológica para evitar fuga de
 
 El desempeño se comparará principalmente mediante **MAE** y **RMSE**. Además de las métricas globales, se revisará el error por estación para determinar si la capacidad predictiva es consistente entre `NTE`, `NTE2`, `NO` y `NE`.
 
-## Modelos alineados para la comparación final
+## Modelos de la entrega final
 
-La Fase 2 deja tres enfoques predictivos bajo la misma definición temporal:
+La comparación predictiva final se concentrará exclusivamente en dos modelos:
 
-- **Regresión lineal múltiple:** técnica de dependencia interpretable, documentada en `quarto/reg_lineal_o3_h24.qmd`.
-- **GAM Gamma:** modelo estadístico no lineal, documentado en `quarto/GAM_h24_final.qmd`.
+- **GAM Gamma:** modelo estadístico de dependencia no lineal e interpretable, documentado en `quarto/GAM_h24_final.qmd`.
 - **XGBoost:** modelo de árboles potenciados, documentado en `quarto/xgboost.qmd`.
 
-Los tres utilizan un objetivo a 24 horas, las mismas cuatro estaciones, la ventana 10:00-20:00 y una separación cronológica que reserva 2025 para la prueba final. Persistencia diaria se mantiene como referencia mínima. Las diferencias en manejo de valores faltantes se conservarán explícitas y la comparación definitiva se realizará posteriormente sobre una muestra común cuando sea necesario.
+Ambos responden al mismo objetivo de pronóstico a 24 horas, utilizan las mismas cuatro estaciones, la ventana 10:00-20:00 y reservan 2025 para la prueba final. La persistencia diaria se mantiene como referencia mínima. La regresión lineal desarrollada en etapas previas permanece como trabajo exploratorio del proyecto, pero **no formará parte de la comparación ni de la narrativa principal de la entrega final**.
+
+## Técnica de interdependencia: PCA
+
+Para cumplir el componente de relaciones de interdependencia y, al mismo tiempo, aportar información útil al problema, se incorpora un **Análisis de Componentes Principales (PCA)** documentado en `quarto/PCA_etapa_4.qmd`.
+
+El PCA se aplica únicamente sobre el periodo de desarrollo 2021-2024 y sobre variables disponibles al momento del pronóstico: O3 actual, su rezago diario y variables meteorológicas utilizadas por los modelos. Las variables se estandarizan antes del análisis porque se encuentran en escalas diferentes.
+
+El objetivo del PCA es identificar patrones de covariación, redundancia y contrastes entre las señales de O3 y meteorología. **No se utilizarán los componentes principales como entrada de GAM o XGBoost**; ambos modelos conservarán sus predictores originales. De esta manera el PCA funciona como análisis multivariado complementario y no altera la definición de los modelos ya validados.
 
 ## Alcance de la Etapa 4
 
 A partir de esta definición, los análisis de las etapas anteriores se reorganizarán alrededor del problema final. El reporte conservará únicamente los resultados necesarios para justificar las decisiones y responder la pregunta de investigación. Los análisis exploratorios extensos, modelos preliminares y diagnósticos complementarios permanecerán disponibles en los archivos de trabajo y, cuando aporten contexto, podrán citarse brevemente o trasladarse a anexos.
 
-Con el problema y los modelos predictivos ya alineados, la siguiente fase será incorporar la **técnica de interdependencia** requerida para la entrega final. Se utilizará PCA para estudiar la estructura conjunta y la redundancia de las variables relevantes sin convertirlo en el modelo predictivo principal.
+Con el problema final, GAM, XGBoost y el PCA ya definidos, la siguiente fase será construir la **comparación final GAM vs. XGBoost sobre 2025**, asegurando que las métricas se interpreten de manera justa frente a las diferencias de cobertura por valores faltantes. Después se incorporará el contexto geográfico de las estaciones y se comenzará a condensar los resultados dentro del reporte final.
