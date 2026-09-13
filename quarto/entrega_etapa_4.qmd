@@ -1,0 +1,89 @@
+---
+title: "Reporte final del reto SIMA: predicción de ozono a 24 horas"
+author:
+  - "Equipo 4:"
+  - "Rey Iván de la Fuente Chávez, A01709445"
+  - "Jannette Cristina Flores Rodríguez, A01255711"
+  - "Matías Romero Mariné, A01708802"
+  - "Emilio Alonso Sánchez, A00841853"
+  - "Dulce Alejandra Sánchez López, A01412307"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+execute:
+  echo: false
+---
+
+<!--
+Etapa 4 - Fase 1.
+Este archivo será el reporte final compacto del reto.
+En esta primera fase se fija el problema definitivo y su alcance.
+Las fases posteriores incorporarán preparación resumida, PCA, modelos,
+evaluación final, discusión y conclusiones.
+-->
+
+# Problema y objetivo final
+
+## Contexto y delimitación
+
+El proyecto utiliza registros horarios del Sistema Integral de Monitoreo Ambiental (SIMA) de Nuevo León para estudiar la concentración de ozono troposférico (O3) en la Zona Metropolitana de Monterrey. Durante las etapas anteriores se exploraron distintos contaminantes, variables meteorológicas, estaciones y horizontes de predicción. Ese proceso permitió delimitar el reto a una tarea concreta y evaluable: **predecir la concentración de O3 con 24 horas de anticipación**.
+
+La selección de este horizonte no implica que los análisis realizados para 1, 6 y 12 horas dejen de ser útiles. Esos horizontes se conservarán como análisis exploratorio y como evidencia para justificar la elección final de 24 horas. Sin embargo, la comparación oficial de modelos y las conclusiones del reporte final se concentrarán en una única tarea: estimar O3 a la misma hora del día siguiente.
+
+El análisis se restringe a las estaciones `NTE`, `NTE2`, `NO` y `NE`, y a horas objetivo entre las **10:00 y 20:00**, periodo en el que el análisis exploratorio mostró mayor relevancia para las concentraciones diurnas de O3. Aunque las bases originales abarcan 2020-2025, **2020 no se utiliza para el modelado final** debido a la insuficiente disponibilidad de mediciones de O3 documentada durante la preparación de datos. Por ello, el periodo útil para el modelado es **2021-2025**.
+
+## Pregunta de investigación final
+
+**¿Con qué precisión puede predecirse la concentración horaria diurna de O3 con 24 horas de anticipación, entre las 10:00 y 20:00, en las estaciones NTE, NTE2, NO y NE de la Zona Metropolitana de Monterrey, utilizando información histórica disponible de O3, variables meteorológicas, variables temporales y estación de monitoreo durante 2021-2025?**
+
+Esta pregunta fija una sola variable objetivo, un horizonte de pronóstico y un conjunto espacial y temporal definidos. También evita utilizar información futura: para predecir la concentración en un instante objetivo $t+24$, los modelos únicamente podrán usar información disponible hasta el instante de origen $t$.
+
+## Objetivo general
+
+Desarrollar, comparar y evaluar modelos capaces de **predecir la concentración horaria de O3 con 24 horas de anticipación**, para horas objetivo entre las 10:00 y 20:00 en las estaciones `NTE`, `NTE2`, `NO` y `NE`, utilizando información histórica disponible de O3, variables meteorológicas, características temporales y estación de monitoreo registrada por SIMA durante 2021-2025.
+
+## Objetivos específicos
+
+1. Resumir la preparación y calidad de los datos utilizados para el modelado, incluyendo la decisión de excluir 2020 del problema predictivo final.
+2. Caracterizar la estructura multivariada de las variables relevantes mediante una técnica de interdependencia, sin perder de vista el objetivo predictivo de O3.
+3. Construir predictores temporales que utilicen únicamente información disponible al momento de generar el pronóstico, incluyendo el historial reciente y diario de O3 y representaciones adecuadas de las variables meteorológicas y temporales.
+4. Ajustar y comparar una técnica estadística de dependencia vista en clase con modelos no lineales adicionales desarrollados por el equipo.
+5. Evaluar todos los modelos finales con una separación cronológica de los datos, manteniendo **2025 como conjunto de prueba final** y utilizando MAE y RMSE como métricas principales.
+6. Comparar el desempeño de los modelos contra una referencia de **persistencia diaria**, definida como el O3 observado a la misma hora del día anterior.
+7. Analizar las variables más relevantes, las diferencias de desempeño entre estaciones y las principales limitaciones del pronóstico a 24 horas.
+
+## Definición del problema predictivo
+
+Para cada observación de origen en el instante $t$, la respuesta del problema final será:
+
+$$
+Y = O3_{t+24}
+$$
+
+La referencia mínima será la persistencia diaria:
+
+$$
+\widehat{O3}_{t+24}^{\text{persistencia}} = O3_t
+$$
+
+Los modelos deberán demostrar si la incorporación de historia adicional de O3, meteorología, estructura temporal y estación de monitoreo aporta información suficiente para mejorar esta referencia.
+
+## Esquema de desarrollo y evaluación
+
+La separación de los datos será estrictamente cronológica para evitar fuga de información del futuro hacia el entrenamiento:
+
+- **2021-2023:** entrenamiento inicial de los modelos.
+- **2024:** validación y selección de especificaciones e hiperparámetros.
+- **2021-2024:** reentrenamiento del modelo definitivo una vez cerradas las decisiones metodológicas.
+- **2025:** prueba final, utilizada una sola vez para estimar el desempeño fuera del periodo de desarrollo.
+
+El desempeño se comparará principalmente mediante **MAE** y **RMSE**. Además de las métricas globales, se revisará el error por estación para determinar si la capacidad predictiva es consistente entre `NTE`, `NTE2`, `NO` y `NE`.
+
+## Alcance de la Etapa 4
+
+A partir de esta definición, los análisis de las etapas anteriores se reorganizarán alrededor del problema final. El reporte conservará únicamente los resultados necesarios para justificar las decisiones y responder la pregunta de investigación. Los análisis exploratorios extensos, modelos preliminares y diagnósticos complementarios permanecerán disponibles en los archivos de trabajo y, cuando aporten contexto, podrán citarse brevemente o trasladarse a anexos.
+
+La siguiente fase consistirá en cerrar los modelos que todavía tienen diagnósticos pendientes y asegurar que todos los modelos que formen parte de la comparación final respondan exactamente a esta definición de pronóstico a 24 horas.
