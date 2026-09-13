@@ -1,0 +1,353 @@
+---
+title: "Regresión lineal múltiple final para O3 a 24 horas"
+author: "Equipo 4"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Objetivo
+
+Este archivo deja cerrada la **regresión lineal múltiple (MLR)** como técnica estadística de dependencia para la Etapa 4. A diferencia del archivo exploratorio `reg_lineal_o3.qmd`, que trabajaba a una hora, este modelo responde exactamente al problema final del reto:
+
+- estaciones: `NTE`, `NTE2`, `NO` y `NE`;
+- horizonte: **24 horas**;
+- horas objetivo: 10:00-20:00;
+- entrenamiento inicial: 2021-2023;
+- validación: 2024;
+- reentrenamiento final: 2021-2024;
+- prueba final: 2025.
+
+La MLR se mantiene deliberadamente más sencilla que XGBoost. Su función es evaluar cuánto puede mejorarse la persistencia diaria mediante relaciones lineales e interpretables con meteorología, temporalidad y estación.
+
+# Carga de datos
+
+```{r}
+#| label: configuracion-mlr-h24
+library(tidyverse)
+library(here)
+library(lubridate)
+library(car)
+library(broom)
+
+options(scipen = 999)
+set.seed(123)
+```
+
+```{r}
+#| label: carga-base-mlr-h24
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+if (!file.exists(ruta_base_modelado)) {
+  stop(
+    "No se encontró data/base_modelado_o3.rds. ",
+    "Renderiza primero quarto/reporte.qmd para generar la base de modelado."
+  )
+}
+
+base_origen_modelado <- readRDS(ruta_base_modelado)
+```
+
+# Construcción del problema a 24 horas
+
+Para un objetivo en $t+24$, `O3_alineado_1d` corresponde al O3 observado exactamente a la misma hora del día anterior. Por tanto, es información disponible al momento de emitir el pronóstico y también constituye la referencia de persistencia diaria.
+
+```{r}
+#| label: base-mlr-h24
+base_h24_mlr <- base_origen_modelado |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_alineado_1d = O3_t,
+    O3_objetivo = lead(O3_t, 24)
+  ) |>
+  ungroup() |>
+  mutate(
+    WS_sin = WS * WD_sin,
+    WS_cos = WS * WD_cos,
+    fecha_objetivo = fecha_hora + hours(24),
+    Anio_objetivo = year(fecha_objetivo),
+    Hora_objetivo = hour(fecha_objetivo),
+    Mes_objetivo = month(fecha_objetivo),
+    Hora_sin_obj = sin(2 * pi * Hora_objetivo / 24),
+    Hora_cos_obj = cos(2 * pi * Hora_objetivo / 24),
+    Mes_sin_obj = sin(2 * pi * (Mes_objetivo - 1) / 12),
+    Mes_cos_obj = cos(2 * pi * (Mes_objetivo - 1) / 12),
+    Periodo = case_when(
+      Anio_objetivo %in% 2021:2023 ~ "Entrenamiento",
+      Anio_objetivo == 2024 ~ "Validacion",
+      Anio_objetivo == 2025 ~ "Prueba",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  filter(
+    !is.na(Periodo),
+    between(Hora_objetivo, 10, 20),
+    !is.na(O3_objetivo)
+  )
+```
+
+# Predictores
+
+Se utiliza una especificación lineal compacta. Se conserva `O3_alineado_1d` como señal temporal principal y se agregan radiación solar, temperatura, humedad, viento vectorial, ciclo horario, ciclo mensual y estación. No se incorporan simultáneamente múltiples rezagos consecutivos de O3 porque en el análisis exploratorio de la regresión lineal mostraron fuerte multicolinealidad y dificultaban la interpretación de los coeficientes individuales.
+
+```{r}
+#| label: predictores-mlr-h24
+predictores_mlr <- c(
+  "O3_alineado_1d",
+  "SR", "TEMP", "RH", "WS_sin", "WS_cos",
+  "Hora_sin_obj", "Hora_cos_obj",
+  "Mes_sin_obj", "Mes_cos_obj",
+  "Estacion"
+)
+
+formula_mlr_h24 <- O3_objetivo ~
+  O3_alineado_1d +
+  SR + TEMP + RH + WS_sin + WS_cos +
+  Hora_sin_obj + Hora_cos_obj +
+  Mes_sin_obj + Mes_cos_obj +
+  Estacion
+```
+
+La MLR requiere casos completos. Para que la comparación con persistencia sea justa, ambas métricas se calculan sobre exactamente las mismas observaciones disponibles para la regresión.
+
+```{r}
+#| label: casos-completos-mlr
+base_h24_mlr_completa <- base_h24_mlr |>
+  drop_na(all_of(predictores_mlr)) |>
+  mutate(Estacion = factor(Estacion))
+
+resumen_cobertura_mlr <- base_h24_mlr_completa |>
+  count(Periodo, name = "Casos_completos") |>
+  left_join(
+    base_h24_mlr |> count(Periodo, name = "Objetivos_disponibles"),
+    by = "Periodo"
+  ) |>
+  mutate(Cobertura_pct = 100 * Casos_completos / Objetivos_disponibles)
+
+resumen_cobertura_mlr |>
+  mutate(Cobertura_pct = round(Cobertura_pct, 1)) |>
+  knitr::kable(caption = "Cobertura de casos completos para la MLR a 24 horas")
+```
+
+# Desarrollo con 2021-2024
+
+## Ajuste inicial y validación 2024
+
+```{r}
+#| label: ajuste-validacion-mlr
+entrenamiento_mlr <- base_h24_mlr_completa |>
+  filter(Periodo == "Entrenamiento")
+
+validacion_mlr <- base_h24_mlr_completa |>
+  filter(Periodo == "Validacion")
+
+modelo_mlr_validacion <- lm(
+  formula_mlr_h24,
+  data = entrenamiento_mlr
+)
+
+pred_mlr_validacion <- predict(
+  modelo_mlr_validacion,
+  newdata = validacion_mlr
+)
+```
+
+```{r}
+#| label: funcion-metricas-mlr
+calcular_metricas <- function(observado, predicho) {
+  tibble(
+    MAE = mean(abs(observado - predicho)),
+    RMSE = sqrt(mean((observado - predicho)^2))
+  )
+}
+
+metricas_persistencia_validacion_mlr <- calcular_metricas(
+  validacion_mlr$O3_objetivo,
+  validacion_mlr$O3_alineado_1d
+) |>
+  mutate(Modelo = "Persistencia diaria", Observaciones = nrow(validacion_mlr), .before = 1)
+
+metricas_mlr_validacion <- calcular_metricas(
+  validacion_mlr$O3_objetivo,
+  pred_mlr_validacion
+) |>
+  mutate(Modelo = "Regresión lineal múltiple", Observaciones = nrow(validacion_mlr), .before = 1)
+
+comparacion_validacion_mlr <- bind_rows(
+  metricas_persistencia_validacion_mlr,
+  metricas_mlr_validacion
+)
+
+comparacion_validacion_mlr |>
+  mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Validación 2024: persistencia diaria frente a MLR a 24 horas")
+```
+
+La reducción de error de la MLR respecto a persistencia en 2024 es de **`r round(100 * (metricas_persistencia_validacion_mlr$MAE[[1]] - metricas_mlr_validacion$MAE[[1]]) / metricas_persistencia_validacion_mlr$MAE[[1]], 1)`% en MAE** y **`r round(100 * (metricas_persistencia_validacion_mlr$RMSE[[1]] - metricas_mlr_validacion$RMSE[[1]]) / metricas_persistencia_validacion_mlr$RMSE[[1]], 1)`% en RMSE**.
+
+## Coeficientes y multicolinealidad
+
+```{r}
+#| label: coeficientes-mlr-h24
+tidy(modelo_mlr_validacion, conf.int = TRUE) |>
+  mutate(across(where(is.numeric), ~ round(.x, 4))) |>
+  knitr::kable(caption = "Coeficientes de la MLR a 24 horas ajustada con 2021-2023")
+```
+
+```{r}
+#| label: vif-mlr-h24
+vif_mlr <- car::vif(modelo_mlr_validacion)
+
+if (is.matrix(vif_mlr)) {
+  tabla_vif_mlr <- as_tibble(vif_mlr, rownames = "Variable")
+} else {
+  tabla_vif_mlr <- tibble(
+    Variable = names(vif_mlr),
+    VIF = as.numeric(vif_mlr)
+  )
+}
+
+tabla_vif_mlr |>
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Diagnóstico de multicolinealidad de la MLR")
+```
+
+La tabla VIF/GVIF se utiliza para verificar que la especificación compacta no reproduzca el problema severo de colinealidad observado cuando se introducían varios rezagos consecutivos de O3. Los coeficientes deben interpretarse como asociaciones condicionales dentro del modelo, no como efectos causales.
+
+# Modelo final y prueba 2025
+
+Una vez fijada la especificación usando únicamente la etapa de desarrollo, el modelo final se reentrena con 2021-2024 y se evalúa una sola vez sobre 2025.
+
+```{r}
+#| label: ajuste-final-mlr-h24
+entrenamiento_final_mlr <- base_h24_mlr_completa |>
+  filter(Anio_objetivo %in% 2021:2024)
+
+prueba_final_mlr <- base_h24_mlr_completa |>
+  filter(Anio_objetivo == 2025)
+
+modelo_mlr_final <- lm(
+  formula_mlr_h24,
+  data = entrenamiento_final_mlr
+)
+
+pred_mlr_final_2025 <- predict(
+  modelo_mlr_final,
+  newdata = prueba_final_mlr
+)
+```
+
+```{r}
+#| label: metricas-finales-mlr-h24
+metricas_persistencia_final_mlr <- calcular_metricas(
+  prueba_final_mlr$O3_objetivo,
+  prueba_final_mlr$O3_alineado_1d
+) |>
+  mutate(Modelo = "Persistencia diaria", Observaciones = nrow(prueba_final_mlr), .before = 1)
+
+metricas_mlr_final_2025 <- calcular_metricas(
+  prueba_final_mlr$O3_objetivo,
+  pred_mlr_final_2025
+) |>
+  mutate(Modelo = "Regresión lineal múltiple", Observaciones = nrow(prueba_final_mlr), .before = 1)
+
+comparacion_final_mlr_2025 <- bind_rows(
+  metricas_persistencia_final_mlr,
+  metricas_mlr_final_2025
+)
+
+comparacion_final_mlr_2025 |>
+  mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Prueba final 2025: persistencia diaria frente a MLR a 24 horas")
+```
+
+En la prueba final de 2025, la MLR obtiene MAE de **`r round(metricas_mlr_final_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_mlr_final_2025$RMSE[[1]], 3)`**, frente a MAE de **`r round(metricas_persistencia_final_mlr$MAE[[1]], 3)`** y RMSE de **`r round(metricas_persistencia_final_mlr$RMSE[[1]], 3)`** de la persistencia diaria sobre las mismas observaciones.
+
+## Error por estación
+
+```{r}
+#| label: metricas-estacion-mlr-h24
+resultados_mlr_2025 <- prueba_final_mlr |>
+  mutate(
+    Pred_MLR = pred_mlr_final_2025,
+    Residuo_MLR = O3_objetivo - Pred_MLR
+  )
+
+metricas_estacion_mlr_2025 <- resultados_mlr_2025 |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = n(),
+    MAE_Persistencia = mean(abs(O3_objetivo - O3_alineado_1d)),
+    MAE_MLR = mean(abs(O3_objetivo - Pred_MLR)),
+    RMSE_Persistencia = sqrt(mean((O3_objetivo - O3_alineado_1d)^2)),
+    RMSE_MLR = sqrt(mean((O3_objetivo - Pred_MLR)^2)),
+    .groups = "drop"
+  )
+
+metricas_estacion_mlr_2025 |>
+  mutate(across(where(is.numeric) & !matches("Observaciones"), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Desempeño de la MLR final por estación en 2025")
+```
+
+# Diagnóstico de residuos
+
+```{r}
+#| label: diagnostico-residuos-mlr-h24
+#| fig-cap: "Diagnóstico de residuos de la MLR final a 24 horas"
+#| fig-width: 9
+#| fig-height: 4
+par(mfrow = c(1, 2))
+plot(
+  fitted(modelo_mlr_final),
+  resid(modelo_mlr_final),
+  xlab = "Valores ajustados",
+  ylab = "Residuos",
+  main = "Residuos vs. ajustados"
+)
+abline(h = 0, lty = 2)
+qqnorm(resid(modelo_mlr_final), main = "Q-Q de residuos")
+qqline(resid(modelo_mlr_final), lty = 2)
+par(mfrow = c(1, 1))
+```
+
+```{r}
+#| label: heterocedasticidad-mlr-h24
+car::ncvTest(modelo_mlr_final)
+```
+
+La prueba de heterocedasticidad y los gráficos de residuos se utilizan como diagnóstico de los supuestos de la regresión. Debido al tamaño de la muestra y a la naturaleza temporal de las mediciones, estos diagnósticos se interpretan junto con el desempeño fuera de muestra y no como un requisito de normalidad perfecta.
+
+## Dependencia temporal residual
+
+```{r}
+#| label: ljung-box-mlr-h24
+ljung_box_mlr <- resultados_mlr_2025 |>
+  arrange(Estacion, fecha_objetivo) |>
+  group_by(Estacion) |>
+  group_modify(~ {
+    prueba <- Box.test(.x$Residuo_MLR, lag = 24, type = "Ljung-Box")
+    tibble(
+      Estadistico_X2 = unname(prueba$statistic),
+      gl = unname(prueba$parameter),
+      p_value = prueba$p.value
+    )
+  }) |>
+  ungroup()
+
+ljung_box_mlr |>
+  mutate(across(where(is.numeric), ~ round(.x, 4))) |>
+  knitr::kable(caption = "Ljung-Box de residuos de la MLR por estación en 2025")
+```
+
+`r if (all(ljung_box_mlr$p_value < 0.05)) "Las cuatro estaciones conservan evidencia de dependencia temporal residual. Esto limita la interpretación inferencial de los errores estándar y p-values de la MLR, aunque no invalida la evaluación predictiva realizada sobre 2025." else if (any(ljung_box_mlr$p_value < 0.05)) paste0(sum(ljung_box_mlr$p_value < 0.05), " de las cuatro estaciones conservan evidencia de dependencia temporal residual. Los coeficientes y sus pruebas de significancia deben interpretarse con cautela, mientras que la evaluación predictiva sobre 2025 sigue siendo válida.") else "No se detecta evidencia de autocorrelación residual al nivel de 0.05 en ninguna estación para este diagnóstico."`
+
+# Conclusión
+
+La regresión lineal queda alineada con el problema final a 24 horas y funciona como la técnica de dependencia interpretable del proyecto. Utiliza la misma separación cronológica que los modelos no lineales y se compara contra persistencia sobre la misma muestra de casos completos. Su desempeño final se juzgará junto con GAM y XGBoost en la comparación global de la Etapa 4; sus coeficientes se utilizarán para interpretar asociaciones lineales, teniendo en cuenta los diagnósticos de multicolinealidad, heterocedasticidad y dependencia temporal residual.
