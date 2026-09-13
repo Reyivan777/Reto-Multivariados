@@ -21,10 +21,10 @@ execute:
 Etapa 4.
 Fase 1: problema final fijado a 24 horas.
 Fase 2: modelos predictivos finales concentrados en GAM y XGBoost.
-Fase 3: PCA incorporado como técnica de interdependencia.
+Fase 3: PCA cerrado con resultados reales.
 Fase 4: comparación final GAM vs. XGBoost cerrada con resultados de 2025.
 Fase 5: contexto espacial de las estaciones incorporado.
-Pendiente: integrar resultados del PCA, condensar preparación/modelado y redactar discusión y conclusiones finales.
+Pendiente: condensar preparación/modelado y redactar discusión, conclusiones, resumen y referencias finales.
 -->
 
 # Problema y objetivo final
@@ -108,7 +108,31 @@ La regresión lineal permanece como trabajo exploratorio del proyecto, pero no f
 
 ## Técnica de interdependencia: PCA
 
-El **Análisis de Componentes Principales (PCA)** está documentado en `quarto/PCA_etapa_4.qmd`. Se utiliza sobre el periodo de desarrollo 2021-2024 para estudiar covariación y redundancia entre las señales de O3 y las variables meteorológicas. Los componentes no se introducen como predictores en GAM o XGBoost, por lo que el PCA funciona como análisis multivariado complementario sin modificar los modelos ya definidos.
+El **Análisis de Componentes Principales (PCA)** está documentado en `quarto/PCA_etapa_4.qmd`. Se utiliza sobre el periodo de desarrollo 2021-2024 para estudiar covariación y redundancia entre `O3_t`, `O3_lag_24`, radiación solar, temperatura, humedad relativa y las dos componentes vectoriales del viento. Las variables se estandarizan antes del análisis. Los componentes no se introducen como predictores en GAM o XGBoost, por lo que el PCA funciona como análisis multivariado complementario sin modificar los modelos ya definidos.
+
+# Resultados del PCA
+
+El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, equivalentes a una cobertura de **75.0%** durante 2021-2024.
+
+| Componente | Varianza explicada (%) | Varianza acumulada (%) |
+|---|---:|---:|
+| PC1 | 39.41 | 39.41 |
+| PC2 | 16.05 | 55.45 |
+| PC3 | 12.45 | 67.90 |
+| PC4 | 11.43 | 79.33 |
+| PC5 | 8.95 | 88.28 |
+
+Los primeros cuatro componentes explican 79.33% de la variabilidad, por lo que se requieren **cinco componentes para superar el 80%**, alcanzando 88.28%. Esto indica que existe estructura compartida entre las variables, pero no una reducción extrema de dimensionalidad: la variabilidad relevante se distribuye entre varios patrones.
+
+## Interpretación de los primeros componentes
+
+En `PC1`, las cargas de mayor magnitud corresponden a `O3_t` (0.507), `O3_lag_24` (0.458), `TEMP` (0.445), `RH` (-0.390) y `SR` (0.351). El componente representa principalmente un contraste entre condiciones de **mayor O3, temperatura y radiación** frente a **mayor humedad relativa**. La cercanía entre las cargas de `O3_t` y `O3_lag_24` confirma que el nivel actual de ozono y el valor de la misma hora del día anterior contienen información parcialmente redundante, coherente con la fuerte persistencia diaria utilizada por los modelos predictivos.
+
+`PC2` está dominado por las componentes del viento: `WS_cos` (-0.735) y `WS_sin` (0.599). Por ello, este eje captura principalmente variación asociada con la combinación de rapidez y dirección del viento, casi separada del patrón principal de O3 y temperatura.
+
+En `PC3`, las mayores cargas corresponden a `SR` (-0.639), `WS_cos` (0.440), `WS_sin` (0.439) y `RH` (-0.373). Este componente refleja un contraste adicional entre radiación/humedad y la estructura vectorial del viento. Como en todo PCA, el signo de una componente puede invertirse sin cambiar su interpretación; lo importante es la relación relativa entre las cargas.
+
+El biplot de `PC1` y `PC2` muestra a `O3_t` y `O3_lag_24` orientados prácticamente en la misma dirección, mientras que `RH` se proyecta en sentido opuesto sobre el primer componente. Las componentes del viento se orientan principalmente sobre `PC2`. En conjunto, el PCA respalda tres ideas útiles para el modelado: existe persistencia temporal marcada del O3, la meteorología aporta estructura adicional y el viento representa una dimensión distinta que no queda resumida únicamente por el nivel de ozono.
 
 # Resultados de la comparación final
 
@@ -153,7 +177,7 @@ Esta distribución constituye una **limitación importante de la comparación di
 
 # Alcance y siguientes pasos
 
-Con la comparación predictiva cerrada, los resultados centrales para 2025 ya están definidos. Antes de redactar las conclusiones definitivas se incorporarán los resultados reales del PCA y se condensarán las etapas anteriores de preparación y exploración para conservar únicamente la evidencia necesaria en el reporte final.
+Con el PCA y la comparación predictiva ya cerrados, los principales resultados cuantitativos de la Etapa 4 están definidos. El siguiente trabajo consiste en condensar la preparación de datos y el desarrollo de modelos dentro de la estructura exigida para el reporte final, y después redactar discusión, conclusiones, resumen, referencias y declaratoria de uso de IA.
 
 ## Fuentes incorporadas en esta fase
 
