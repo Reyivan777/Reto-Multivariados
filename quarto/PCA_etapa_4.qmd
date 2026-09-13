@@ -1,0 +1,268 @@
+---
+title: "PCA para la estructura multivariada del O3 y la meteorología"
+author: "Equipo 4"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Objetivo
+
+Este archivo incorpora el **Análisis de Componentes Principales (PCA)** como técnica de interdependencia para la Etapa 4. Su propósito no es sustituir al GAM ni a XGBoost, sino resumir la estructura conjunta de las variables numéricas más relevantes para el problema final y detectar qué señales tienden a variar de manera similar.
+
+Para mantener coherencia con el reto final, el PCA se concentra en:
+
+- estaciones `NTE`, `NTE2`, `NO` y `NE`;
+- horas entre 10:00 y 20:00;
+- periodo 2021-2024;
+- variables disponibles en el instante de origen del pronóstico.
+
+Se excluye 2025 de este análisis para mantenerlo completamente fuera de las decisiones metodológicas previas a la prueba final.
+
+Las variables seleccionadas son `O3_t`, `O3_lag_24`, `SR`, `TEMP`, `RH`, `WS_sin` y `WS_cos`. De esta forma se combinan dos tipos de información que también aparecen en los modelos finales: historia reciente del ozono y condiciones meteorológicas.
+
+# Carga de la base
+
+```{r}
+#| label: configuracion-pca
+library(tidyverse)
+library(here)
+library(lubridate)
+
+options(scipen = 999)
+set.seed(123)
+```
+
+```{r}
+#| label: carga-base-pca
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+if (!file.exists(ruta_base_modelado)) {
+  stop(
+    "No se encontró data/base_modelado_o3.rds. ",
+    "Renderiza primero quarto/reporte.qmd para generar la base de modelado."
+  )
+}
+
+base_origen_modelado <- readRDS(ruta_base_modelado)
+```
+
+# Preparación de las variables
+
+```{r}
+#| label: base-pca
+variables_pca <- c(
+  "O3_t", "O3_lag_24",
+  "SR", "TEMP", "RH",
+  "WS_sin", "WS_cos"
+)
+
+base_pca <- base_origen_modelado |>
+  mutate(
+    Anio = year(fecha_hora),
+    Hora = hour(fecha_hora),
+    WS_sin = WS * WD_sin,
+    WS_cos = WS * WD_cos
+  ) |>
+  filter(
+    Anio %in% 2021:2024,
+    between(Hora, 10, 20),
+    Estacion %in% c("NTE", "NTE2", "NO", "NE")
+  ) |>
+  select(Estacion, fecha_hora, all_of(variables_pca))
+```
+
+El PCA requiere observaciones completas para todas las variables incluidas. Por ello, antes de ajustarlo se reporta la cobertura real del subconjunto utilizado.
+
+```{r}
+#| label: cobertura-pca
+resumen_pca <- tibble(
+  Observaciones_candidatas = nrow(base_pca),
+  Casos_completos = sum(complete.cases(base_pca[, variables_pca])),
+  Cobertura_pct = 100 * Casos_completos / Observaciones_candidatas
+)
+
+resumen_pca |>
+  mutate(Cobertura_pct = round(Cobertura_pct, 1)) |>
+  knitr::kable(caption = "Cobertura de casos completos para el PCA")
+```
+
+```{r}
+#| label: casos-completos-pca
+base_pca_completa <- base_pca |>
+  drop_na(all_of(variables_pca))
+```
+
+# Estandarización y ajuste
+
+Las variables se encuentran en escalas y unidades diferentes, por lo que el PCA se calcula sobre variables centradas y estandarizadas. Así, ninguna variable domina únicamente por tener una varianza numéricamente mayor.
+
+```{r}
+#| label: ajuste-pca
+modelo_pca <- prcomp(
+  base_pca_completa |>
+    select(all_of(variables_pca)),
+  center = TRUE,
+  scale. = TRUE
+)
+```
+
+# Varianza explicada
+
+```{r}
+#| label: varianza-pca
+varianza_pca <- modelo_pca$sdev^2
+
+resumen_componentes <- tibble(
+  Componente = paste0("PC", seq_along(varianza_pca)),
+  Autovalor = varianza_pca,
+  Varianza_pct = 100 * varianza_pca / sum(varianza_pca),
+  Varianza_acumulada_pct = cumsum(100 * varianza_pca / sum(varianza_pca))
+)
+
+resumen_componentes |>
+  mutate(across(where(is.numeric), ~ round(.x, 2))) |>
+  knitr::kable(caption = "Varianza explicada por los componentes principales")
+```
+
+```{r}
+#| label: scree-pca
+#| fig-cap: "Varianza explicada por cada componente principal"
+#| fig-width: 7
+#| fig-height: 4.5
+resumen_componentes |>
+  mutate(Componente = factor(Componente, levels = Componente)) |>
+  ggplot(aes(x = Componente, y = Varianza_pct)) +
+  geom_col() +
+  geom_line(aes(group = 1)) +
+  geom_point() +
+  labs(
+    x = "Componente principal",
+    y = "Varianza explicada (%)"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| label: componentes-80-pca
+n_componentes_80 <- which(resumen_componentes$Varianza_acumulada_pct >= 80)[1]
+```
+
+Los primeros **`r n_componentes_80` componentes** explican al menos el 80% de la variabilidad total del conjunto estandarizado. Este valor se utiliza únicamente como resumen descriptivo de la dimensionalidad y no para transformar los predictores de GAM o XGBoost.
+
+# Cargas de los componentes
+
+Las cargas indican qué variables contribuyen con mayor intensidad a cada componente. El signo debe interpretarse de forma relativa: variables con cargas del mismo signo tienden a moverse en la misma dirección dentro del componente, mientras que signos opuestos representan contrastes.
+
+```{r}
+#| label: cargas-pca
+tabla_cargas <- as.data.frame(modelo_pca$rotation) |>
+  rownames_to_column("Variable") |>
+  as_tibble()
+
+knitr::kable(
+  tabla_cargas |>
+    select(Variable, PC1, PC2, PC3) |>
+    mutate(across(where(is.numeric), ~ round(.x, 3))),
+  caption = "Cargas de las variables en los primeros tres componentes"
+)
+```
+
+```{r}
+#| label: variables-dominantes-pca
+variables_dominantes <- tabla_cargas |>
+  pivot_longer(
+    cols = starts_with("PC"),
+    names_to = "Componente",
+    values_to = "Carga"
+  ) |>
+  filter(Componente %in% c("PC1", "PC2", "PC3")) |>
+  group_by(Componente) |>
+  slice_max(order_by = abs(Carga), n = 3, with_ties = FALSE) |>
+  ungroup() |>
+  arrange(Componente, desc(abs(Carga)))
+
+variables_dominantes |>
+  mutate(Carga = round(Carga, 3)) |>
+  knitr::kable(caption = "Tres variables con mayor carga absoluta en PC1, PC2 y PC3")
+```
+
+# Visualización de observaciones y variables
+
+Para evitar una gráfica ilegible con decenas de miles de observaciones, se utiliza una muestra reproducible únicamente para visualizar los puntajes. El PCA y todas las tablas anteriores sí se calculan con todos los casos completos.
+
+```{r}
+#| label: scores-pca
+scores_pca <- as_tibble(modelo_pca$x[, 1:2]) |>
+  bind_cols(
+    base_pca_completa |>
+      select(Estacion, fecha_hora)
+  )
+
+set.seed(123)
+
+scores_muestra <- scores_pca |>
+  slice_sample(n = min(4000, nrow(scores_pca)))
+
+cargas_biplot <- tabla_cargas |>
+  select(Variable, PC1, PC2)
+
+factor_flechas <- 0.7 * min(
+  max(abs(scores_muestra$PC1)) / max(abs(cargas_biplot$PC1)),
+  max(abs(scores_muestra$PC2)) / max(abs(cargas_biplot$PC2))
+)
+
+cargas_biplot <- cargas_biplot |>
+  mutate(
+    PC1_plot = PC1 * factor_flechas,
+    PC2_plot = PC2 * factor_flechas
+  )
+```
+
+```{r}
+#| label: biplot-pca
+#| fig-cap: "PCA de O3 y variables meteorológicas: puntajes y cargas en PC1-PC2"
+#| fig-width: 8
+#| fig-height: 6
+ggplot(scores_muestra, aes(x = PC1, y = PC2, shape = Estacion)) +
+  geom_point(alpha = 0.18, size = 1) +
+  geom_segment(
+    data = cargas_biplot,
+    aes(x = 0, y = 0, xend = PC1_plot, yend = PC2_plot),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.16, "cm"))
+  ) +
+  geom_text(
+    data = cargas_biplot,
+    aes(x = PC1_plot, y = PC2_plot, label = Variable),
+    inherit.aes = FALSE,
+    vjust = -0.4
+  ) +
+  labs(
+    x = paste0("PC1 (", round(resumen_componentes$Varianza_pct[1], 1), "%)"),
+    y = paste0("PC2 (", round(resumen_componentes$Varianza_pct[2], 1), "%)")
+  ) +
+  theme_minimal()
+```
+
+# Interpretación para el reporte final
+
+```{r}
+#| label: resumen-interpretacion-pca
+resumen_dominantes <- variables_dominantes |>
+  group_by(Componente) |>
+  summarise(
+    Variables = paste0(Variable, " (", sprintf("%.2f", Carga), ")", collapse = ", "),
+    .groups = "drop"
+  )
+```
+
+El PCA se utilizará en el reporte final como una técnica de **interdependencia** para describir la estructura conjunta de las variables, no como un paso obligatorio de reducción antes del modelado. En particular, la interpretación se apoyará en la varianza explicada, las cargas de PC1-PC3 y el biplot. Las variables dominantes se obtienen automáticamente del resultado real al renderizar el documento, evitando fijar conclusiones antes de observar las salidas.
+
+El análisis con PCA no modifica la especificación final de GAM ni XGBoost. Su función es complementar la comparación predictiva mostrando qué variables contienen información redundante o contrastante y cómo se organiza la variabilidad multivariada del conjunto de desarrollo 2021-2024.
