@@ -3,7 +3,7 @@ title: "Comparación final GAM vs. XGBoost para O3 a 24 horas"
 author: "Equipo 4"
 date: today
 format:
-  pdf:
+  html:
     toc: true
     toc-depth: 3
 execute:
