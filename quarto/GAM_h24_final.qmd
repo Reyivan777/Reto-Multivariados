@@ -1,0 +1,331 @@
+---
+title: "GAM final para O3 a 24 horas"
+author: "Equipo 4"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Objetivo
+
+Este archivo deja una versión compacta y cerrada del **Modelo Aditivo Generalizado (GAM)** para la Etapa 4. El desarrollo exploratorio de horizontes y familias permanece documentado en `GAM.qmd`; aquí se conserva únicamente la especificación final que responde al problema definitivo del reto:
+
+- estaciones: `NTE`, `NTE2`, `NO` y `NE`;
+- horizonte: **24 horas**;
+- horas objetivo: 10:00-20:00;
+- entrenamiento inicial: 2021-2023;
+- validación: 2024;
+- reentrenamiento final: 2021-2024;
+- prueba final: 2025;
+- familia final: Gamma con enlace logarítmico.
+
+El GAM complementa a la regresión lineal porque permite relaciones no lineales sin perder la posibilidad de visualizar el efecto parcial de cada predictor.
+
+# Carga de la base
+
+```{r}
+#| label: configuracion-gam-final
+library(tidyverse)
+library(here)
+library(lubridate)
+library(mgcv)
+library(gratia)
+
+options(scipen = 999)
+set.seed(123)
+```
+
+```{r}
+#| label: carga-base-gam-final
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+if (!file.exists(ruta_base_modelado)) {
+  stop(
+    "No se encontró data/base_modelado_o3.rds. ",
+    "Renderiza primero quarto/reporte.qmd para generar la base de modelado."
+  )
+}
+
+base_origen_modelado <- readRDS(ruta_base_modelado)
+```
+
+# Construcción del problema a 24 horas
+
+Para mantener una interpretación clara, `O3_alineado_1d` representa el O3 observado a la misma hora del día anterior y `O3_alineado_2d` el observado a esa misma hora dos días antes del objetivo.
+
+```{r}
+#| label: base-gam-h24-final
+base_h24_gam <- base_origen_modelado |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_alineado_1d = O3_t,
+    O3_alineado_2d = lag(O3_t, 24),
+    O3_objetivo = lead(O3_t, 24)
+  ) |>
+  ungroup() |>
+  mutate(
+    WS_sin = WS * WD_sin,
+    WS_cos = WS * WD_cos,
+    fecha_objetivo = fecha_hora + hours(24),
+    Anio_objetivo = year(fecha_objetivo),
+    Hora_objetivo = hour(fecha_objetivo),
+    Mes_objetivo = month(fecha_objetivo),
+    Periodo = case_when(
+      Anio_objetivo %in% 2021:2023 ~ "Entrenamiento",
+      Anio_objetivo == 2024 ~ "Validacion",
+      Anio_objetivo == 2025 ~ "Prueba",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  filter(
+    !is.na(Periodo),
+    between(Hora_objetivo, 10, 20),
+    !is.na(O3_objetivo)
+  )
+```
+
+# Predictores y casos completos
+
+La especificación conserva los predictores seleccionados durante el desarrollo del GAM, pero los nombres de los rezagos se expresan ahora con respecto al objetivo para que su interpretación sea consistente con XGBoost y la regresión lineal final.
+
+```{r}
+#| label: predictores-gam-final
+predictores_gam_final <- c(
+  "O3_alineado_1d", "O3_alineado_2d",
+  "SR", "TEMP", "RH", "WS_sin", "WS_cos",
+  "Hora_objetivo", "Mes_objetivo", "Estacion"
+)
+
+base_h24_gam_completa <- base_h24_gam |>
+  drop_na(all_of(predictores_gam_final)) |>
+  mutate(Estacion = factor(Estacion))
+
+base_h24_gam_completa |>
+  count(Periodo, name = "Casos_completos") |>
+  left_join(
+    base_h24_gam |> count(Periodo, name = "Objetivos_disponibles"),
+    by = "Periodo"
+  ) |>
+  mutate(Cobertura_pct = round(100 * Casos_completos / Objetivos_disponibles, 1)) |>
+  knitr::kable(caption = "Cobertura de casos completos para el GAM final")
+```
+
+# Validación 2024
+
+La familia Gamma con enlace logarítmico fue seleccionada durante el desarrollo previo porque el O3 es positivo y el diagnóstico del modelo gaussiano mostraba heterocedasticidad. En esta versión final no se vuelve a seleccionar la familia utilizando 2025.
+
+```{r}
+#| label: ajuste-gam-validacion
+entrenamiento_gam <- base_h24_gam_completa |>
+  filter(Periodo == "Entrenamiento")
+
+validacion_gam <- base_h24_gam_completa |>
+  filter(Periodo == "Validacion")
+
+modelo_gam_validacion <- bam(
+  O3_objetivo ~
+    s(O3_alineado_1d, k = 10) +
+    s(O3_alineado_2d, k = 10) +
+    s(SR, k = 10) +
+    s(TEMP, k = 15) +
+    s(RH, k = 10) +
+    s(WS_sin, k = 10) +
+    s(WS_cos, k = 10) +
+    s(Hora_objetivo, k = 8) +
+    s(Mes_objetivo, bs = "cc", k = 10) +
+    Estacion,
+  data = entrenamiento_gam,
+  family = Gamma(link = "log"),
+  method = "fREML",
+  discrete = TRUE
+)
+
+pred_gam_validacion <- predict(
+  modelo_gam_validacion,
+  newdata = validacion_gam,
+  type = "response"
+)
+```
+
+```{r}
+#| label: funcion-metricas-gam-final
+calcular_metricas <- function(observado, predicho) {
+  tibble(
+    MAE = mean(abs(observado - predicho)),
+    RMSE = sqrt(mean((observado - predicho)^2))
+  )
+}
+
+metricas_persistencia_validacion_gam <- calcular_metricas(
+  validacion_gam$O3_objetivo,
+  validacion_gam$O3_alineado_1d
+) |>
+  mutate(Modelo = "Persistencia diaria", Observaciones = nrow(validacion_gam), .before = 1)
+
+metricas_gam_validacion <- calcular_metricas(
+  validacion_gam$O3_objetivo,
+  pred_gam_validacion
+) |>
+  mutate(Modelo = "GAM Gamma", Observaciones = nrow(validacion_gam), .before = 1)
+
+bind_rows(
+  metricas_persistencia_validacion_gam,
+  metricas_gam_validacion
+) |>
+  mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Validación 2024: persistencia diaria frente a GAM a 24 horas")
+```
+
+# Modelo final y prueba 2025
+
+La especificación queda congelada después de la validación. El modelo definitivo se reentrena con 2021-2024 y 2025 se utiliza únicamente como prueba final.
+
+```{r}
+#| label: ajuste-gam-final-2025
+entrenamiento_final_gam <- base_h24_gam_completa |>
+  filter(Anio_objetivo %in% 2021:2024)
+
+prueba_final_gam <- base_h24_gam_completa |>
+  filter(Anio_objetivo == 2025)
+
+modelo_gam_final <- bam(
+  O3_objetivo ~
+    s(O3_alineado_1d, k = 10) +
+    s(O3_alineado_2d, k = 10) +
+    s(SR, k = 10) +
+    s(TEMP, k = 15) +
+    s(RH, k = 10) +
+    s(WS_sin, k = 10) +
+    s(WS_cos, k = 10) +
+    s(Hora_objetivo, k = 8) +
+    s(Mes_objetivo, bs = "cc", k = 10) +
+    Estacion,
+  data = entrenamiento_final_gam,
+  family = Gamma(link = "log"),
+  method = "fREML",
+  discrete = TRUE
+)
+
+pred_gam_final_2025 <- predict(
+  modelo_gam_final,
+  newdata = prueba_final_gam,
+  type = "response"
+)
+```
+
+## Resumen y diagnósticos del ajuste
+
+```{r}
+#| label: resumen-gam-final-h24
+summary(modelo_gam_final)
+```
+
+```{r}
+#| label: concurvity-gam-final-h24
+concurvity(modelo_gam_final, full = TRUE)
+```
+
+```{r}
+#| label: gam-check-final-h24
+#| fig-cap: "Diagnóstico del GAM final a 24 horas"
+gam.check(modelo_gam_final)
+```
+
+```{r}
+#| label: efectos-gam-final-h24
+#| fig-cap: "Efectos parciales del GAM final a 24 horas"
+#| fig-width: 9
+#| fig-height: 7
+draw(modelo_gam_final)
+```
+
+# Desempeño final
+
+```{r}
+#| label: metricas-gam-final-2025
+metricas_persistencia_final_gam <- calcular_metricas(
+  prueba_final_gam$O3_objetivo,
+  prueba_final_gam$O3_alineado_1d
+) |>
+  mutate(Modelo = "Persistencia diaria", Observaciones = nrow(prueba_final_gam), .before = 1)
+
+metricas_gam_final_2025 <- calcular_metricas(
+  prueba_final_gam$O3_objetivo,
+  pred_gam_final_2025
+) |>
+  mutate(Modelo = "GAM Gamma", Observaciones = nrow(prueba_final_gam), .before = 1)
+
+comparacion_final_gam_2025 <- bind_rows(
+  metricas_persistencia_final_gam,
+  metricas_gam_final_2025
+)
+
+comparacion_final_gam_2025 |>
+  mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Prueba final 2025: persistencia diaria frente a GAM a 24 horas")
+```
+
+En 2025, sobre **`r format(nrow(prueba_final_gam), big.mark = ",")` casos completos**, el GAM obtiene MAE de **`r round(metricas_gam_final_2025$MAE[[1]], 3)`** y RMSE de **`r round(metricas_gam_final_2025$RMSE[[1]], 3)`**. La mejora respecto a persistencia sobre esa misma muestra es de **`r round(100 * (metricas_persistencia_final_gam$MAE[[1]] - metricas_gam_final_2025$MAE[[1]]) / metricas_persistencia_final_gam$MAE[[1]], 1)`% en MAE** y **`r round(100 * (metricas_persistencia_final_gam$RMSE[[1]] - metricas_gam_final_2025$RMSE[[1]]) / metricas_persistencia_final_gam$RMSE[[1]], 1)`% en RMSE**.
+
+## Desempeño por estación
+
+```{r}
+#| label: metricas-estacion-gam-final
+resultados_gam_2025 <- prueba_final_gam |>
+  mutate(
+    Pred_GAM = pred_gam_final_2025,
+    Residuo_GAM = O3_objetivo - Pred_GAM
+  )
+
+metricas_estacion_gam_2025 <- resultados_gam_2025 |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = n(),
+    MAE_Persistencia = mean(abs(O3_objetivo - O3_alineado_1d)),
+    MAE_GAM = mean(abs(O3_objetivo - Pred_GAM)),
+    RMSE_Persistencia = sqrt(mean((O3_objetivo - O3_alineado_1d)^2)),
+    RMSE_GAM = sqrt(mean((O3_objetivo - Pred_GAM)^2)),
+    .groups = "drop"
+  )
+
+metricas_estacion_gam_2025 |>
+  mutate(across(where(is.numeric) & !matches("Observaciones"), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Desempeño del GAM final por estación en 2025")
+```
+
+# Dependencia temporal de residuos
+
+El análisis se realiza por estación para no mezclar series temporales distintas. Debido a que solo se evalúan horas objetivo entre 10:00 y 20:00, el rezago secuencial no siempre equivale a una hora real cuando se cruza de un día al siguiente.
+
+```{r}
+#| label: ljung-box-gam-final
+ljung_box_gam <- resultados_gam_2025 |>
+  arrange(Estacion, fecha_objetivo) |>
+  group_by(Estacion) |>
+  group_modify(~ {
+    prueba <- Box.test(.x$Residuo_GAM, lag = 24, type = "Ljung-Box")
+    tibble(
+      Estadistico_X2 = unname(prueba$statistic),
+      gl = unname(prueba$parameter),
+      p_value = prueba$p.value
+    )
+  }) |>
+  ungroup()
+
+ljung_box_gam |>
+  mutate(across(where(is.numeric), ~ round(.x, 4))) |>
+  knitr::kable(caption = "Ljung-Box de residuos del GAM final por estación")
+```
+
+`r if (all(ljung_box_gam$p_value < 0.05)) "Las cuatro estaciones muestran evidencia de autocorrelación residual. Por ello, los p-values de los términos suaves deben interpretarse con cautela; la evaluación predictiva sobre 2025, en cambio, sigue siendo válida como prueba fuera de muestra." else if (any(ljung_box_gam$p_value < 0.05)) paste0(sum(ljung_box_gam$p_value < 0.05), " de las cuatro estaciones muestran evidencia de autocorrelación residual. La inferencia sobre los términos suaves debe interpretarse con cautela, aunque la evaluación predictiva fuera de muestra se mantiene válida.") else "No se detecta evidencia de autocorrelación residual al nivel de 0.05 en ninguna estación para este diagnóstico."`
+
+# Conclusión
+
+El GAM queda cerrado con el mismo horizonte, ventana horaria y separación cronológica definidos para la Etapa 4. La familia Gamma y la especificación de predictores se fijan antes de observar la prueba final de 2025. El modelo se compara con persistencia sobre su propia muestra de casos completos y reporta además resultados por estación y dependencia temporal residual. La comparación definitiva contra MLR y XGBoost se realizará posteriormente sobre una base común de evaluación para evitar atribuir diferencias de desempeño únicamente a diferencias en cobertura de datos.
