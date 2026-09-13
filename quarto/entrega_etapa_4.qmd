@@ -1,7 +1,7 @@
 ---
 title: "Predicción de ozono a 24 horas en la Zona Metropolitana de Monterrey"
+subtitle: "Equipo 4"
 author:
-  - "Equipo 4"
   - "Rey Iván de la Fuente Chávez, A01709445"
   - "Jannette Cristina Flores Rodríguez, A01255711"
   - "Matías Romero Mariné, A01708802"
@@ -152,6 +152,34 @@ El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, eq
 
 : Varianza explicada por los primeros cinco componentes principales. {#tbl-pca}
 
+```{r}
+#| label: fig-pca-varianza
+#| fig-cap: "Varianza explicada y acumulada por los primeros componentes del PCA."
+#| fig-width: 7
+#| fig-height: 4.2
+pca_varianza <- data.frame(
+  Componente = factor(paste0("PC", 1:5), levels = paste0("PC", 1:5)),
+  Varianza = c(39.41, 16.05, 12.45, 11.43, 8.95),
+  Acumulada = c(39.41, 55.45, 67.90, 79.33, 88.28)
+)
+
+ggplot2::ggplot(pca_varianza, ggplot2::aes(x = Componente)) +
+  ggplot2::geom_col(ggplot2::aes(y = Varianza)) +
+  ggplot2::geom_line(
+    ggplot2::aes(y = Acumulada, group = 1),
+    linewidth = 0.8
+  ) +
+  ggplot2::geom_point(ggplot2::aes(y = Acumulada), size = 2) +
+  ggplot2::geom_hline(yintercept = 80, linetype = "dashed") +
+  ggplot2::labs(
+    x = NULL,
+    y = "Varianza (%)"
+  ) +
+  ggplot2::theme_minimal()
+```
+
+La figura permite observar que `PC1` concentra la mayor proporción individual de variabilidad, pero los componentes posteriores siguen aportando información relevante. La varianza acumulada supera 80% hasta el quinto componente, por lo que la estructura multivariada no puede resumirse adecuadamente en una o dos dimensiones.
+
 En `PC1`, las cargas de mayor magnitud corresponden a `O3_t` (0.507), `O3_lag_24` (0.458), `TEMP` (0.445), `RH` (-0.390) y `SR` (0.351). Este componente representa principalmente un contraste entre mayor O3, temperatura y radiación frente a mayor humedad relativa. La proximidad entre las cargas de O3 actual y su rezago diario respalda la importancia de la persistencia temporal.
 
 `PC2` está dominado por `WS_cos` (-0.735) y `WS_sin` (0.599), por lo que captura principalmente la estructura vectorial del viento. En `PC3` destacan radiación solar (-0.639), ambas componentes del viento (aproximadamente 0.44) y humedad (-0.373). En conjunto, el PCA indica que la meteorología no puede resumirse únicamente mediante el nivel previo de O3 y que el viento aporta una dimensión adicional de variabilidad.
@@ -182,6 +210,38 @@ La comparación principal utiliza exactamente las mismas 3,435 observaciones. Co
 | XGBoost | 3,435 | 12.110 | 16.579 |
 
 : Comparación final sobre la misma muestra de 2025. {#tbl-comun}
+
+```{r}
+#| label: fig-comparacion-final
+#| fig-cap: "Comparación de MAE y RMSE entre persistencia, GAM y XGBoost sobre la muestra común de 2025."
+#| fig-width: 7
+#| fig-height: 4.3
+comparacion_visual <- data.frame(
+  Modelo = factor(
+    rep(c("Persistencia diaria", "GAM Gamma", "XGBoost"), each = 2),
+    levels = c("Persistencia diaria", "GAM Gamma", "XGBoost")
+  ),
+  Metrica = rep(c("MAE", "RMSE"), times = 3),
+  Error = c(14.144, 19.561, 12.270, 16.620, 12.110, 16.579)
+)
+
+ggplot2::ggplot(
+  comparacion_visual,
+  ggplot2::aes(x = Modelo, y = Error, fill = Modelo)
+) +
+  ggplot2::geom_col(show.legend = FALSE) +
+  ggplot2::facet_wrap(~Metrica, scales = "free_y") +
+  ggplot2::labs(
+    x = NULL,
+    y = "Error"
+  ) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 20, hjust = 1)
+  )
+```
+
+La figura muestra que GAM y XGBoost reducen de forma clara ambos errores respecto a persistencia diaria. La diferencia visual entre GAM y XGBoost es pequeña, consistente con la conclusión de que la ventaja de XGBoost en precisión existe, pero es marginal frente al GAM.
 
 XGBoost reduce el MAE del GAM en aproximadamente **1.3%** y el RMSE en **0.25%**. Por tanto, los resultados no muestran una superioridad amplia de XGBoost en precisión pura. Ambos modelos ofrecen un desempeño muy similar cuando reciben la misma muestra; la ventaja más clara de XGBoost aparece en la cantidad de observaciones que puede conservar.
 
