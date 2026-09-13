@@ -1,7 +1,7 @@
 ---
-title: "Reporte final del reto SIMA: predicción de ozono a 24 horas"
+title: "Predicción de ozono a 24 horas en la Zona Metropolitana de Monterrey"
 author:
-  - "Equipo 4:"
+  - "Equipo 4"
   - "Rey Iván de la Fuente Chávez, A01709445"
   - "Jannette Cristina Flores Rodríguez, A01255711"
   - "Matías Romero Mariné, A01708802"
@@ -10,73 +10,59 @@ author:
 date: today
 format:
   pdf:
-    toc: true
-    toc-depth: 2
+    toc: false
     number-sections: true
+    geometry:
+      - margin=1in
+    fontsize: 11pt
+    linestretch: 1.0
 execute:
   echo: false
 ---
 
-<!--
-Etapa 4.
-Fase 1: problema final fijado a 24 horas.
-Fase 2: modelos predictivos finales concentrados en GAM y XGBoost.
-Fase 3: PCA cerrado con resultados reales.
-Fase 4: comparación final GAM vs. XGBoost cerrada con resultados de 2025.
-Fase 5: contexto espacial de las estaciones incorporado.
-Fase 6: preparación de datos y modelado final condensados.
-Fase 7: discusión y conclusiones finales redactadas.
-Pendiente: resumen de una página, referencias, declaratoria de uso de IA y auditoría final de extensión/formato.
--->
+```{=latex}
+\newpage
+```
 
-# Problema y objetivo final
+# Resumen {.unnumbered}
 
-## Contexto y delimitación
+Este proyecto evalúa la posibilidad de **predecir la concentración horaria de ozono troposférico (O3) con 24 horas de anticipación** en las estaciones `NTE`, `NTE2`, `NO` y `NE` del Sistema Integral de Monitoreo Ambiental (SIMA) de Nuevo León. El análisis se concentra en horas objetivo entre las 10:00 y las 20:00, periodo en el que el O3 presenta sus concentraciones diurnas más relevantes. Las bases originales abarcan 2020-2025; sin embargo, 2020 se excluyó del modelado debido a que más de 93% de las mediciones de O3 estaban ausentes en las cuatro estaciones consideradas. El periodo útil quedó definido entre 2021 y junio de 2025.
 
-El proyecto utiliza registros horarios del Sistema Integral de Monitoreo Ambiental (SIMA) de Nuevo León para estudiar la concentración de ozono troposférico (O3) en la Zona Metropolitana de Monterrey. Durante las etapas anteriores se exploraron distintos contaminantes, variables meteorológicas, estaciones y horizontes de predicción. Ese proceso permitió delimitar el reto a una tarea concreta y evaluable: **predecir la concentración de O3 con 24 horas de anticipación**.
+La preparación de datos incluyó homologación de variables, revisión de duplicados, transformación de mediciones físicamente inválidas a valores faltantes, construcción de variables temporales y representación vectorial del viento. El O3 no se imputó cuando funcionó como respuesta o como rezago, ya que existían interrupciones prolongadas cuya sustitución habría introducido grandes bloques de información sintética. La separación temporal utilizó 2021-2023 para desarrollo inicial, 2024 para validación y selección de especificaciones, 2021-2024 para reentrenamiento final y 2025 exclusivamente como prueba fuera de muestra.
 
-La selección de este horizonte no implica que los análisis realizados para 1, 6 y 12 horas dejen de ser útiles. Estos se conservan como antecedentes exploratorios, mientras que la comparación oficial y las conclusiones del reporte final se concentran en estimar O3 a la misma hora del día siguiente.
+Como técnica de **interdependencia** se utilizó Análisis de Componentes Principales (PCA). Con 48,240 casos completos de 2021-2024, cinco componentes fueron necesarios para superar 80% de varianza acumulada. El primer componente relacionó principalmente O3 actual, O3 rezagado 24 horas, temperatura y radiación solar, en contraste con humedad relativa; el segundo estuvo dominado por las componentes vectoriales del viento. Estos resultados muestran que la persistencia del O3 y la meteorología contienen información compartida, mientras el viento aporta una dimensión adicional.
 
-El análisis considera las estaciones `NTE`, `NTE2`, `NO` y `NE`, y horas objetivo entre las **10:00 y 20:00**. Aunque las bases originales abarcan 2020-2025, **2020 se excluye del modelado final** debido a la insuficiente disponibilidad de O3 documentada durante la preparación de datos. El periodo útil para modelado es, por tanto, **2021-2025**.
+Como técnica de **dependencia** se ajustó un Modelo Aditivo Generalizado (GAM) con familia Gamma y enlace logarítmico. También se entrenó XGBoost como modelo predictivo flexible. Ambos se compararon contra una referencia de persistencia diaria. Sobre una muestra común de 3,435 observaciones de 2025, la persistencia obtuvo MAE de 14.144 y RMSE de 19.561; el GAM obtuvo MAE de 12.270 y RMSE de 16.620; y XGBoost obtuvo MAE de 12.110 y RMSE de 16.579. XGBoost presentó la menor pérdida, aunque la diferencia frente al GAM fue pequeña. Su ventaja más clara fue la cobertura: pudo evaluarse sobre 7,333 observaciones en su muestra natural, frente a 3,435 casos completos del GAM.
 
-## Contexto espacial de las estaciones
+En conclusión, la información histórica de O3, meteorología, temporalidad y estación permite mejorar de forma consistente un pronóstico de persistencia a 24 horas. XGBoost resulta el candidato más conveniente cuando se prioriza disponibilidad ante datos faltantes, mientras que GAM conserva un desempeño prácticamente equivalente con mayor interpretabilidad. Las principales limitaciones son la cobertura desigual entre estaciones y que 2025 solo contiene datos hasta junio. Como trabajo futuro se propone incorporar pronósticos meteorológicos, evaluar modelos espacio-temporales y analizar específicamente episodios de O3 elevado.
 
-Las cuatro estaciones representan sectores distintos de la Zona Metropolitana de Monterrey. De acuerdo con el reporte mensual de SIMA de julio de 2024, sus ubicaciones son:
+```{=latex}
+\newpage
+```
 
-| Sigla | Estación | Ubicación | Municipio |
-|---|---|---|---|
-| NTE | Norte | Parque Los Olivos II sección | General Escobedo |
-| NTE2 | Norte 2 | Unidad Postgrado CEDEEM UANL | San Nicolás de los Garza |
-| NO | Noroeste | Prepa Militarizada San Bernabé | Monterrey |
-| NE | Noreste | Parque Los Naranjos | San Nicolás de los Garza |
+# Introducción y justificación
 
-La localización es relevante porque las concentraciones registradas dependen tanto de las emisiones como del transporte y dispersión atmosférica. SIMA registra continuamente variables como temperatura, humedad relativa, radiación solar, rapidez y dirección del viento, precisamente porque las condiciones meteorológicas modifican la acumulación y movimiento de contaminantes. Además, la Zona Metropolitana de Monterrey se encuentra condicionada por un relieve montañoso que puede limitar la ventilación regional.
+La contaminación atmosférica constituye un problema relevante de salud y gestión ambiental. Las guías globales de calidad del aire de la Organización Mundial de la Salud incluyen al ozono, material particulado, dióxido de nitrógeno, dióxido de azufre y monóxido de carbono entre los contaminantes para los que existe evidencia suficiente para establecer niveles guía basados en efectos sobre la salud (World Health Organization, 2021). En el norte de México también se han documentado asociaciones de corto plazo entre contaminación atmosférica, temperatura y mortalidad, lo que refuerza la importancia de disponer de mediciones confiables y herramientas que permitan anticipar episodios de contaminación (Cerón Bretón et al., 2020).
 
-En el caso del O3, la meteorología es especialmente importante porque se trata de un contaminante secundario. La Secretaría de Medio Ambiente de Nuevo León ha señalado que combinaciones de **alta temperatura, alta radiación y estabilidad atmosférica** favorecen su formación durante las horas centrales del día. Esto respalda tanto la ventana horaria 10:00-20:00 como la inclusión de radiación solar, temperatura, humedad y viento en el modelado.
+En la Zona Metropolitana de Monterrey (ZMM), el Sistema Integral de Monitoreo Ambiental (SIMA) registra de forma horaria contaminantes y variables meteorológicas mediante una red de estaciones. Estas series permiten estudiar no solo el estado actual de la calidad del aire, sino también si la combinación de historia reciente, meteorología y temporalidad contiene suficiente información para generar pronósticos. Para el O3 este problema es particularmente relevante porque se trata de un contaminante secundario cuya concentración responde a procesos fotoquímicos y condiciones atmosféricas. En estudios previos de predicción horaria, variables como radiación solar y temperatura han resultado especialmente informativas para anticipar O3 (Cifuentes et al., 2021).
 
-## Pregunta de investigación final
+El reto se desarrolló inicialmente con un alcance amplio que incluía varios contaminantes, estaciones y horizontes. Sin embargo, conforme avanzó la comprensión de los datos, se delimitó a una tarea más concreta: **predecir O3 con 24 horas de anticipación**. La elección responde a dos razones. Primero, el análisis exploratorio mostró un patrón diario claro y una correlación elevada entre el O3 de una hora y el observado a la misma hora del día anterior. Segundo, un horizonte de 24 horas es suficientemente exigente para evaluar si meteorología, historia adicional del contaminante y estructura temporal mejoran una referencia simple de persistencia.
+
+El proyecto no busca sustituir los procedimientos oficiales de pronóstico de SIMA ni establecer relaciones causales. Su objetivo es evaluar, dentro del alcance académico del reto, qué tan bien puede anticiparse el O3 utilizando únicamente información disponible antes de la hora objetivo. Para ello se combinan una técnica de interdependencia, PCA, con una técnica de dependencia vista en clase, GAM, y un modelo adicional de aprendizaje automático, XGBoost. La evaluación se realiza cronológicamente para evitar fuga de información y se reserva 2025 como prueba final.
+
+# Problemática y objetivo
+
+## Delimitación final
+
+El análisis considera las estaciones `NTE`, `NTE2`, `NO` y `NE`, y horas objetivo entre las **10:00 y 20:00**. Aunque las bases originales abarcan 2020-2025, **2020 se excluye del modelado final** debido a la insuficiente disponibilidad de O3. El periodo útil para modelado es **2021-2025**.
+
+La pregunta de investigación final es:
 
 **¿Con qué precisión puede predecirse la concentración horaria diurna de O3 con 24 horas de anticipación, entre las 10:00 y 20:00, en las estaciones NTE, NTE2, NO y NE de la Zona Metropolitana de Monterrey, utilizando información histórica disponible de O3, variables meteorológicas, variables temporales y estación de monitoreo durante 2021-2025?**
 
-Para predecir la concentración en un instante objetivo $t+24$, los modelos utilizan únicamente información disponible hasta el instante de origen $t$.
+El objetivo general es desarrollar, comparar y evaluar modelos capaces de predecir la concentración horaria de O3 con 24 horas de anticipación en dichas estaciones y ventana horaria, utilizando únicamente información disponible hasta el instante de origen del pronóstico.
 
-## Objetivo general
-
-Desarrollar, comparar y evaluar modelos capaces de **predecir la concentración horaria de O3 con 24 horas de anticipación**, para horas objetivo entre las 10:00 y 20:00 en las estaciones `NTE`, `NTE2`, `NO` y `NE`, utilizando información histórica disponible de O3, variables meteorológicas, características temporales y estación de monitoreo registrada por SIMA durante 2021-2025.
-
-## Objetivos específicos
-
-1. Resumir la preparación y calidad de los datos utilizados para el modelado, incluyendo la exclusión de 2020.
-2. Caracterizar la estructura multivariada de las variables relevantes mediante PCA como técnica de interdependencia.
-3. Construir predictores temporales utilizando únicamente información disponible al momento del pronóstico.
-4. Ajustar y evaluar un **GAM** como técnica de dependencia no lineal e interpretable y contrastarlo con **XGBoost**.
-5. Mantener **2025 como conjunto de prueba final** y utilizar MAE y RMSE como métricas principales.
-6. Comparar GAM y XGBoost contra una referencia de **persistencia diaria**.
-7. Analizar variables relevantes, diferencias entre estaciones y limitaciones del pronóstico a 24 horas.
-
-## Definición del problema predictivo
-
-Para cada observación de origen en el instante $t$, la respuesta es:
+Para cada observación de origen en el instante $t$, la respuesta del problema es:
 
 $$
 Y = O3_{t+24}
@@ -88,74 +74,73 @@ $$
 \widehat{O3}_{t+24}^{\text{persistencia}} = O3_t
 $$
 
-## Esquema de desarrollo y evaluación
+## Contexto espacial de las estaciones
 
-La separación temporal evita utilizar información futura durante el desarrollo:
+Las cuatro estaciones representan sectores distintos de la ZMM. La Tabla @tbl-estaciones resume sus ubicaciones de acuerdo con el reporte mensual de SIMA de julio de 2024 (Secretaría de Medio Ambiente de Nuevo León, 2024).
 
-- **2021-2023:** entrenamiento inicial.
-- **2024:** validación y selección de especificaciones e hiperparámetros.
-- **2021-2024:** reentrenamiento definitivo.
-- **2025:** prueba final.
+| Sigla | Estación | Ubicación | Municipio |
+|---|---|---|---|
+| NTE | Norte | Parque Los Olivos II sección | General Escobedo |
+| NTE2 | Norte 2 | Unidad Postgrado CEDEEM UANL | San Nicolás de los Garza |
+| NO | Noroeste | Prepa Militarizada San Bernabé | Monterrey |
+| NE | Noreste | Parque Los Naranjos | San Nicolás de los Garza |
 
-# Preparación de los datos
+: Ubicación de las estaciones analizadas. {#tbl-estaciones}
+
+La localización es relevante porque las concentraciones registradas dependen tanto de las emisiones como del transporte y dispersión atmosférica. La ZMM se encuentra además condicionada por un relieve montañoso que puede limitar la ventilación regional. Para el O3, las condiciones meteorológicas resultan especialmente importantes: la Secretaría de Medio Ambiente de Nuevo León ha señalado que combinaciones de alta temperatura, alta radiación y estabilidad atmosférica favorecen su formación durante las horas centrales del día (Secretaría de Medio Ambiente de Nuevo León, 2026). Esto respalda tanto la ventana 10:00-20:00 como la inclusión de radiación, temperatura, humedad y viento en los modelos.
+
+# Preparación de la base de datos
 
 ## Integración y control de calidad
 
 Los datos originales provienen de seis archivos de Excel, uno por año entre 2020 y 2025, con registros horarios por estación. Para el problema final se integraron únicamente `NTE`, `NTE2`, `NO` y `NE`. La base inicial de estas cuatro estaciones contiene **192,723 registros**.
 
-La primera revisión incluyó homologación de nombres y tipos de variables, conversión de banderas de ausencia, verificación de duplicados y control de rangos físicos. No se detectaron registros duplicados para una misma estación y fecha-hora. Los valores fuera de los límites de validación no provocaron la eliminación de la fila completa: únicamente la medición inválida fue convertida a `NA`.
+La preparación incluyó homologación de nombres y tipos de variables, conversión de banderas de ausencia, verificación de duplicados y control de rangos físicos. No se detectaron duplicados para una misma estación y fecha-hora. Los valores fuera de los límites de validación no provocaron la eliminación del registro completo: únicamente la medición inválida fue convertida a `NA`.
 
-Después de excluir 2020, la base conserva **157,616 registros entre 2021 y 2025**. En este periodo se transformaron **1,062 mediciones fuera de rango a `NA`** y la comprobación posterior confirmó que no permanecen valores fuera de los límites utilizados. Los valores extremos que sí se encuentran dentro de rangos físicamente válidos se conservan, ya que pueden corresponder a episodios reales de contaminación.
+Después de excluir 2020, la base conserva **157,616 registros entre 2021 y 2025**. En este periodo se transformaron **1,062 mediciones fuera de rango a `NA`** y la verificación posterior confirmó que no permanecen valores fuera de los límites definidos. Los valores extremos dentro de rangos físicamente válidos se conservaron porque pueden representar episodios reales.
 
 ## Disponibilidad de O3 y exclusión de 2020
 
-La principal decisión de calidad de datos se relaciona con la variable objetivo. En 2020 el porcentaje de O3 faltante fue de **99.90% en NE, 98.44% en NO, 99.99% en NTE y 93.33% en NTE2**. La ausencia es demasiado alta para utilizar ese año en un modelo supervisado de O3, por lo que 2020 permanece únicamente como parte de la fuente histórica y no participa en entrenamiento, validación o prueba.
+La principal decisión de calidad se relaciona con la variable objetivo. En 2020 el porcentaje de O3 faltante fue de **99.90% en NE, 98.44% en NO, 99.99% en NTE y 93.33% en NTE2**. Esta ausencia impide utilizar ese año de manera razonable en un modelo supervisado, por lo que 2020 se conserva únicamente como parte de la fuente histórica.
 
-Desde 2021 la cobertura mejora considerablemente, aunque persisten algunos bloques prolongados sin medición. Por ejemplo, al inicio de 2021 se identificaron interrupciones de más de mil horas consecutivas en varias estaciones. Debido a esta estructura, **el O3 no se imputa cuando funciona como respuesta ni cuando se utiliza como rezago**. Crear semanas de valores sintéticos podría alterar la dinámica temporal que los modelos intentan aprender. Entre 2021 y junio de 2025 permanecen **145,151 mediciones válidas de O3** después de la limpieza.
+Desde 2021 la cobertura mejora de forma considerable, aunque permanecen interrupciones prolongadas. Debido a ello, **el O3 no se imputa cuando funciona como respuesta ni cuando se utiliza como rezago**. Imputar semanas completas podría alterar la dinámica temporal que los modelos intentan aprender. Entre 2021 y junio de 2025 permanecen **145,151 mediciones válidas de O3** después de la limpieza.
 
 ## Ventana horaria y variables derivadas
 
-El análisis exploratorio mostró un ciclo diario estable: el O3 disminuye durante la madrugada, aumenta con rapidez durante la mañana, alcanza sus valores más altos en la tarde y vuelve a descender posteriormente. A partir de este patrón se definió **10:00-20:00** como ventana de evaluación. Las horas nocturnas no se eliminan, porque siguen siendo necesarias para construir la historia temporal; la restricción se aplica únicamente a las horas que pueden convertirse en objetivo del pronóstico.
+El análisis exploratorio mostró un ciclo diario estable: el O3 disminuye durante la madrugada, aumenta durante la mañana, alcanza sus valores más altos en la tarde y desciende posteriormente. Con base en este patrón se definió **10:00-20:00** como ventana de evaluación. Las horas fuera de ese intervalo permanecen disponibles para construir historia y rezagos; la restricción se aplica únicamente a las horas objetivo.
 
-La estructura temporal se representa mediante fecha, hora, mes, estación de monitoreo y transformaciones cíclicas seno-coseno para hora y mes. La dirección del viento se combina con su rapidez mediante las componentes `WS_sin` y `WS_cos`, evitando tratar los grados como una variable lineal.
+La estructura temporal se representa mediante fecha, hora, mes, estación y transformaciones cíclicas seno-coseno. La dirección y rapidez del viento se combinan mediante `WS_sin` y `WS_cos`, evitando tratar los grados como una variable lineal. El análisis de rezagos realizado con 2021-2023 mostró dependencia fuerte en las horas inmediatamente anteriores y una recuperación clara de la correlación a las 24 horas, lo que justifica utilizar el O3 de la misma hora del día anterior como referencia y predictor.
 
-El análisis de rezagos realizado exclusivamente con 2021-2023 mostró dos señales temporales importantes: una dependencia fuerte en las horas inmediatamente anteriores y una recuperación clara de la correlación al llegar a 24 horas. Esta periodicidad diaria justifica utilizar la concentración observada a la misma hora del día anterior como referencia mínima y como predictor de los modelos.
+# Modelación y validación
 
-# Metodología final
+## Estrategia temporal
 
-## Técnicas multivariadas y modelos predictivos
+La separación de datos fue estrictamente cronológica:
 
-La entrega final utiliza **PCA** como técnica de interdependencia y **GAM** como técnica de dependencia vista en clase. XGBoost se incorpora como modelo predictivo adicional para evaluar si una estructura más flexible basada en árboles puede mejorar el pronóstico. La regresión lineal desarrollada durante etapas previas permanece como trabajo exploratorio y no forma parte de la comparación final.
+- **2021-2023:** entrenamiento y desarrollo inicial.
+- **2024:** validación y selección de especificaciones o hiperparámetros.
+- **2021-2024:** reentrenamiento de los modelos definitivos.
+- **2025:** prueba final fuera de muestra.
 
-El PCA estudia la estructura conjunta de `O3_t`, `O3_lag_24`, radiación solar, temperatura, humedad relativa y las componentes vectoriales del viento utilizando únicamente 2021-2024. Los componentes se interpretan como resumen multivariado, pero no se incorporan posteriormente como entradas de GAM o XGBoost.
+La evaluación se basa en **MAE** y **RMSE**. MAE resume el tamaño promedio del error absoluto y RMSE penaliza con mayor intensidad los errores grandes. Ambos modelos se comparan contra persistencia diaria.
 
-## GAM Gamma
+## Técnicas utilizadas
 
-El GAM final modela `O3(t+24)` mediante relaciones suaves y no lineales. Incluye como predictores el O3 disponible a uno y dos días de distancia respecto al objetivo, radiación solar, temperatura, humedad relativa, las dos componentes vectoriales del viento, hora objetivo, mes objetivo y estación de monitoreo.
+La entrega final utiliza **PCA** como técnica de interdependencia y **GAM** como técnica de dependencia vista en clase. XGBoost se incorpora como modelo predictivo adicional. La regresión lineal desarrollada en etapas previas se conserva en el repositorio como trabajo exploratorio, pero no forma parte de la comparación final porque el análisis definitivo se concentró en GAM y XGBoost.
 
-Se utiliza una **familia Gamma con enlace logarítmico**, seleccionada durante el desarrollo previo después de observar heterocedasticidad en la alternativa gaussiana. La especificación queda fijada antes de evaluar 2025. El ajuste definitivo utiliza 2021-2024 y el modelo solo puede generar una predicción cuando todos sus predictores están disponibles, por lo que trabaja con casos completos.
+El **PCA** se aplica sobre 2021-2024 a `O3_t`, `O3_lag_24`, radiación solar, temperatura, humedad relativa y las componentes vectoriales del viento. Las variables se estandarizan y los componentes se utilizan únicamente para interpretar la estructura multivariada; no se incorporan como predictores de los modelos finales.
 
-Además de MAE y RMSE, el GAM conserva diagnósticos del ajuste, efectos parciales, concurvidad y una revisión de dependencia temporal de los residuos. Estos resultados permiten interpretar el modelo sin utilizar la prueba final de 2025 para modificar su especificación.
+El **GAM Gamma** modela `O3(t+24)` mediante relaciones suaves de O3 histórico, radiación, temperatura, humedad, viento, hora, mes y estación. La familia Gamma con enlace logarítmico se fijó durante el desarrollo después de que la alternativa gaussiana mostrara heterocedasticidad. El GAM requiere casos completos para producir predicciones.
 
-## XGBoost
+**XGBoost** utiliza una representación más amplia de la historia del O3, con valores alineados de uno a cuatro días, rezagos recientes, meteorología, temporalidad cíclica y estación. Los hiperparámetros se seleccionan con 2024 y *early stopping*. A diferencia del GAM, XGBoost puede trabajar directamente con valores faltantes en los predictores.
 
-XGBoost utiliza una representación más amplia de la historia del O3: valores alineados de uno a cuatro días respecto al objetivo, rezagos recientes de una a tres horas, radiación solar, temperatura, humedad relativa, viento vectorial, transformaciones cíclicas de hora y mes y la estación de monitoreo.
+Para comparar precisión de forma justa se utilizan dos perspectivas. La primera reporta la cobertura natural de cada modelo. La segunda, y principal, utiliza una **muestra común de 2025** donde GAM, XGBoost y persistencia se calculan sobre exactamente las mismas observaciones.
 
-Los hiperparámetros se seleccionan exclusivamente con **2024 como validación**, utilizando 2021-2023 para el ajuste inicial y *early stopping* para evitar prolongar innecesariamente el entrenamiento. Una vez elegida la configuración, el modelo se reentrena con 2021-2024 y se evalúa una sola vez en 2025. A diferencia del GAM, XGBoost puede trabajar directamente con valores faltantes en los predictores, característica que posteriormente resulta importante para su cobertura de evaluación.
+# Resultados
 
-## Estrategia de validación y comparación
+## Estructura multivariada mediante PCA
 
-La evaluación final se basa en **MAE** y **RMSE**. MAE resume el tamaño promedio del error absoluto, mientras que RMSE penaliza con mayor fuerza las desviaciones grandes. Ambos modelos se comparan también con persistencia diaria:
-
-$$
-\widehat{O3}_{t+24}^{\text{persistencia}} = O3_t.
-$$
-
-La comparación se realiza desde dos perspectivas. Primero se reporta la cobertura natural de cada modelo, útil para evaluar su disponibilidad operativa. Después se construye una **muestra común de 2025**, de modo que GAM y XGBoost sean evaluados exactamente sobre las mismas observaciones. Esta segunda comparación es la referencia principal para decidir si existe una diferencia real de precisión entre ambos modelos.
-
-# Resultados del PCA
-
-El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, equivalentes a una cobertura de **75.0%** durante 2021-2024.
+El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, equivalentes a una cobertura de **75.0%** durante 2021-2024. La Tabla @tbl-pca muestra que se requieren cinco componentes para superar 80% de varianza acumulada.
 
 | Componente | Varianza explicada (%) | Varianza acumulada (%) |
 |---|---:|---:|
@@ -165,23 +150,15 @@ El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, eq
 | PC4 | 11.43 | 79.33 |
 | PC5 | 8.95 | 88.28 |
 
-Los primeros cuatro componentes explican 79.33% de la variabilidad, por lo que se requieren **cinco componentes para superar el 80%**, alcanzando 88.28%. Esto indica que existe estructura compartida entre las variables, pero no una reducción extrema de dimensionalidad: la variabilidad relevante se distribuye entre varios patrones.
+: Varianza explicada por los primeros cinco componentes principales. {#tbl-pca}
 
-## Interpretación de los primeros componentes
+En `PC1`, las cargas de mayor magnitud corresponden a `O3_t` (0.507), `O3_lag_24` (0.458), `TEMP` (0.445), `RH` (-0.390) y `SR` (0.351). Este componente representa principalmente un contraste entre mayor O3, temperatura y radiación frente a mayor humedad relativa. La proximidad entre las cargas de O3 actual y su rezago diario respalda la importancia de la persistencia temporal.
 
-En `PC1`, las cargas de mayor magnitud corresponden a `O3_t` (0.507), `O3_lag_24` (0.458), `TEMP` (0.445), `RH` (-0.390) y `SR` (0.351). El componente representa principalmente un contraste entre condiciones de **mayor O3, temperatura y radiación** frente a **mayor humedad relativa**. La cercanía entre las cargas de `O3_t` y `O3_lag_24` confirma que el nivel actual de ozono y el valor de la misma hora del día anterior contienen información parcialmente redundante, coherente con la fuerte persistencia diaria utilizada por los modelos predictivos.
+`PC2` está dominado por `WS_cos` (-0.735) y `WS_sin` (0.599), por lo que captura principalmente la estructura vectorial del viento. En `PC3` destacan radiación solar (-0.639), ambas componentes del viento (aproximadamente 0.44) y humedad (-0.373). En conjunto, el PCA indica que la meteorología no puede resumirse únicamente mediante el nivel previo de O3 y que el viento aporta una dimensión adicional de variabilidad.
 
-`PC2` está dominado por las componentes del viento: `WS_cos` (-0.735) y `WS_sin` (0.599). Por ello, este eje captura principalmente variación asociada con la combinación de rapidez y dirección del viento, casi separada del patrón principal de O3 y temperatura.
+## Desempeño en cobertura natural
 
-En `PC3`, las mayores cargas corresponden a `SR` (-0.639), `WS_cos` (0.440), `WS_sin` (0.439) y `RH` (-0.373). Este componente refleja un contraste adicional entre radiación/humedad y la estructura vectorial del viento. Como en todo PCA, el signo de una componente puede invertirse sin cambiar su interpretación; lo importante es la relación relativa entre las cargas.
-
-El biplot de `PC1` y `PC2` muestra a `O3_t` y `O3_lag_24` orientados prácticamente en la misma dirección, mientras que `RH` se proyecta en sentido opuesto sobre el primer componente. Las componentes del viento se orientan principalmente sobre `PC2`. En conjunto, el PCA respalda tres ideas útiles para el modelado: existe persistencia temporal marcada del O3, la meteorología aporta estructura adicional y el viento representa una dimensión distinta que no queda resumida únicamente por el nivel de ozono.
-
-# Resultados de la comparación final
-
-La comparación está implementada de forma reproducible en `quarto/comparacion_final_modelos.qmd`. Se utilizan dos perspectivas: cobertura natural de cada modelo y una muestra común con las mismas observaciones.
-
-## Cobertura natural en 2025
+La Tabla @tbl-cobertura compara cada modelo con persistencia sobre su propia cobertura de 2025. XGBoost reduce el error de persistencia en aproximadamente **14.4% en MAE y 15.1% en RMSE**. El GAM reduce aproximadamente **13.2% en MAE y 15.0% en RMSE** sobre sus casos completos.
 
 | Muestra | Modelo | Observaciones | MAE | RMSE |
 |---|---|---:|---:|---:|
@@ -190,11 +167,13 @@ La comparación está implementada de forma reproducible en `quarto/comparacion_
 | Casos completos GAM | Persistencia diaria | 3,435 | 14.144 | 19.561 |
 | Casos completos GAM | GAM Gamma | 3,435 | 12.270 | 16.620 |
 
-En su cobertura natural, XGBoost reduce el error de persistencia en aproximadamente **14.4% en MAE y 15.1% en RMSE**. El GAM reduce el error en aproximadamente **13.2% en MAE y 15.0% en RMSE** sobre sus casos completos. Ambos modelos aportan información útil respecto a asumir que el O3 será igual al del día anterior.
+: Desempeño natural de GAM y XGBoost en la prueba de 2025. {#tbl-cobertura}
 
-Una diferencia práctica importante es la cobertura. XGBoost puede generar la evaluación sobre **7,333 observaciones**, mientras que el GAM utiliza **3,435**, debido a que este último requiere casos completos en todos sus predictores. Por ello, las métricas de esta tabla no deben compararse directamente entre modelos.
+La diferencia de cobertura es importante: XGBoost mantiene 7,333 observaciones, mientras el GAM puede utilizar 3,435 debido a su requerimiento de casos completos. Estas métricas describen disponibilidad operativa, pero no deben usarse por sí solas para decidir qué modelo es más preciso porque se calculan sobre muestras distintas.
 
-## Comparación sobre la misma muestra
+## Comparación directa GAM vs. XGBoost
+
+La comparación principal utiliza exactamente las mismas 3,435 observaciones. Como muestra la Tabla @tbl-comun, XGBoost obtiene el menor error, pero la diferencia frente al GAM es pequeña.
 
 | Modelo | Observaciones | MAE | RMSE |
 |---|---:|---:|---:|
@@ -202,11 +181,13 @@ Una diferencia práctica importante es la cobertura. XGBoost puede generar la ev
 | GAM Gamma | 3,435 | 12.270 | 16.620 |
 | XGBoost | 3,435 | 12.110 | 16.579 |
 
-Sobre exactamente las mismas observaciones, XGBoost obtiene el menor error, pero la diferencia frente al GAM es pequeña: aproximadamente **0.161 unidades de MAE** y **0.041 unidades de RMSE**, equivalentes a alrededor de **1.3% y 0.25% menos error**, respectivamente, frente al GAM. Por tanto, el resultado no muestra una superioridad amplia de XGBoost en precisión pura; ambos modelos presentan un desempeño muy similar cuando reciben la misma muestra.
+: Comparación final sobre la misma muestra de 2025. {#tbl-comun}
 
-La ventaja más clara de XGBoost en esta etapa es que mantiene un desempeño comparable utilizando una cobertura mucho mayor de datos faltantes. Esta diferencia es relevante para una aplicación operativa, donde perder observaciones puede limitar la disponibilidad del pronóstico.
+XGBoost reduce el MAE del GAM en aproximadamente **1.3%** y el RMSE en **0.25%**. Por tanto, los resultados no muestran una superioridad amplia de XGBoost en precisión pura. Ambos modelos ofrecen un desempeño muy similar cuando reciben la misma muestra; la ventaja más clara de XGBoost aparece en la cantidad de observaciones que puede conservar.
 
-## Comparación por estación en la muestra común
+## Resultados por estación
+
+La Tabla @tbl-estacion muestra la comparación sobre la muestra común. `NTE2` y `NO` concentran prácticamente todos los registros comparables. `NE` aporta solo 13 observaciones y `NTE` ninguna, por lo que no es posible sostener una comparación estable para esas dos estaciones.
 
 | Estación | Observaciones | MAE GAM | MAE XGBoost | RMSE GAM | RMSE XGBoost |
 |---|---:|---:|---:|---:|---:|
@@ -214,60 +195,58 @@ La ventaja más clara de XGBoost en esta etapa es que mantiene un desempeño com
 | NO | 1,534 | 12.971 | 12.756 | 17.264 | 17.255 |
 | NE | 13 | 18.559 | 18.523 | 29.765 | 28.463 |
 
-En `NTE2` y `NO`, que concentran prácticamente toda la muestra común, XGBoost presenta errores ligeramente menores que el GAM. En `NE` solo existen **13 observaciones comunes**, por lo que no es razonable extraer una conclusión estable a partir de esa estación. `NTE` no presenta observaciones en la muestra común de 2025.
+: Desempeño de GAM y XGBoost por estación sobre la muestra común de 2025. {#tbl-estacion}
 
-Esta distribución constituye una **limitación importante de la comparación directa**: aunque el resultado global favorece ligeramente a XGBoost, la muestra común no representa de manera equilibrada a las cuatro estaciones. Por ello, la conclusión final debe separar dos ideas: XGBoost tiene una ligera ventaja en precisión sobre la muestra comparable y una ventaja clara en cobertura; no se debe afirmar que supera al GAM de manera uniforme en cada estación.
+# Discusión y conclusiones
 
-# Discusión
+## Discusión
 
-## Capacidad predictiva a 24 horas
+Los resultados muestran que el O3 diurno puede anticiparse a 24 horas con una mejora consistente respecto a persistencia diaria. La diferencia entre ambos modelos y la referencia es considerablemente mayor que la diferencia entre GAM y XGBoost. Esto indica que el principal avance no proviene de elegir un algoritmo claramente dominante, sino de incorporar historia adicional del contaminante, meteorología, temporalidad y estación.
 
-Los resultados muestran que la concentración diurna de O3 puede anticiparse a 24 horas con una mejora consistente respecto a una referencia simple de persistencia diaria. En la muestra común de 2025, la persistencia obtiene MAE de 14.144 y RMSE de 19.561, mientras que el GAM reduce estos errores a 12.270 y 16.620 y XGBoost a 12.110 y 16.579, respectivamente. La ganancia es relevante porque ambos modelos incorporan información adicional que mejora la predicción frente a asumir que la concentración del día siguiente será igual a la observada a la misma hora del día anterior.
+El PCA ayuda a interpretar este resultado. El primer componente agrupa O3 actual, O3 rezagado 24 horas, temperatura y radiación en una misma estructura, mientras la humedad se comporta en sentido contrario. Esto confirma que la persistencia diaria es una referencia exigente, porque ya resume una parte importante del comportamiento futuro. Para superarla, los modelos deben aprovechar señal adicional. La reducción cercana a 15% de RMSE respecto a persistencia muestra que esa señal sí existe.
 
-Sin embargo, la diferencia entre GAM y XGBoost es mucho menor que la diferencia de ambos frente a persistencia. XGBoost reduce el MAE del GAM alrededor de 1.3% y el RMSE alrededor de 0.25% en la muestra comparable. Por lo tanto, los resultados no justifican afirmar que uno de los dos enfoques sea claramente superior en precisión. El GAM alcanza un desempeño prácticamente equivalente mediante una estructura estadística interpretable, mientras que XGBoost obtiene una ligera ventaja numérica mediante una representación más flexible de interacciones y patrones no lineales.
+La principal diferencia práctica entre GAM y XGBoost es la cobertura. El GAM ofrece un desempeño prácticamente equivalente con una estructura estadística interpretable, pero requiere casos completos. XGBoost puede generar predicciones ante faltantes en algunos predictores y conserva más del doble de observaciones en la evaluación natural de 2025. Para una aplicación operativa esta diferencia puede ser tan importante como una pequeña mejora en error.
 
-## Relación entre estructura multivariada y predicción
+Las conclusiones deben interpretarse con cautela. La muestra común está fuertemente concentrada en `NTE2` y `NO`; `NE` aporta muy pocas observaciones y `NTE` ninguna. Además, 2025 contiene datos únicamente hasta junio. El análisis tampoco establece causalidad entre meteorología y O3: PCA, GAM y XGBoost describen asociaciones y capacidad predictiva. Finalmente, los modelos utilizan meteorología observada en el instante de origen; un pronóstico operativo a 24 horas podría beneficiarse de pronósticos meteorológicos futuros.
 
-El PCA ayuda a interpretar por qué la historia del O3 y la meteorología resultan útiles en los modelos. `PC1` agrupa en una misma dirección al O3 actual, su valor rezagado 24 horas, la temperatura y la radiación, mientras que la humedad se proyecta en sentido contrario. Esto confirma que una fracción importante de la variabilidad conjunta está asociada con un patrón donde persistencia del O3 y condiciones atmosféricas cambian de manera relacionada. Al mismo tiempo, `PC2` muestra que el viento contiene una dimensión de variabilidad relativamente distinta.
+## Conclusiones y recomendaciones
 
-Esta estructura también explica por qué la persistencia diaria constituye una referencia exigente. El O3 observado a la misma hora del día anterior ya resume una parte importante del comportamiento futuro. Para superar esa referencia, GAM y XGBoost deben aprovechar información adicional de meteorología, temporalidad y antecedentes del contaminante. La reducción cercana a 15% de RMSE respecto a persistencia indica que esas variables sí aportan señal predictiva adicional, aunque una parte importante de la dinámica siga estando determinada por la periodicidad diaria.
+Sobre la muestra común de 2025, **XGBoost obtuvo MAE = 12.110 y RMSE = 16.579**, mientras que **GAM obtuvo MAE = 12.270 y RMSE = 16.620**. Ambos superaron a la persistencia diaria, con MAE = 14.144 y RMSE = 19.561. Por lo tanto, la información histórica de O3, meteorología, temporalidad y estación mejora de manera medible un pronóstico basado únicamente en la misma hora del día anterior.
 
-## Precisión frente a cobertura
+XGBoost presenta la mejor precisión, pero solo por un margen pequeño. Su principal ventaja es la cobertura: pudo evaluarse sobre 7,333 observaciones frente a 3,435 casos completos del GAM. Por ello, **XGBoost es el candidato preferible cuando la prioridad es mantener disponibilidad ante datos faltantes**, mientras que **GAM debe conservarse como modelo interpretable de referencia**, ya que alcanza un error prácticamente equivalente.
 
-La principal diferencia práctica entre los modelos aparece en la cantidad de observaciones que pueden utilizar. El GAM requiere casos completos y pudo evaluarse sobre 3,435 observaciones de 2025, mientras que XGBoost mantuvo 7,333 observaciones en su cobertura natural. Esta diferencia no debe confundirse con una ventaja directa en precisión, ya que las métricas calculadas sobre muestras distintas no son comparables de forma estricta; por esa razón la decisión de precisión se basa en la muestra común.
+El PCA mostró que la estructura multivariada no depende de una sola señal. El O3 actual y su rezago diario comparten información con temperatura y radiación, mientras la humedad actúa en sentido contrario y el viento aporta una dimensión adicional. Se requieren cinco componentes para superar 80% de varianza acumulada, por lo que existe redundancia, pero también información distribuida entre distintos factores.
 
-Aun así, la cobertura tiene importancia operativa. Un modelo con buen error promedio pero incapaz de generar pronósticos cuando faltan algunos predictores tendría disponibilidad limitada en un sistema de monitoreo real. Desde esta perspectiva, XGBoost ofrece una ventaja práctica porque puede conservar predicciones ante valores faltantes sin requerir la eliminación completa del registro. El GAM, por otra parte, conserva la ventaja de permitir una interpretación explícita de efectos no lineales y constituye una referencia estadística útil para comprobar que el desempeño de XGBoost no depende únicamente de mayor complejidad.
+Antes de considerar un uso operativo se recomienda mejorar la continuidad de mediciones y repetir la prueba con un año completo y una representación más equilibrada de estaciones. Como nuevas preguntas quedan evaluar si los pronósticos meteorológicos futuros mejoran el desempeño, si modelos específicos por estación o espacio-temporales aprovechan mejor la red SIMA y si el comportamiento relativo de los modelos cambia al enfocarse específicamente en episodios de O3 elevado.
 
-## Limitaciones
+# Referencias {.unnumbered}
 
-La limitación principal es la disponibilidad desigual de datos entre años y estaciones. El año 2020 no pudo utilizarse por la ausencia casi total de O3 y, aun desde 2021, existen interrupciones prolongadas en algunas series. La comparación común de 2025 también está concentrada en `NTE2` y `NO`: `NE` aporta solo 13 observaciones y `NTE` ninguna. En consecuencia, no puede sostenerse que la ligera ventaja global de XGBoost se reproduzca de forma estable en las cuatro estaciones.
+Cerón Bretón, R. M., Cerón Bretón, J. G., Kahl, J. W. D., Espinosa Fuentes, M. de la L., Ramírez Lara, E., Rangel Marrón, M., Lara Severino, R. del C., & Uc Chi, M. P. (2020). Short-term effects of atmospheric pollution on daily mortality and their modification by increased temperatures associated with a climatic change scenario in Northern Mexico. *International Journal of Environmental Research and Public Health, 17*(24), 9219. https://doi.org/10.3390/ijerph17249219
 
-Además, la prueba final de 2025 corresponde únicamente al periodo disponible hasta junio, por lo que no representa un año calendario completo. El análisis tampoco pretende establecer relaciones causales entre meteorología y O3: tanto el PCA como los modelos identifican estructura estadística y capacidad predictiva. Finalmente, los predictores meteorológicos utilizados corresponden a información conocida en el instante de origen; un sistema operativo a 24 horas podría beneficiarse de incorporar pronósticos meteorológicos futuros, algo que no se evaluó en este reto.
+Cifuentes, F., Gálvez, A., González, C. M., Orozco-Alzate, M., & Aristizábal, B. H. (2021). Hourly ozone and PM2.5 prediction using meteorological data: Alternatives for cities with limited pollutant information. *Aerosol and Air Quality Research, 21*, 200471. https://doi.org/10.4209/aaqr.200471
 
-## Recomendaciones y nuevas preguntas
+Secretaría de Medio Ambiente de Nuevo León. (2024). *Reporte de la meteorología y calidad del aire de la Zona Metropolitana de Monterrey: Julio de 2024*. https://aire.nl.gob.mx/docs/reportes/mensuales/2024/07_Reporte_Julio_2024.pdf
 
-Para una aplicación posterior conviene priorizar la continuidad de las mediciones, porque mejorar la disponibilidad de O3 y variables meteorológicas permitiría evaluar los modelos de forma más equilibrada entre estaciones. Con los resultados actuales, XGBoost es el candidato más conveniente cuando la prioridad es mantener cobertura ante datos faltantes, mientras que GAM debe conservarse como modelo interpretable de referencia debido a su desempeño prácticamente equivalente.
+Secretaría de Medio Ambiente de Nuevo León. (2026, 6 de mayo). *Aviso de condiciones actuales de la calidad del aire en la zona metropolitana de Monterrey*. https://www.nl.gob.mx/es/boletines/aviso-de-condiciones-actuales-de-la-calidad-del-aire-en-la-zona-metropolitana-de-2
 
-Como extensiones naturales del proyecto quedan tres preguntas. Primero, si incorporar pronósticos meteorológicos para las siguientes 24 horas puede mejorar el error frente a utilizar únicamente las condiciones observadas en el origen. Segundo, si modelos específicos por estación o enfoques espacio-temporales que aprovechen estaciones vecinas pueden mejorar el desempeño en zonas con menor cobertura. Tercero, si la evaluación cambia al enfocarse específicamente en episodios de O3 elevado, donde el costo de error puede ser distinto al representado por MAE y RMSE globales.
+World Health Organization. (2021). *WHO global air quality guidelines: Particulate matter (PM2.5 and PM10), ozone, nitrogen dioxide, sulfur dioxide and carbon monoxide*. https://www.who.int/publications/i/item/9789240034228
 
-# Conclusiones
+# Declaratoria de uso de IA {.unnumbered}
 
-El objetivo final del proyecto fue determinar con qué precisión puede predecirse el O3 diurno con **24 horas de anticipación** en las estaciones `NTE`, `NTE2`, `NO` y `NE`. Sobre la muestra común de prueba de 2025, XGBoost obtuvo **MAE = 12.110** y **RMSE = 16.579**, mientras que el GAM obtuvo **MAE = 12.270** y **RMSE = 16.620**. Ambos superaron a la persistencia diaria, cuyo MAE fue 14.144 y RMSE 19.561. Por lo tanto, la información histórica de O3, meteorología, temporalidad y estación permite mejorar de manera medible un pronóstico simple basado únicamente en el día anterior.
+**Opción B. Se utilizó IA de la siguiente forma:**
 
-La comparación entre modelos muestra que **XGBoost presenta la mejor precisión, pero solo por un margen pequeño**. La diferencia frente al GAM es insuficiente para considerarlo claramente superior por error predictivo. Su ventaja más importante es la cobertura: en 2025 pudo evaluarse sobre 7,333 observaciones frente a 3,435 casos completos del GAM. En un escenario aplicado, esta capacidad para conservar predicciones cuando existen faltantes favorece a XGBoost, mientras que el GAM ofrece una alternativa casi igual de precisa y con mayor interpretabilidad estadística.
+**Herramientas:** ChatGPT (OpenAI) y Claude (Anthropic).
 
-El PCA complementa estos resultados al mostrar que la estructura multivariada no depende de una sola variable. El primer componente relaciona principalmente O3 actual, O3 rezagado 24 horas, temperatura, radiación y humedad, mientras que el viento aporta una dimensión adicional. Se requieren cinco componentes para superar 80% de varianza acumulada, lo que indica que existe redundancia entre algunas señales, pero también información distribuida entre distintos factores meteorológicos y temporales.
+**Uso realizado:** apoyo para organizar el reporte, revisar redacción, discutir decisiones metodológicas, apoyar la depuración y sintaxis de código, y proponer interpretaciones preliminares de tablas y resultados.
 
-La conclusión debe interpretarse dentro de las limitaciones de cobertura. La muestra común está dominada por `NTE2` y `NO`, mientras que `NE` aporta muy pocos registros y `NTE` ninguno; además, 2025 solo está disponible hasta junio. Por ello, los resultados respaldan la **viabilidad del pronóstico de O3 a 24 horas** dentro del periodo y las estaciones analizadas, pero no justifican todavía una generalización uniforme a toda la red SIMA ni un uso operativo sin validación adicional.
+**Secciones donde se utilizó:** preparación y exploración de datos, construcción y revisión de modelos, PCA, GAM, XGBoost, comparación final, discusión, conclusiones y revisión de estructura y estilo del reporte.
 
-En conjunto, el reto muestra que un enfoque que combine control de calidad, estructura temporal, análisis multivariado y modelos no lineales puede mejorar de forma consistente la predicción diaria de O3. El siguiente avance metodológico debería concentrarse menos en aumentar la complejidad del modelo y más en mejorar la cobertura de datos, incorporar información meteorológica futura y validar el desempeño durante un periodo anual completo y en un conjunto más equilibrado de estaciones.
+**Validación realizada por los estudiantes:** el equipo revisó los datos, ejecutó el código, verificó las salidas y contrastó las interpretaciones con los resultados obtenidos. El contenido final fue revisado y editado por los integrantes del equipo, quienes asumen la responsabilidad de la entrega.
 
-# Alcance y siguientes pasos
+# Código y reproducibilidad {.unnumbered}
 
-Con la discusión y conclusiones ya redactadas, la parte analítica principal de la Etapa 4 queda cerrada. El trabajo restante se concentra en la presentación final: redactar el resumen de una página, consolidar las referencias en formato APA, completar la declaratoria de uso de IA, agregar el enlace al código y verificar que el documento final cumpla con el límite de extensión y con los requisitos de formato.
+El análisis se desarrolló en **R** y los archivos de trabajo, datos utilizados y documentos reproducibles se encuentran en el repositorio del proyecto:
 
-## Fuentes incorporadas en esta fase
+**GitHub:** https://github.com/Reyivan777/Reto-Multivariados
 
-Secretaría de Medio Ambiente de Nuevo León. (2024). *Reporte de la meteorología y calidad del aire de la Zona Metropolitana de Monterrey: julio de 2024*. https://aire.nl.gob.mx/docs/reportes/mensuales/2024/07_Reporte_Julio_2024.pdf
-
-Secretaría de Medio Ambiente de Nuevo León. (2026, 6 de mayo). *Aviso de condiciones actuales de la calidad del aire en la Zona Metropolitana de Monterrey*. https://www.nl.gob.mx/es/boletines/aviso-de-condiciones-actuales-de-la-calidad-del-aire-en-la-zona-metropolitana-de-2
+Los archivos principales de la etapa final son `PCA_etapa_4.qmd`, `GAM_h24_final.qmd`, `xgboost.qmd`, `comparacion_final_modelos.qmd` y `entrega_etapa_4.qmd`.
