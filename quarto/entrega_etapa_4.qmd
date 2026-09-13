@@ -1,14 +1,7 @@
 ---
-title: "Predicción de ozono a 24 horas en la Zona Metropolitana de Monterrey"
-subtitle: "Equipo 4"
-author:
-  - "Rey Iván de la Fuente Chávez, A01709445"
-  - "Jannette Cristina Flores Rodríguez, A01255711"
-  - "Matías Romero Mariné, A01708802"
-  - "Emilio Alonso Sánchez, A00841853"
-  - "Dulce Alejandra Sánchez López, A01412307"
 date: today
 lang: es
+title-block: false
 format:
   pdf:
     toc: false
@@ -21,6 +14,70 @@ execute:
   echo: false
 ---
 
+\begin{titlepage}
+
+\begin{center}
+
+
+\includegraphics[width=0.65\textwidth]{logotec.png}
+\vspace{1.5cm}
+
+
+\vspace{1.5cm}
+
+
+{\large \textbf{Aplicación de métodos multivariados en ciencia de datos (Gpo 101)}}
+
+\vspace{1cm}
+
+
+{\LARGE \textbf{
+Predicción de ozono a 24 horas\\[0.3cm] en la Zona Metropolitana de Monterrey
+}}
+
+\vspace{1cm}
+
+
+{\large \textbf{Equipo 4}}
+
+\vspace{1cm}
+
+
+{\large \textbf{Profesores}}
+
+\vspace{0.3cm}
+
+{\large Blanca Rosa Ruiz Hernandez}
+
+{\large Raúl Gómez Muñoz}
+
+\vfill
+
+
+{\large \textbf{Integrantes}}
+
+\vspace{0.3cm}
+
+{\large Rey Iván de la Fuente Chávez, A01709445}
+
+{\large Jannette Cristina Flores Rodríguez, A01255711}
+
+{\large Matías Romero Mariné, A01708802}
+
+{\large Emilio Alonso Sánchez, A00841853}
+
+{\large Dulce Alejandra Sánchez López, A01412307}
+
+\vfill
+
+
+{\large Monterrey, Nuevo León}
+
+{\large 12 de septiembre de 2026}
+
+\end{center}
+
+\end{titlepage}
 ```{=latex}
 \newpage
 ```
