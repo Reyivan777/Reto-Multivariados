@@ -8,6 +8,7 @@ author:
   - "Emilio Alonso Sánchez, A00841853"
   - "Dulce Alejandra Sánchez López, A01412307"
 date: today
+lang: es
 format:
   pdf:
     toc: false
@@ -76,7 +77,7 @@ $$
 
 ## Contexto espacial de las estaciones
 
-Las cuatro estaciones representan sectores distintos de la ZMM. La Tabla @tbl-estaciones resume sus ubicaciones de acuerdo con el reporte mensual de SIMA de julio de 2024 (Secretaría de Medio Ambiente de Nuevo León, 2024).
+Las cuatro estaciones representan sectores distintos de la ZMM. La @tbl-estaciones resume sus ubicaciones de acuerdo con el reporte mensual de SIMA de julio de 2024 (Secretaría de Medio Ambiente de Nuevo León, 2024).
 
 | Sigla | Estación | Ubicación | Municipio |
 |---|---|---|---|
@@ -136,11 +137,17 @@ El **GAM Gamma** modela `O3(t+24)` mediante relaciones suaves de O3 histórico, 
 
 Para comparar precisión de forma justa se utilizan dos perspectivas. La primera reporta la cobertura natural de cada modelo. La segunda, y principal, utiliza una **muestra común de 2025** donde GAM, XGBoost y persistencia se calculan sobre exactamente las mismas observaciones.
 
+## Validación y diagnóstico
+
+La evaluación no se limitó a comparar errores promedio. En el GAM se revisó la adecuación de la familia Gamma con enlace logarítmico, la concurvidad entre términos suaves, el comportamiento de los residuos y su dependencia temporal. Estas comprobaciones son relevantes porque un modelo puede obtener un MAE bajo y, aun así, conservar patrones sistemáticos en los errores. La especificación final se fijó antes de observar 2025, por lo que los diagnósticos de la prueba final se utilizan para interpretar limitaciones y no para reajustar el modelo después de conocer sus resultados.
+
+En XGBoost no se requieren supuestos distribucionales sobre los residuos, pero sí se controla el sobreajuste mediante validación temporal y *early stopping*. Esto permite que la comparación entre ambos enfoques se apoye principalmente en desempeño fuera de muestra, manteniendo 2025 separado de las decisiones de desarrollo.
+
 # Resultados
 
 ## Estructura multivariada mediante PCA
 
-El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, equivalentes a una cobertura de **75.0%** durante 2021-2024. La Tabla @tbl-pca muestra que se requieren cinco componentes para superar 80% de varianza acumulada.
+El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, equivalentes a una cobertura de **75.0%** durante 2021-2024. La @tbl-pca muestra que se requieren cinco componentes para superar 80% de varianza acumulada.
 
 | Componente | Varianza explicada (%) | Varianza acumulada (%) |
 |---|---:|---:|
@@ -155,8 +162,8 @@ El PCA utiliza **48,240 casos completos de 64,284 observaciones candidatas**, eq
 ```{r}
 #| label: fig-pca-varianza
 #| fig-cap: "Varianza explicada y acumulada por los primeros componentes del PCA."
-#| fig-width: 7
-#| fig-height: 4.2
+#| fig-width: 6.4
+#| fig-height: 3.8
 pca_varianza <- data.frame(
   Componente = factor(paste0("PC", 1:5), levels = paste0("PC", 1:5)),
   Varianza = c(39.41, 16.05, 12.45, 11.43, 8.95),
@@ -186,7 +193,7 @@ En `PC1`, las cargas de mayor magnitud corresponden a `O3_t` (0.507), `O3_lag_24
 
 ## Desempeño en cobertura natural
 
-La Tabla @tbl-cobertura compara cada modelo con persistencia sobre su propia cobertura de 2025. XGBoost reduce el error de persistencia en aproximadamente **14.4% en MAE y 15.1% en RMSE**. El GAM reduce aproximadamente **13.2% en MAE y 15.0% en RMSE** sobre sus casos completos.
+La @tbl-cobertura compara cada modelo con persistencia sobre su propia cobertura de 2025. XGBoost reduce el error de persistencia en aproximadamente **14.4% en MAE y 15.1% en RMSE**. El GAM reduce aproximadamente **13.2% en MAE y 15.0% en RMSE** sobre sus casos completos.
 
 | Muestra | Modelo | Observaciones | MAE | RMSE |
 |---|---|---:|---:|---:|
@@ -201,7 +208,7 @@ La diferencia de cobertura es importante: XGBoost mantiene 7,333 observaciones, 
 
 ## Comparación directa GAM vs. XGBoost
 
-La comparación principal utiliza exactamente las mismas 3,435 observaciones. Como muestra la Tabla @tbl-comun, XGBoost obtiene el menor error, pero la diferencia frente al GAM es pequeña.
+La comparación principal utiliza exactamente las mismas 3,435 observaciones. Como muestra la @tbl-comun, XGBoost obtiene el menor error, pero la diferencia frente al GAM es pequeña.
 
 | Modelo | Observaciones | MAE | RMSE |
 |---|---:|---:|---:|
@@ -214,12 +221,12 @@ La comparación principal utiliza exactamente las mismas 3,435 observaciones. Co
 ```{r}
 #| label: fig-comparacion-final
 #| fig-cap: "Comparación de MAE y RMSE entre persistencia, GAM y XGBoost sobre la muestra común de 2025."
-#| fig-width: 7
-#| fig-height: 4.3
+#| fig-width: 5.5
+#| fig-height: 2.8
 comparacion_visual <- data.frame(
   Modelo = factor(
-    rep(c("Persistencia diaria", "GAM Gamma", "XGBoost"), each = 2),
-    levels = c("Persistencia diaria", "GAM Gamma", "XGBoost")
+    rep(c("Persistencia", "GAM", "XGBoost"), each = 2),
+    levels = c("Persistencia", "GAM", "XGBoost")
   ),
   Metrica = rep(c("MAE", "RMSE"), times = 3),
   Error = c(14.144, 19.561, 12.270, 16.620, 12.110, 16.579)
@@ -229,15 +236,16 @@ ggplot2::ggplot(
   comparacion_visual,
   ggplot2::aes(x = Modelo, y = Error, fill = Modelo)
 ) +
-  ggplot2::geom_col(show.legend = FALSE) +
+  ggplot2::geom_col(show.legend = FALSE, width = 0.72) +
   ggplot2::facet_wrap(~Metrica, scales = "free_y") +
   ggplot2::labs(
     x = NULL,
     y = "Error"
   ) +
-  ggplot2::theme_minimal() +
+  ggplot2::theme_minimal(base_size = 9) +
   ggplot2::theme(
-    axis.text.x = ggplot2::element_text(angle = 20, hjust = 1)
+    axis.text.x = ggplot2::element_text(size = 8),
+    strip.text = ggplot2::element_text(size = 8)
   )
 ```
 
@@ -247,7 +255,7 @@ XGBoost reduce el MAE del GAM en aproximadamente **1.3%** y el RMSE en **0.25%**
 
 ## Resultados por estación
 
-La Tabla @tbl-estacion muestra la comparación sobre la muestra común. `NTE2` y `NO` concentran prácticamente todos los registros comparables. `NE` aporta solo 13 observaciones y `NTE` ninguna, por lo que no es posible sostener una comparación estable para esas dos estaciones.
+La @tbl-estacion muestra la comparación sobre la muestra común. `NTE2` y `NO` concentran prácticamente todos los registros comparables. `NE` aporta solo 13 observaciones y `NTE` ninguna, por lo que no es posible sostener una comparación estable para esas dos estaciones.
 
 | Estación | Observaciones | MAE GAM | MAE XGBoost | RMSE GAM | RMSE XGBoost |
 |---|---:|---:|---:|---:|---:|
@@ -257,6 +265,152 @@ La Tabla @tbl-estacion muestra la comparación sobre la muestra común. `NTE2` y
 
 : Desempeño de GAM y XGBoost por estación sobre la muestra común de 2025. {#tbl-estacion}
 
+## Diagnóstico de errores en la muestra común
+
+MAE y RMSE resumen el tamaño del error, pero no muestran si los modelos presentan **sesgo sistemático** o si una parte importante del error se concentra en observaciones difíciles. Para complementar la comparación se analizan los residuos de la muestra común de 2025, definidos como:
+
+$$
+\text{Residuo}=O3_{\text{observado}}-O3_{\text{predicho}}.
+$$
+
+Un residuo positivo indica subestimación y uno negativo indica sobreestimación. Esta revisión utiliza exactamente las mismas observaciones empleadas en la comparación directa, por lo que las diferencias no se deben a cambios en la muestra.
+
+```{r}
+#| label: diagnostico-residuos-comun
+ruta_predicciones <- here::here("output", "predicciones_comunes_2025.csv")
+
+if (!file.exists(ruta_predicciones)) {
+  stop(
+    "No se encontró output/predicciones_comunes_2025.csv. ",
+    "Renderiza primero quarto/comparacion_final_modelos.qmd."
+  )
+}
+
+predicciones_comunes <- readr::read_csv(
+  ruta_predicciones,
+  show_col_types = FALSE
+)
+
+residuos_largos <- dplyr::bind_rows(
+  predicciones_comunes |>
+    dplyr::transmute(
+      Modelo = "GAM",
+      O3_observado = O3_objetivo,
+      Predicho = Pred_GAM,
+      Residuo = O3_objetivo - Pred_GAM
+    ),
+  predicciones_comunes |>
+    dplyr::transmute(
+      Modelo = "XGBoost",
+      O3_observado = O3_objetivo,
+      Predicho = Pred_XGBoost,
+      Residuo = O3_objetivo - Pred_XGBoost
+    )
+)
+
+resumen_residuos <- residuos_largos |>
+  dplyr::group_by(Modelo) |>
+  dplyr::summarise(
+    Observaciones = dplyr::n(),
+    Sesgo_medio = mean(Residuo),
+    Desv_residuo = stats::sd(Residuo),
+    Mediana_error_abs = stats::median(abs(Residuo)),
+    P90_error_abs = stats::quantile(abs(Residuo), 0.90),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  resumen_residuos |>
+    dplyr::mutate(
+      dplyr::across(
+        c(Sesgo_medio, Desv_residuo, Mediana_error_abs, P90_error_abs),
+        ~ round(.x, 2)
+      )
+    ),
+  caption = "Diagnóstico descriptivo de residuos en la muestra común de 2025"
+)
+
+sesgo_gam <- resumen_residuos$Sesgo_medio[resumen_residuos$Modelo == "GAM"]
+sesgo_xgb <- resumen_residuos$Sesgo_medio[resumen_residuos$Modelo == "XGBoost"]
+p90_gam <- resumen_residuos$P90_error_abs[resumen_residuos$Modelo == "GAM"]
+p90_xgb <- resumen_residuos$P90_error_abs[resumen_residuos$Modelo == "XGBoost"]
+```
+
+En la muestra común, el residuo medio es de **`r round(sesgo_gam, 2)`** para GAM y **`r round(sesgo_xgb, 2)`** para XGBoost. Como el residuo se definió como observado menos predicho, valores positivos reflejan tendencia a subestimar y valores negativos a sobreestimar. El percentil 90 del error absoluto es **`r round(p90_gam, 2)`** para GAM y **`r round(p90_xgb, 2)`** para XGBoost; esta medida complementa al RMSE porque muestra el tamaño de error por debajo del cual se encuentra 90% de las predicciones.
+
+```{r}
+#| label: fig-residuos-modelos
+#| fig-cap: "Distribución de los residuos de GAM y XGBoost en la muestra común de 2025."
+#| fig-width: 5.8
+#| fig-height: 3.0
+limites_residuo <- stats::quantile(
+  residuos_largos$Residuo,
+  probs = c(0.01, 0.99),
+  na.rm = TRUE
+)
+
+ggplot2::ggplot(
+  residuos_largos,
+  ggplot2::aes(x = Residuo, linetype = Modelo)
+) +
+  ggplot2::geom_density(linewidth = 0.8) +
+  ggplot2::geom_vline(xintercept = 0, linetype = "dashed") +
+  ggplot2::coord_cartesian(xlim = limites_residuo) +
+  ggplot2::labs(
+    x = "Residuo (observado - predicho)",
+    y = "Densidad",
+    linetype = NULL
+  ) +
+  ggplot2::theme_minimal(base_size = 9) +
+  ggplot2::theme(legend.position = "top")
+```
+
+La forma de las dos distribuciones permite comprobar si la ligera ventaja global de XGBoost proviene de un desplazamiento general de los errores o de una reducción de su dispersión. Este diagnóstico debe interpretarse de manera descriptiva: la prueba final sirve para evaluar el comportamiento fuera de muestra, no para volver a modificar la especificación de los modelos.
+
+### Error en concentraciones relativamente altas de O3
+
+Una métrica global puede ocultar diferencias precisamente en las observaciones de mayor concentración. Por ello se separa la muestra común usando el tercer cuartil del O3 observado en 2025. Este umbral es descriptivo y **no representa un límite normativo**; únicamente permite comparar el desempeño en la parte superior de la distribución.
+
+```{r}
+#| label: errores-o3-alto
+umbral_o3_alto_2025 <- stats::quantile(
+  predicciones_comunes$O3_objetivo,
+  0.75,
+  na.rm = TRUE
+)
+
+errores_nivel_o3 <- residuos_largos |>
+  dplyr::mutate(
+    Grupo = dplyr::if_else(
+      O3_observado >= umbral_o3_alto_2025,
+      "O3 alto (>= P75)",
+      "Resto de observaciones"
+    )
+  ) |>
+  dplyr::group_by(Modelo, Grupo) |>
+  dplyr::summarise(
+    Observaciones = dplyr::n(),
+    MAE = mean(abs(Residuo)),
+    RMSE = sqrt(mean(Residuo^2)),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  errores_nivel_o3 |>
+    dplyr::mutate(
+      MAE = round(MAE, 2),
+      RMSE = round(RMSE, 2)
+    ),
+  caption = paste0(
+    "Error según nivel observado de O3 en la muestra común (P75 = ",
+    round(umbral_o3_alto_2025, 2),
+    ")"
+  )
+)
+```
+
+Esta separación permite valorar si el buen desempeño promedio se mantiene en las concentraciones relativamente altas, que son particularmente relevantes desde la perspectiva del problema ambiental. Si los errores aumentan en ese grupo, la métrica global debe complementarse con evaluaciones enfocadas en episodios elevados antes de considerar un uso operativo.
+
 # Discusión y conclusiones
 
 ## Discusión
@@ -264,6 +418,8 @@ La Tabla @tbl-estacion muestra la comparación sobre la muestra común. `NTE2` y
 Los resultados muestran que el O3 diurno puede anticiparse a 24 horas con una mejora consistente respecto a persistencia diaria. La diferencia entre ambos modelos y la referencia es considerablemente mayor que la diferencia entre GAM y XGBoost. Esto indica que el principal avance no proviene de elegir un algoritmo claramente dominante, sino de incorporar historia adicional del contaminante, meteorología, temporalidad y estación.
 
 El PCA ayuda a interpretar este resultado. El primer componente agrupa O3 actual, O3 rezagado 24 horas, temperatura y radiación en una misma estructura, mientras la humedad se comporta en sentido contrario. Esto confirma que la persistencia diaria es una referencia exigente, porque ya resume una parte importante del comportamiento futuro. Para superarla, los modelos deben aprovechar señal adicional. La reducción cercana a 15% de RMSE respecto a persistencia muestra que esa señal sí existe.
+
+El diagnóstico de residuos agrega una segunda lectura del desempeño. MAE y RMSE permiten comparar el tamaño global de los errores, mientras que el sesgo medio, la dispersión residual y el percentil 90 del error absoluto ayudan a identificar si el error se encuentra centrado o si permanecen colas de predicciones difíciles. La revisión específica de concentraciones por encima del tercer cuartil es especialmente útil porque un modelo aceptable en promedio puede deteriorarse en las observaciones de O3 relativamente alto.
 
 La principal diferencia práctica entre GAM y XGBoost es la cobertura. El GAM ofrece un desempeño prácticamente equivalente con una estructura estadística interpretable, pero requiere casos completos. XGBoost puede generar predicciones ante faltantes en algunos predictores y conserva más del doble de observaciones en la evaluación natural de 2025. Para una aplicación operativa esta diferencia puede ser tan importante como una pequeña mejora en error.
 
@@ -277,7 +433,7 @@ XGBoost presenta la mejor precisión, pero solo por un margen pequeño. Su princ
 
 El PCA mostró que la estructura multivariada no depende de una sola señal. El O3 actual y su rezago diario comparten información con temperatura y radiación, mientras la humedad actúa en sentido contrario y el viento aporta una dimensión adicional. Se requieren cinco componentes para superar 80% de varianza acumulada, por lo que existe redundancia, pero también información distribuida entre distintos factores.
 
-Antes de considerar un uso operativo se recomienda mejorar la continuidad de mediciones y repetir la prueba con un año completo y una representación más equilibrada de estaciones. Como nuevas preguntas quedan evaluar si los pronósticos meteorológicos futuros mejoran el desempeño, si modelos específicos por estación o espacio-temporales aprovechan mejor la red SIMA y si el comportamiento relativo de los modelos cambia al enfocarse específicamente en episodios de O3 elevado.
+Antes de considerar un uso operativo se recomienda mejorar la continuidad de mediciones y repetir la prueba con un año completo y una representación más equilibrada de estaciones. También conviene evaluar explícitamente el comportamiento en concentraciones elevadas y no depender únicamente de métricas globales. Como nuevas preguntas quedan evaluar si los pronósticos meteorológicos futuros mejoran el desempeño, si modelos específicos por estación o espacio-temporales aprovechan mejor la red SIMA y si el comportamiento relativo de los modelos cambia al enfocarse específicamente en episodios de O3 elevado.
 
 # Referencias {.unnumbered}
 
@@ -310,3 +466,5 @@ El análisis se desarrolló en **R** y los archivos de trabajo, datos utilizados
 **GitHub:** https://github.com/Reyivan777/Reto-Multivariados
 
 Los archivos principales de la etapa final son `PCA_etapa_4.qmd`, `GAM_h24_final.qmd`, `xgboost.qmd`, `comparacion_final_modelos.qmd` y `entrega_etapa_4.qmd`.
+
+Para reproducir esta versión del reporte final, primero debe generarse `data/base_modelado_o3.rds` desde `quarto/reporte.qmd` y después renderizar `quarto/comparacion_final_modelos.qmd`, que crea `output/predicciones_comunes_2025.csv`. Finalmente se renderiza `quarto/entrega_etapa_4.qmd`.
