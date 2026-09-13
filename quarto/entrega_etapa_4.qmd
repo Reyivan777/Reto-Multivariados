@@ -22,8 +22,9 @@ Etapa 4.
 Fase 1: problema final fijado a 24 horas.
 Fase 2: modelos predictivos finales concentrados en GAM y XGBoost.
 Fase 3: PCA incorporado como técnica de interdependencia.
-Las fases posteriores integrarán comparación final, contexto de estaciones,
-resultados, discusión y conclusiones.
+Fase 4: comparación GAM vs. XGBoost preparada; falta ejecutar y trasladar resultados.
+Las fases posteriores incorporarán contexto de estaciones, resultados,
+discusión y conclusiones.
 -->
 
 # Problema y objetivo final
@@ -100,8 +101,17 @@ El PCA se aplica únicamente sobre el periodo de desarrollo 2021-2024 y sobre va
 
 El objetivo del PCA es identificar patrones de covariación, redundancia y contrastes entre las señales de O3 y meteorología. **No se utilizarán los componentes principales como entrada de GAM o XGBoost**; ambos modelos conservarán sus predictores originales. De esta manera el PCA funciona como análisis multivariado complementario y no altera la definición de los modelos ya validados.
 
+## Estrategia de comparación final
+
+La comparación definitiva se encuentra implementada en `quarto/comparacion_final_modelos.qmd`. Se reportarán dos perspectivas complementarias:
+
+- **Cobertura natural:** cada modelo se evalúa sobre las observaciones de 2025 que puede utilizar bajo su manejo normal de valores faltantes.
+- **Muestra común:** GAM, XGBoost y persistencia se evalúan exactamente sobre las mismas observaciones de 2025. Esta será la comparación principal para decidir cuál modelo presenta menor MAE y RMSE.
+
+También se comparará el desempeño por estación. El detalle del tuning permanecerá en el archivo reproducible y en el cuerpo final se conservarán únicamente las tablas y figuras necesarias para comunicar los resultados.
+
 ## Alcance de la Etapa 4
 
 A partir de esta definición, los análisis de las etapas anteriores se reorganizarán alrededor del problema final. El reporte conservará únicamente los resultados necesarios para justificar las decisiones y responder la pregunta de investigación. Los análisis exploratorios extensos, modelos preliminares y diagnósticos complementarios permanecerán disponibles en los archivos de trabajo y, cuando aporten contexto, podrán citarse brevemente o trasladarse a anexos.
 
-Con el problema final, GAM, XGBoost y el PCA ya definidos, la siguiente fase será construir la **comparación final GAM vs. XGBoost sobre 2025**, asegurando que las métricas se interpreten de manera justa frente a las diferencias de cobertura por valores faltantes. Después se incorporará el contexto geográfico de las estaciones y se comenzará a condensar los resultados dentro del reporte final.
+La estructura metodológica de la comparación final ya está preparada. El siguiente paso es **ejecutar `quarto/comparacion_final_modelos.qmd` y revisar sus resultados reales**. Con esas métricas se cerrará la Fase 4 y se podrá avanzar al contexto geográfico de las estaciones y a la redacción de resultados, discusión y conclusiones.
