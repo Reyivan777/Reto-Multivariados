@@ -24,7 +24,8 @@ Fase 2: modelos predictivos finales concentrados en GAM y XGBoost.
 Fase 3: PCA cerrado con resultados reales.
 Fase 4: comparación final GAM vs. XGBoost cerrada con resultados de 2025.
 Fase 5: contexto espacial de las estaciones incorporado.
-Pendiente: condensar preparación/modelado y redactar discusión, conclusiones, resumen y referencias finales.
+Fase 6: preparación de datos y modelado final condensados.
+Pendiente: discusión, conclusiones, resumen, referencias y declaratoria de uso de IA.
 -->
 
 # Problema y objetivo final
@@ -67,7 +68,7 @@ Desarrollar, comparar y evaluar modelos capaces de **predecir la concentración 
 1. Resumir la preparación y calidad de los datos utilizados para el modelado, incluyendo la exclusión de 2020.
 2. Caracterizar la estructura multivariada de las variables relevantes mediante PCA como técnica de interdependencia.
 3. Construir predictores temporales utilizando únicamente información disponible al momento del pronóstico.
-4. Ajustar y evaluar un **GAM** como enfoque estadístico de dependencia no lineal e interpretable y contrastarlo con **XGBoost**.
+4. Ajustar y evaluar un **GAM** como técnica de dependencia no lineal e interpretable y contrastarlo con **XGBoost**.
 5. Mantener **2025 como conjunto de prueba final** y utilizar MAE y RMSE como métricas principales.
 6. Comparar GAM y XGBoost contra una referencia de **persistencia diaria**.
 7. Analizar variables relevantes, diferencias entre estaciones y limitaciones del pronóstico a 24 horas.
@@ -95,20 +96,61 @@ La separación temporal evita utilizar información futura durante el desarrollo
 - **2021-2024:** reentrenamiento definitivo.
 - **2025:** prueba final.
 
+# Preparación de los datos
+
+## Integración y control de calidad
+
+Los datos originales provienen de seis archivos de Excel, uno por año entre 2020 y 2025, con registros horarios por estación. Para el problema final se integraron únicamente `NTE`, `NTE2`, `NO` y `NE`. La base inicial de estas cuatro estaciones contiene **192,723 registros**.
+
+La primera revisión incluyó homologación de nombres y tipos de variables, conversión de banderas de ausencia, verificación de duplicados y control de rangos físicos. No se detectaron registros duplicados para una misma estación y fecha-hora. Los valores fuera de los límites de validación no provocaron la eliminación de la fila completa: únicamente la medición inválida fue convertida a `NA`.
+
+Después de excluir 2020, la base conserva **157,616 registros entre 2021 y 2025**. En este periodo se transformaron **1,062 mediciones fuera de rango a `NA`** y la comprobación posterior confirmó que no permanecen valores fuera de los límites utilizados. Los valores extremos que sí se encuentran dentro de rangos físicamente válidos se conservan, ya que pueden corresponder a episodios reales de contaminación.
+
+## Disponibilidad de O3 y exclusión de 2020
+
+La principal decisión de calidad de datos se relaciona con la variable objetivo. En 2020 el porcentaje de O3 faltante fue de **99.90% en NE, 98.44% en NO, 99.99% en NTE y 93.33% en NTE2**. La ausencia es demasiado alta para utilizar ese año en un modelo supervisado de O3, por lo que 2020 permanece únicamente como parte de la fuente histórica y no participa en entrenamiento, validación o prueba.
+
+Desde 2021 la cobertura mejora considerablemente, aunque persisten algunos bloques prolongados sin medición. Por ejemplo, al inicio de 2021 se identificaron interrupciones de más de mil horas consecutivas en varias estaciones. Debido a esta estructura, **el O3 no se imputa cuando funciona como respuesta ni cuando se utiliza como rezago**. Crear semanas de valores sintéticos podría alterar la dinámica temporal que los modelos intentan aprender. Entre 2021 y junio de 2025 permanecen **145,151 mediciones válidas de O3** después de la limpieza.
+
+## Ventana horaria y variables derivadas
+
+El análisis exploratorio mostró un ciclo diario estable: el O3 disminuye durante la madrugada, aumenta con rapidez durante la mañana, alcanza sus valores más altos en la tarde y vuelve a descender posteriormente. A partir de este patrón se definió **10:00-20:00** como ventana de evaluación. Las horas nocturnas no se eliminan, porque siguen siendo necesarias para construir la historia temporal; la restricción se aplica únicamente a las horas que pueden convertirse en objetivo del pronóstico.
+
+La estructura temporal se representa mediante fecha, hora, mes, estación de monitoreo y transformaciones cíclicas seno-coseno para hora y mes. La dirección del viento se combina con su rapidez mediante las componentes `WS_sin` y `WS_cos`, evitando tratar los grados como una variable lineal.
+
+El análisis de rezagos realizado exclusivamente con 2021-2023 mostró dos señales temporales importantes: una dependencia fuerte en las horas inmediatamente anteriores y una recuperación clara de la correlación al llegar a 24 horas. Esta periodicidad diaria justifica utilizar la concentración observada a la misma hora del día anterior como referencia mínima y como predictor de los modelos.
+
 # Metodología final
 
-## Modelos predictivos
+## Técnicas multivariadas y modelos predictivos
 
-La comparación final se concentra exclusivamente en:
+La entrega final utiliza **PCA** como técnica de interdependencia y **GAM** como técnica de dependencia vista en clase. XGBoost se incorpora como modelo predictivo adicional para evaluar si una estructura más flexible basada en árboles puede mejorar el pronóstico. La regresión lineal desarrollada durante etapas previas permanece como trabajo exploratorio y no forma parte de la comparación final.
 
-- **GAM Gamma:** modelo estadístico de dependencia no lineal e interpretable, documentado en `quarto/GAM_h24_final.qmd`.
-- **XGBoost:** modelo de árboles potenciados, documentado en `quarto/xgboost.qmd`.
+El PCA estudia la estructura conjunta de `O3_t`, `O3_lag_24`, radiación solar, temperatura, humedad relativa y las componentes vectoriales del viento utilizando únicamente 2021-2024. Los componentes se interpretan como resumen multivariado, pero no se incorporan posteriormente como entradas de GAM o XGBoost.
 
-La regresión lineal permanece como trabajo exploratorio del proyecto, pero no forma parte de la comparación ni de la narrativa principal de esta entrega.
+## GAM Gamma
 
-## Técnica de interdependencia: PCA
+El GAM final modela `O3(t+24)` mediante relaciones suaves y no lineales. Incluye como predictores el O3 disponible a uno y dos días de distancia respecto al objetivo, radiación solar, temperatura, humedad relativa, las dos componentes vectoriales del viento, hora objetivo, mes objetivo y estación de monitoreo.
 
-El **Análisis de Componentes Principales (PCA)** está documentado en `quarto/PCA_etapa_4.qmd`. Se utiliza sobre el periodo de desarrollo 2021-2024 para estudiar covariación y redundancia entre `O3_t`, `O3_lag_24`, radiación solar, temperatura, humedad relativa y las dos componentes vectoriales del viento. Las variables se estandarizan antes del análisis. Los componentes no se introducen como predictores en GAM o XGBoost, por lo que el PCA funciona como análisis multivariado complementario sin modificar los modelos ya definidos.
+Se utiliza una **familia Gamma con enlace logarítmico**, seleccionada durante el desarrollo previo después de observar heterocedasticidad en la alternativa gaussiana. La especificación queda fijada antes de evaluar 2025. El ajuste definitivo utiliza 2021-2024 y el modelo solo puede generar una predicción cuando todos sus predictores están disponibles, por lo que trabaja con casos completos.
+
+Además de MAE y RMSE, el GAM conserva diagnósticos del ajuste, efectos parciales, concurvidad y una revisión de dependencia temporal de los residuos. Estos resultados permiten interpretar el modelo sin utilizar la prueba final de 2025 para modificar su especificación.
+
+## XGBoost
+
+XGBoost utiliza una representación más amplia de la historia del O3: valores alineados de uno a cuatro días respecto al objetivo, rezagos recientes de una a tres horas, radiación solar, temperatura, humedad relativa, viento vectorial, transformaciones cíclicas de hora y mes y la estación de monitoreo.
+
+Los hiperparámetros se seleccionan exclusivamente con **2024 como validación**, utilizando 2021-2023 para el ajuste inicial y *early stopping* para evitar prolongar innecesariamente el entrenamiento. Una vez elegida la configuración, el modelo se reentrena con 2021-2024 y se evalúa una sola vez en 2025. A diferencia del GAM, XGBoost puede trabajar directamente con valores faltantes en los predictores, característica que posteriormente resulta importante para su cobertura de evaluación.
+
+## Estrategia de validación y comparación
+
+La evaluación final se basa en **MAE** y **RMSE**. MAE resume el tamaño promedio del error absoluto, mientras que RMSE penaliza con mayor fuerza las desviaciones grandes. Ambos modelos se comparan también con persistencia diaria:
+
+$$
+\widehat{O3}_{t+24}^{\text{persistencia}} = O3_t.
+$$
+
+La comparación se realiza desde dos perspectivas. Primero se reporta la cobertura natural de cada modelo, útil para evaluar su disponibilidad operativa. Después se construye una **muestra común de 2025**, de modo que GAM y XGBoost sean evaluados exactamente sobre las mismas observaciones. Esta segunda comparación es la referencia principal para decidir si existe una diferencia real de precisión entre ambos modelos.
 
 # Resultados del PCA
 
@@ -177,7 +219,7 @@ Esta distribución constituye una **limitación importante de la comparación di
 
 # Alcance y siguientes pasos
 
-Con el PCA y la comparación predictiva ya cerrados, los principales resultados cuantitativos de la Etapa 4 están definidos. El siguiente trabajo consiste en condensar la preparación de datos y el desarrollo de modelos dentro de la estructura exigida para el reporte final, y después redactar discusión, conclusiones, resumen, referencias y declaratoria de uso de IA.
+Con la preparación, el PCA y la comparación predictiva ya cerrados, la metodología y los principales resultados cuantitativos de la Etapa 4 están definidos. El siguiente trabajo consiste en redactar la discusión y conclusiones finales y, a partir de ellas, construir el resumen de una página, revisar referencias, declaratoria de uso de IA y extensión total del documento.
 
 ## Fuentes incorporadas en esta fase
 
