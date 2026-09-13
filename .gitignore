@@ -1,12 +1,36 @@
+# R / RStudio
 .Rhistory
 .RData
+.RDataTmp*
+**/.RDataTmp*
 .Rproj.user/
+**/.Rapp.history
+
+# macOS and archivos temporales de Office
+.DS_Store
+**/.DS_Store
+~$*
+**/~$*
+
+# renv local
 renv/library/
 renv/staging/
-output/
 
+# Quarto: caché y archivos auxiliares regenerables
 /.quarto/
-
 **/*.quarto_ipynb
 **/*_cache/
+**/*_files/
+
+# Salidas locales de modelado
+output/
 data/base_modelado_o3.rds
+
+# Documentos de trabajo renderizados
+# Se conservan en Git únicamente los PDF oficiales de las etapas.
+docs/**/*.html
+docs/**/*.docx
+docs/**/*.pdf
+!docs/quarto/entrega_etapa_2.pdf
+!docs/quarto/entrega_etapa_3.pdf
+!docs/quarto/entrega_etapa_4.pdf
