@@ -3,7 +3,7 @@ title: "GAM final para O3 a 24 horas"
 author: "Equipo 4"
 date: today
 format:
-  pdf:
+  html:
     toc: true
     toc-depth: 3
 execute:
@@ -25,7 +25,7 @@ Este archivo deja una versión compacta y cerrada del **Modelo Aditivo Generaliz
 - prueba final: 2025;
 - familia final: Gamma con enlace logarítmico.
 
-El GAM complementa a la regresión lineal porque permite relaciones no lineales sin perder la posibilidad de visualizar el efecto parcial de cada predictor.
+El GAM aporta un enfoque estadístico no lineal e interpretable y permite visualizar el efecto parcial de cada predictor antes de compararlo con XGBoost.
 
 # Carga de la base
 
@@ -93,7 +93,7 @@ base_h24_gam <- base_origen_modelado |>
 
 # Predictores y casos completos
 
-La especificación conserva los predictores seleccionados durante el desarrollo del GAM, pero los nombres de los rezagos se expresan ahora con respecto al objetivo para que su interpretación sea consistente con XGBoost y la regresión lineal final.
+La especificación conserva los predictores seleccionados durante el desarrollo del GAM. Los nombres de los rezagos se expresan con respecto al objetivo para mantener una interpretación consistente con XGBoost.
 
 ```{r}
 #| label: predictores-gam-final
@@ -328,4 +328,4 @@ ljung_box_gam |>
 
 # Conclusión
 
-El GAM queda cerrado con el mismo horizonte, ventana horaria y separación cronológica definidos para la Etapa 4. La familia Gamma y la especificación de predictores se fijan antes de observar la prueba final de 2025. El modelo se compara con persistencia sobre su propia muestra de casos completos y reporta además resultados por estación y dependencia temporal residual. La comparación definitiva contra MLR y XGBoost se realizará posteriormente sobre una base común de evaluación para evitar atribuir diferencias de desempeño únicamente a diferencias en cobertura de datos.
+El GAM queda cerrado con el mismo horizonte, ventana horaria y separación cronológica definidos para la Etapa 4. La familia Gamma y la especificación de predictores se fijan antes de observar la prueba final de 2025. El modelo se compara con persistencia sobre su propia muestra de casos completos y reporta además resultados por estación y dependencia temporal residual. La comparación definitiva frente a XGBoost se realiza en `quarto/comparacion_final_modelos.qmd` sobre una muestra común de evaluación.
