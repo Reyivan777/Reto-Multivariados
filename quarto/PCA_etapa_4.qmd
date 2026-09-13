@@ -3,7 +3,7 @@ title: "PCA para la estructura multivariada del O3 y la meteorología"
 author: "Equipo 4"
 date: today
 format:
-  pdf:
+  html:
     toc: true
     toc-depth: 3
 execute:
