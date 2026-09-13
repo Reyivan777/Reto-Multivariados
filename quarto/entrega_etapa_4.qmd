@@ -143,6 +143,29 @@ La evaluación no se limitó a comparar errores promedio. En el GAM se revisó l
 
 En XGBoost no se requieren supuestos distribucionales sobre los residuos, pero sí se controla el sobreajuste mediante validación temporal y *early stopping*. Esto permite que la comparación entre ambos enfoques se apoye principalmente en desempeño fuera de muestra, manteniendo 2025 separado de las decisiones de desarrollo.
 
+## Papel de las variables en el pronóstico
+
+La información utilizada por los modelos puede resumirse en cuatro grupos. Cada grupo representa un mecanismo distinto dentro del problema y ayuda a interpretar por qué los modelos mejoran a la persistencia diaria.
+
+| Grupo | Variables representativas | Papel en el análisis |
+|---|---|---|
+| Historia del O3 | O3 actual, rezagos horarios y valores alineados de días previos | Capturar persistencia, memoria reciente y periodicidad diaria |
+| Meteorología | Radiación solar, temperatura y humedad relativa | Representar condiciones atmosféricas asociadas con la formación y variación del O3 |
+| Viento | `WS_sin` y `WS_cos` | Incorporar conjuntamente rapidez y dirección para representar transporte y dispersión |
+| Contexto temporal y espacial | Hora, mes y estación | Capturar ciclos diarios y estacionales y diferencias entre ubicaciones |
+
+: Papel de los principales grupos de variables en el pronóstico de O3. {#tbl-papel-variables}
+
+La historia del O3 constituye la señal temporal más directa: el análisis de rezagos mostró dependencia fuerte en las horas cercanas y una recuperación de la correlación a 24 horas, razón por la que la persistencia diaria es una referencia competitiva. Sin embargo, el PCA muestra que esta señal no resume toda la estructura de los datos. Temperatura y radiación aparecen asociadas con el eje principal junto con O3, mientras que la humedad relativa se orienta en sentido contrario y el viento domina un componente distinto. Por ello, mantener variables meteorológicas y de viento permite que GAM y XGBoost incorporen información que no está contenida únicamente en el valor del día anterior.
+
+La estación y las variables cíclicas de hora y mes cumplen un papel diferente: no describen una medición atmosférica puntual, sino el contexto en el que ocurre. Su inclusión permite representar diferencias sistemáticas entre ubicaciones y patrones diarios o estacionales sin asumir que dos horas o meses consecutivos sean independientes entre sí.
+
+## Técnicas exploradas y decisiones finales
+
+Durante el desarrollo se consideraron alternativas que finalmente no forman parte de la comparación principal. La **regresión lineal múltiple** se mantuvo como ejercicio exploratorio y como referencia metodológica, pero la entrega final se concentró en GAM y XGBoost porque el problema presenta relaciones no lineales y efectos temporales que resultan más naturales de representar mediante funciones suaves o árboles potenciados. Esto no implica que la regresión lineal sea inválida; simplemente dejó de ser el enfoque central una vez que el objetivo se fijó en el horizonte de 24 horas y se priorizó la comparación de dos modelos no lineales.
+
+También se evaluó una formulación **gaussiana del GAM** durante el desarrollo. Los diagnósticos mostraron heterocedasticidad, por lo que se adoptó finalmente una familia Gamma con enlace logarítmico, más coherente con una respuesta positiva y con variabilidad que cambia con el nivel de la respuesta. La decisión se tomó durante el desarrollo y no después de observar la prueba de 2025. Esta secuencia es importante porque evita seleccionar la especificación final utilizando el mismo conjunto reservado para evaluar su desempeño.
+
 # Resultados
 
 ## Estructura multivariada mediante PCA
