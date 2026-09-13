@@ -1,0 +1,595 @@
+---
+title: "Comparación final GAM vs. XGBoost para O3 a 24 horas"
+author: "Equipo 4"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Objetivo
+
+Este archivo construye la comparación definitiva entre los dos modelos que formarán parte de la entrega final:
+
+- **GAM Gamma**, como modelo estadístico no lineal e interpretable;
+- **XGBoost**, como modelo predictivo flexible basado en árboles potenciados.
+
+Ambos responden exactamente al mismo problema: predecir `O3` con **24 horas de anticipación**, para horas objetivo entre 10:00 y 20:00 en las estaciones `NTE`, `NTE2`, `NO` y `NE`.
+
+La comparación se realiza sobre **2025**, que permanece como conjunto de prueba final. Además de reportar el desempeño natural de cada modelo, se construye una **muestra común de evaluación** para evitar que la comparación GAM vs. XGBoost dependa únicamente de que XGBoost tolere valores faltantes y GAM requiera casos completos.
+
+# Configuración
+
+```{r}
+#| label: configuracion-comparacion
+library(tidyverse)
+library(here)
+library(lubridate)
+library(mgcv)
+library(xgboost)
+
+options(scipen = 999)
+set.seed(123)
+```
+
+```{r}
+#| label: carga-base-comparacion
+ruta_base_modelado <- here("data", "base_modelado_o3.rds")
+
+if (!file.exists(ruta_base_modelado)) {
+  stop(
+    "No se encontró data/base_modelado_o3.rds. ",
+    "Renderiza primero quarto/reporte.qmd para generar la base de modelado."
+  )
+}
+
+base_origen_modelado <- readRDS(ruta_base_modelado)
+```
+
+# Construcción de la base a 24 horas
+
+La construcción replica la definición utilizada en los archivos finales de GAM y XGBoost. Todas las variables meteorológicas corresponden al instante de origen y no al futuro.
+
+```{r}
+#| label: base-h24-comparacion
+base_h24 <- base_origen_modelado |>
+  arrange(Estacion, fecha_hora) |>
+  group_by(Estacion) |>
+  mutate(
+    O3_alineado_1d = O3_t,
+    O3_alineado_2d = lag(O3_t, 24),
+    O3_alineado_3d = lag(O3_t, 48),
+    O3_alineado_4d = lag(O3_t, 72),
+    O3_objetivo = lead(O3_t, 24)
+  ) |>
+  ungroup() |>
+  mutate(
+    WS_sin = WS * WD_sin,
+    WS_cos = WS * WD_cos,
+    fecha_objetivo = fecha_hora + hours(24),
+    Anio_objetivo = year(fecha_objetivo),
+    Hora_objetivo = hour(fecha_objetivo),
+    Mes_objetivo = month(fecha_objetivo),
+    Hora_sin_obj = sin(2 * pi * Hora_objetivo / 24),
+    Hora_cos_obj = cos(2 * pi * Hora_objetivo / 24),
+    Mes_sin_obj = sin(2 * pi * (Mes_objetivo - 1) / 12),
+    Mes_cos_obj = cos(2 * pi * (Mes_objetivo - 1) / 12),
+    Periodo = case_when(
+      Anio_objetivo %in% 2021:2023 ~ "Entrenamiento",
+      Anio_objetivo == 2024 ~ "Validacion",
+      Anio_objetivo == 2025 ~ "Prueba",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  filter(
+    !is.na(Periodo),
+    between(Hora_objetivo, 10, 20),
+    !is.na(O3_objetivo)
+  )
+
+if (any(base_h24$O3_objetivo <= 0, na.rm = TRUE)) {
+  stop("Se encontraron valores no positivos de O3 objetivo; revisar antes de ajustar el GAM Gamma.")
+}
+```
+
+```{r}
+#| label: resumen-base-comparacion
+base_h24 |>
+  count(Periodo, name = "Observaciones_con_objetivo") |>
+  knitr::kable(
+    caption = "Observaciones disponibles para el problema final a 24 horas"
+  )
+```
+
+# Función de métricas
+
+```{r}
+#| label: funcion-metricas-comparacion
+calcular_metricas <- function(observado, predicho) {
+  tibble(
+    MAE = mean(abs(observado - predicho)),
+    RMSE = sqrt(mean((observado - predicho)^2))
+  )
+}
+```
+
+# GAM final
+
+El GAM conserva la especificación ya fijada en `GAM_h24_final.qmd`. Se entrena con 2021-2024 y se evalúa en 2025. Como GAM no admite valores faltantes en sus predictores, se utilizan casos completos.
+
+```{r}
+#| label: preparar-gam-comparacion
+predictores_gam <- c(
+  "O3_alineado_1d", "O3_alineado_2d",
+  "SR", "TEMP", "RH", "WS_sin", "WS_cos",
+  "Hora_objetivo", "Mes_objetivo", "Estacion"
+)
+
+base_gam <- base_h24 |>
+  drop_na(all_of(predictores_gam)) |>
+  mutate(Estacion = factor(Estacion))
+
+entrenamiento_gam <- base_gam |>
+  filter(Anio_objetivo %in% 2021:2024)
+
+prueba_gam <- base_gam |>
+  filter(Anio_objetivo == 2025)
+```
+
+```{r}
+#| label: ajustar-gam-comparacion
+modelo_gam_final <- bam(
+  O3_objetivo ~
+    s(O3_alineado_1d, k = 10) +
+    s(O3_alineado_2d, k = 10) +
+    s(SR, k = 10) +
+    s(TEMP, k = 15) +
+    s(RH, k = 10) +
+    s(WS_sin, k = 10) +
+    s(WS_cos, k = 10) +
+    s(Hora_objetivo, k = 8) +
+    s(Mes_objetivo, bs = "cc", k = 10) +
+    Estacion,
+  data = entrenamiento_gam,
+  family = Gamma(link = "log"),
+  method = "fREML",
+  discrete = TRUE
+)
+
+pred_gam_2025 <- predict(
+  modelo_gam_final,
+  newdata = prueba_gam,
+  type = "response"
+)
+
+resultados_gam <- prueba_gam |>
+  mutate(Pred_GAM = pred_gam_2025)
+```
+
+# XGBoost final
+
+Para mantener la comparación reproducible, el tuning reducido se repite usando exclusivamente 2021-2023 para entrenamiento y 2024 para validación. Después se congela la configuración seleccionada, se reentrena con 2021-2024 y se predice 2025.
+
+## Matriz de predictores
+
+```{r}
+#| label: predictores-xgb-comparacion
+predictores_xgb <- c(
+  "O3_alineado_1d", "O3_alineado_2d",
+  "O3_alineado_3d", "O3_alineado_4d",
+  "O3_lag_1", "O3_lag_2", "O3_lag_3",
+  "SR", "TEMP", "RH", "WS_sin", "WS_cos",
+  "Hora_sin_obj", "Hora_cos_obj",
+  "Mes_sin_obj", "Mes_cos_obj"
+)
+
+crear_matriz_xgb <- function(datos) {
+  matriz_numerica <- datos |>
+    select(all_of(predictores_xgb)) |>
+    as.matrix()
+
+  storage.mode(matriz_numerica) <- "double"
+
+  matriz_estacion <- model.matrix(
+    ~ Estacion - 1,
+    data = datos
+  )
+
+  cbind(matriz_numerica, matriz_estacion)
+}
+```
+
+## Selección de hiperparámetros con 2024
+
+```{r}
+#| label: bases-desarrollo-xgb
+entrenamiento_xgb <- base_h24 |>
+  filter(Periodo == "Entrenamiento")
+
+validacion_xgb <- base_h24 |>
+  filter(Periodo == "Validacion")
+
+x_train <- crear_matriz_xgb(entrenamiento_xgb)
+x_val <- crear_matriz_xgb(validacion_xgb)
+
+dtrain <- xgb.DMatrix(
+  data = x_train,
+  label = entrenamiento_xgb$O3_objetivo,
+  missing = NA
+)
+
+dval <- xgb.DMatrix(
+  data = x_val,
+  label = validacion_xgb$O3_objetivo,
+  missing = NA
+)
+```
+
+```{r}
+#| label: tuning-xgb-comparacion
+configuraciones_tuning <- tribble(
+  ~Configuracion, ~eta, ~max_depth, ~min_child_weight, ~subsample, ~colsample_bytree,
+  "Inicial", 0.05, 6, 5, 0.8, 0.8,
+  "T1",      0.05, 4, 5, 0.8, 0.8,
+  "T2",      0.05, 8, 5, 0.8, 0.8,
+  "T3",      0.03, 6, 5, 0.8, 0.8,
+  "T4",      0.10, 6, 5, 0.8, 0.8,
+  "T5",      0.05, 6, 10, 0.8, 0.8,
+  "T6",      0.05, 6, 5, 0.7, 0.7
+)
+
+entrenar_configuracion <- function(configuracion) {
+  parametros <- list(
+    objective = "reg:squarederror",
+    eval_metric = "rmse",
+    eta = configuracion$eta,
+    max_depth = configuracion$max_depth,
+    min_child_weight = configuracion$min_child_weight,
+    subsample = configuracion$subsample,
+    colsample_bytree = configuracion$colsample_bytree,
+    lambda = 1
+  )
+
+  set.seed(123)
+
+  modelo <- xgb.train(
+    params = parametros,
+    data = dtrain,
+    nrounds = 1000,
+    evals = list(
+      entrenamiento = dtrain,
+      validacion = dval
+    ),
+    early_stopping_rounds = 30,
+    verbose = 0
+  )
+
+  registro <- as_tibble(attr(modelo, "evaluation_log"))
+  columna_rmse <- names(registro)[
+    str_detect(names(registro), "^validacion.*rmse$")
+  ]
+
+  indice_mejor <- which.min(registro[[columna_rmse]])
+
+  tibble(
+    Configuracion = configuracion$Configuracion,
+    eta = configuracion$eta,
+    max_depth = configuracion$max_depth,
+    min_child_weight = configuracion$min_child_weight,
+    subsample = configuracion$subsample,
+    colsample_bytree = configuracion$colsample_bytree,
+    Mejor_iteracion = registro$iter[indice_mejor],
+    RMSE_validacion = registro[[columna_rmse]][indice_mejor]
+  )
+}
+
+resultados_tuning <- map_dfr(
+  seq_len(nrow(configuraciones_tuning)),
+  ~ entrenar_configuracion(configuraciones_tuning[.x, ])
+) |>
+  arrange(RMSE_validacion)
+
+mejor_configuracion <- resultados_tuning |>
+  slice(1)
+
+resultados_tuning |>
+  mutate(RMSE_validacion = round(RMSE_validacion, 3)) |>
+  knitr::kable(caption = "Selección de configuración XGBoost con validación 2024")
+```
+
+## Reentrenamiento 2021-2024 y prueba 2025
+
+```{r}
+#| label: ajuste-xgb-final-comparacion
+parametros_finales <- list(
+  objective = "reg:squarederror",
+  eval_metric = "rmse",
+  eta = mejor_configuracion$eta[[1]],
+  max_depth = mejor_configuracion$max_depth[[1]],
+  min_child_weight = mejor_configuracion$min_child_weight[[1]],
+  subsample = mejor_configuracion$subsample[[1]],
+  colsample_bytree = mejor_configuracion$colsample_bytree[[1]],
+  lambda = 1
+)
+
+iteraciones_finales <- mejor_configuracion$Mejor_iteracion[[1]]
+
+entrenamiento_xgb_final <- base_h24 |>
+  filter(Anio_objetivo %in% 2021:2024)
+
+prueba_xgb <- base_h24 |>
+  filter(Anio_objetivo == 2025)
+
+dtrain_final <- xgb.DMatrix(
+  data = crear_matriz_xgb(entrenamiento_xgb_final),
+  label = entrenamiento_xgb_final$O3_objetivo,
+  missing = NA
+)
+
+dtest_final <- xgb.DMatrix(
+  data = crear_matriz_xgb(prueba_xgb),
+  label = prueba_xgb$O3_objetivo,
+  missing = NA
+)
+
+set.seed(123)
+
+modelo_xgb_final <- xgb.train(
+  params = parametros_finales,
+  data = dtrain_final,
+  nrounds = iteraciones_finales,
+  verbose = 0
+)
+
+pred_xgb_2025 <- predict(modelo_xgb_final, dtest_final)
+
+resultados_xgb <- prueba_xgb |>
+  mutate(Pred_XGBoost = pred_xgb_2025)
+```
+
+# Desempeño natural de cada modelo
+
+Esta primera tabla respeta la cobertura natural de cada modelo. Para XGBoost se conservan todas las observaciones de 2025 con persistencia diaria disponible; para GAM se conservan sus casos completos. Por ello, **esta tabla describe desempeño operativo, pero no debe utilizarse sola para decidir qué modelo es mejor**.
+
+```{r}
+#| label: metricas-naturales
+muestra_xgb_natural <- resultados_xgb |>
+  filter(!is.na(O3_alineado_1d))
+
+metricas_naturales <- bind_rows(
+  calcular_metricas(
+    muestra_xgb_natural$O3_objetivo,
+    muestra_xgb_natural$O3_alineado_1d
+  ) |>
+    mutate(Muestra = "Cobertura XGBoost", Modelo = "Persistencia diaria", Observaciones = nrow(muestra_xgb_natural), .before = 1),
+  calcular_metricas(
+    muestra_xgb_natural$O3_objetivo,
+    muestra_xgb_natural$Pred_XGBoost
+  ) |>
+    mutate(Muestra = "Cobertura XGBoost", Modelo = "XGBoost", Observaciones = nrow(muestra_xgb_natural), .before = 1),
+  calcular_metricas(
+    resultados_gam$O3_objetivo,
+    resultados_gam$O3_alineado_1d
+  ) |>
+    mutate(Muestra = "Casos completos GAM", Modelo = "Persistencia diaria", Observaciones = nrow(resultados_gam), .before = 1),
+  calcular_metricas(
+    resultados_gam$O3_objetivo,
+    resultados_gam$Pred_GAM
+  ) |>
+    mutate(Muestra = "Casos completos GAM", Modelo = "GAM Gamma", Observaciones = nrow(resultados_gam), .before = 1)
+)
+
+metricas_naturales |>
+  mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+  knitr::kable(caption = "Desempeño natural de los modelos en 2025")
+```
+
+# Comparación directa sobre muestra común
+
+La comparación principal utiliza exactamente las filas de 2025 donde el GAM puede generar una predicción. Sobre esas mismas observaciones se recalculan XGBoost y persistencia. Así, las diferencias de MAE y RMSE no se deben a que cada modelo haya sido evaluado sobre observaciones distintas.
+
+```{r}
+#| label: construir-muestra-comun
+claves_comunes <- resultados_gam |>
+  select(Estacion, fecha_hora, fecha_objetivo)
+
+muestra_comun <- resultados_gam |>
+  select(
+    Estacion, fecha_hora, fecha_objetivo,
+    O3_objetivo, O3_alineado_1d, Pred_GAM
+  ) |>
+  left_join(
+    resultados_xgb |>
+      select(Estacion, fecha_hora, fecha_objetivo, Pred_XGBoost),
+    by = c("Estacion", "fecha_hora", "fecha_objetivo")
+  ) |>
+  drop_na(Pred_XGBoost)
+
+if (nrow(muestra_comun) == 0) {
+  stop("La muestra común GAM-XGBoost quedó vacía; revisar las claves temporales.")
+}
+```
+
+```{r}
+#| label: metricas-muestra-comun
+metricas_comunes <- bind_rows(
+  calcular_metricas(
+    muestra_comun$O3_objetivo,
+    muestra_comun$O3_alineado_1d
+  ) |>
+    mutate(Modelo = "Persistencia diaria", .before = 1),
+  calcular_metricas(
+    muestra_comun$O3_objetivo,
+    muestra_comun$Pred_GAM
+  ) |>
+    mutate(Modelo = "GAM Gamma", .before = 1),
+  calcular_metricas(
+    muestra_comun$O3_objetivo,
+    muestra_comun$Pred_XGBoost
+  ) |>
+    mutate(Modelo = "XGBoost", .before = 1)
+) |>
+  mutate(Observaciones = nrow(muestra_comun), .after = Modelo)
+
+metricas_comunes |>
+  mutate(across(c(MAE, RMSE), ~ round(.x, 3))) |>
+  knitr::kable(
+    caption = "Comparación final sobre la misma muestra de 2025"
+  )
+```
+
+## Mejora respecto a persistencia
+
+```{r}
+#| label: mejora-comun
+referencia_mae <- metricas_comunes |>
+  filter(Modelo == "Persistencia diaria") |>
+  pull(MAE)
+
+referencia_rmse <- metricas_comunes |>
+  filter(Modelo == "Persistencia diaria") |>
+  pull(RMSE)
+
+mejoras_comunes <- metricas_comunes |>
+  filter(Modelo != "Persistencia diaria") |>
+  mutate(
+    Mejora_MAE_pct = 100 * (referencia_mae - MAE) / referencia_mae,
+    Mejora_RMSE_pct = 100 * (referencia_rmse - RMSE) / referencia_rmse
+  )
+
+mejoras_comunes |>
+  select(Modelo, Observaciones, Mejora_MAE_pct, Mejora_RMSE_pct) |>
+  mutate(across(ends_with("pct"), ~ round(.x, 1))) |>
+  knitr::kable(
+    caption = "Reducción del error respecto a persistencia en la muestra común"
+  )
+```
+
+## Comparación gráfica
+
+```{r}
+#| label: grafica-comparacion-comun
+#| fig-cap: "MAE y RMSE de persistencia, GAM y XGBoost sobre la misma muestra de 2025"
+#| fig-width: 8
+#| fig-height: 4.8
+metricas_comunes |>
+  select(Modelo, MAE, RMSE) |>
+  pivot_longer(
+    cols = c(MAE, RMSE),
+    names_to = "Metrica",
+    values_to = "Error"
+  ) |>
+  ggplot(aes(x = Modelo, y = Error, fill = Metrica)) +
+  geom_col(position = "dodge") +
+  labs(x = NULL, y = "Error", fill = "Métrica") +
+  theme_minimal()
+```
+
+# Desempeño por estación sobre la muestra común
+
+```{r}
+#| label: metricas-estacion-comun
+metricas_estacion_comun <- muestra_comun |>
+  group_by(Estacion) |>
+  summarise(
+    Observaciones = n(),
+    MAE_Persistencia = mean(abs(O3_objetivo - O3_alineado_1d)),
+    MAE_GAM = mean(abs(O3_objetivo - Pred_GAM)),
+    MAE_XGBoost = mean(abs(O3_objetivo - Pred_XGBoost)),
+    RMSE_Persistencia = sqrt(mean((O3_objetivo - O3_alineado_1d)^2)),
+    RMSE_GAM = sqrt(mean((O3_objetivo - Pred_GAM)^2)),
+    RMSE_XGBoost = sqrt(mean((O3_objetivo - Pred_XGBoost)^2)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    Mejora_RMSE_GAM_pct = 100 * (RMSE_Persistencia - RMSE_GAM) / RMSE_Persistencia,
+    Mejora_RMSE_XGB_pct = 100 * (RMSE_Persistencia - RMSE_XGBoost) / RMSE_Persistencia
+  )
+
+metricas_estacion_comun |>
+  mutate(
+    across(
+      c(
+        MAE_Persistencia, MAE_GAM, MAE_XGBoost,
+        RMSE_Persistencia, RMSE_GAM, RMSE_XGBoost
+      ),
+      ~ round(.x, 3)
+    ),
+    Mejora_RMSE_GAM_pct = round(Mejora_RMSE_GAM_pct, 1),
+    Mejora_RMSE_XGB_pct = round(Mejora_RMSE_XGB_pct, 1)
+  ) |>
+  knitr::kable(
+    caption = "Comparación GAM vs. XGBoost por estación sobre la muestra común de 2025"
+  )
+```
+
+# Síntesis automática
+
+```{r}
+#| label: sintesis-comparacion
+mejor_mae <- metricas_comunes |>
+  filter(Modelo != "Persistencia diaria") |>
+  slice_min(MAE, n = 1, with_ties = FALSE)
+
+mejor_rmse <- metricas_comunes |>
+  filter(Modelo != "Persistencia diaria") |>
+  slice_min(RMSE, n = 1, with_ties = FALSE)
+
+estaciones_gana_xgb_rmse <- sum(
+  metricas_estacion_comun$RMSE_XGBoost < metricas_estacion_comun$RMSE_GAM
+)
+
+estaciones_gana_gam_rmse <- sum(
+  metricas_estacion_comun$RMSE_GAM < metricas_estacion_comun$RMSE_XGBoost
+)
+```
+
+Sobre una muestra común de **`r format(nrow(muestra_comun), big.mark = ",")` observaciones de 2025**, el menor MAE corresponde a **`r mejor_mae$Modelo[[1]]`** con **`r round(mejor_mae$MAE[[1]], 3)`**, mientras que el menor RMSE corresponde a **`r mejor_rmse$Modelo[[1]]`** con **`r round(mejor_rmse$RMSE[[1]], 3)`**. En la comparación por estación, XGBoost obtiene menor RMSE que GAM en **`r estaciones_gana_xgb_rmse` de `r nrow(metricas_estacion_comun)` estaciones**, mientras que GAM obtiene menor RMSE en **`r estaciones_gana_gam_rmse`**.
+
+Esta comparación permite separar dos preguntas: la cobertura natural de cada modelo y su desempeño cuando ambos se evalúan exactamente sobre las mismas observaciones. Para la conclusión principal del reporte se utilizará la **muestra común**, mientras que la cobertura natural se reportará como una consideración práctica adicional.
+
+# Exportación de resultados
+
+Los siguientes archivos permiten incorporar posteriormente las tablas finales al reporte sin volver a reconstruir manualmente los resultados.
+
+```{r}
+#| label: exportar-comparacion
+ruta_output <- here("output")
+dir.create(ruta_output, showWarnings = FALSE, recursive = TRUE)
+
+write_csv(
+  metricas_naturales,
+  file.path(ruta_output, "comparacion_cobertura_natural_2025.csv")
+)
+
+write_csv(
+  metricas_comunes,
+  file.path(ruta_output, "comparacion_comun_2025.csv")
+)
+
+write_csv(
+  metricas_estacion_comun,
+  file.path(ruta_output, "comparacion_comun_estaciones_2025.csv")
+)
+
+write_csv(
+  muestra_comun,
+  file.path(ruta_output, "predicciones_comunes_2025.csv")
+)
+```
+
+# Qué se usará en el reporte final
+
+Para evitar saturar el documento final, de este archivo se conservarán principalmente:
+
+1. la tabla de **comparación sobre muestra común**;
+2. la tabla resumida de **desempeño por estación**;
+3. una gráfica comparativa de MAE y RMSE;
+4. una explicación breve sobre la diferencia de cobertura entre GAM y XGBoost.
+
+El tuning detallado y las tablas auxiliares permanecerán en este archivo como evidencia reproducible, pero no necesitan ocupar espacio en el cuerpo principal del reporte.
