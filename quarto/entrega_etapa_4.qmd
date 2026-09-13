@@ -18,11 +18,11 @@ execute:
 ---
 
 <!--
-Etapa 4 - Fase 1.
-Este archivo será el reporte final compacto del reto.
-En esta primera fase se fija el problema definitivo y su alcance.
-Las fases posteriores incorporarán preparación resumida, PCA, modelos,
-evaluación final, discusión y conclusiones.
+Etapa 4.
+Fase 1: problema final fijado a 24 horas.
+Fase 2: modelos predictivos alineados al mismo horizonte y esquema temporal.
+Las fases posteriores incorporarán PCA, comparación global, resultados,
+discusión y conclusiones.
 -->
 
 # Problema y objetivo final
@@ -82,8 +82,18 @@ La separación de los datos será estrictamente cronológica para evitar fuga de
 
 El desempeño se comparará principalmente mediante **MAE** y **RMSE**. Además de las métricas globales, se revisará el error por estación para determinar si la capacidad predictiva es consistente entre `NTE`, `NTE2`, `NO` y `NE`.
 
+## Modelos alineados para la comparación final
+
+La Fase 2 deja tres enfoques predictivos bajo la misma definición temporal:
+
+- **Regresión lineal múltiple:** técnica de dependencia interpretable, documentada en `quarto/reg_lineal_o3_h24.qmd`.
+- **GAM Gamma:** modelo estadístico no lineal, documentado en `quarto/GAM_h24_final.qmd`.
+- **XGBoost:** modelo de árboles potenciados, documentado en `quarto/xgboost.qmd`.
+
+Los tres utilizan un objetivo a 24 horas, las mismas cuatro estaciones, la ventana 10:00-20:00 y una separación cronológica que reserva 2025 para la prueba final. Persistencia diaria se mantiene como referencia mínima. Las diferencias en manejo de valores faltantes se conservarán explícitas y la comparación definitiva se realizará posteriormente sobre una muestra común cuando sea necesario.
+
 ## Alcance de la Etapa 4
 
 A partir de esta definición, los análisis de las etapas anteriores se reorganizarán alrededor del problema final. El reporte conservará únicamente los resultados necesarios para justificar las decisiones y responder la pregunta de investigación. Los análisis exploratorios extensos, modelos preliminares y diagnósticos complementarios permanecerán disponibles en los archivos de trabajo y, cuando aporten contexto, podrán citarse brevemente o trasladarse a anexos.
 
-La siguiente fase consistirá en cerrar los modelos que todavía tienen diagnósticos pendientes y asegurar que todos los modelos que formen parte de la comparación final respondan exactamente a esta definición de pronóstico a 24 horas.
+Con el problema y los modelos predictivos ya alineados, la siguiente fase será incorporar la **técnica de interdependencia** requerida para la entrega final. Se utilizará PCA para estudiar la estructura conjunta y la redundancia de las variables relevantes sin convertirlo en el modelo predictivo principal.
