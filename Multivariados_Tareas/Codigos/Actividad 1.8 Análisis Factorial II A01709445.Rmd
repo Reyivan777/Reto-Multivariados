@@ -1,0 +1,451 @@
+---
+title: "Actividad 1.8 Análisis Factorial II"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-09-03"
+output: html_document
+---
+
+# Preparación
+
+Los datos contienen información sobre el consumo de combustible y distintas características de los automóviles. Para el análisis se utilizarán las variables cuantitativas y se eliminarán las observaciones con datos faltantes.
+
+```{r}
+library(MVN)
+library(psych)
+library(GPArotation)
+library(knitr)
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# 1. Lectura y limpieza de los datos
+
+Primero se leen los datos, se asignan nombres descriptivos a las variables y se revisan los valores faltantes.
+
+Posteriormente se eliminan las filas que tengan al menos un valor faltante.
+
+```{r}
+# Leer datos
+datos <- read.csv(
+  "C:\\Users\\reyiv\\Downloads\\cars93.csv",
+  header = TRUE,
+  na.strings = c("NA", "?", "")
+)
+
+# Asignar nombres
+names(datos) <- c(
+  "mpg",
+  "cylinders",
+  "mileage",
+  "horsepower",
+  "weight",
+  "acceleration",
+  "model_year",
+  "origin",
+  "car_name"
+)
+
+# Asegurar que horsepower sea numérica
+datos$horsepower <- as.numeric(as.character(datos$horsepower))
+
+# Origin representa categorías
+datos$origin <- factor(datos$origin)
+
+# Número original de observaciones
+n_original <- nrow(datos)
+
+# Valores faltantes
+cat("Valores faltantes por variable:\n")
+print(colSums(is.na(datos)))
+
+# Eliminar observaciones incompletas
+datos <- na.omit(datos)
+
+# Resumen de la limpieza
+cat("\nObservaciones originales:", n_original)
+cat("\nObservaciones eliminadas:", n_original - nrow(datos))
+cat("\nObservaciones finales:", nrow(datos), "\n")
+
+# Revisar estructura
+str(datos)
+
+# Primeras filas
+head(datos)
+```
+
+La base original tenía 406 observaciones. Se eliminaron 14 filas con valores faltantes, quedando 392 observaciones completas para realizar los análisis posteriores.
+
+# 2. Matriz únicamente de variables numéricas
+
+Las variables `origin` y `car_name` no se incluyen. Aunque `origin` originalmente utiliza números, estos solamente representan categorías y no cantidades numéricas.
+
+Por lo tanto, la matriz de análisis contiene siete variables cuantitativas.
+
+```{r}
+M1 <- datos[, c(
+  "mpg",
+  "cylinders",
+  "mileage",
+  "horsepower",
+  "weight",
+  "acceleration",
+  "model_year"
+)]
+
+# Revisar estructura
+str(M1)
+
+# Dimensiones
+cat("Número de observaciones:", nrow(M1), "\n")
+cat("Número de variables:", ncol(M1), "\n")
+
+head(M1)
+```
+
+La matriz reducida contiene 392 observaciones y 7 variables numéricas. Esta será la matriz utilizada en los análisis multivariados siguientes.
+
+# 3. Normalidad multivariada
+
+Para comprobar la normalidad multivariada se utiliza la prueba de Mardia.
+
+Las hipótesis son:
+
+\[
+H_0: \text{Los datos provienen de una distribución normal multivariada}
+\]
+
+\[
+H_1: \text{Los datos no provienen de una distribución normal multivariada}
+\]
+
+Se utiliza un nivel de significancia de:
+
+\[
+\alpha = 0.05
+\]
+
+```{r}
+resultado_mardia <- MVN::mvn(
+  data = M1,
+  mvn_test = "mardia",
+  univariate_test = "SW"
+)
+
+# Normalidad multivariada
+resultado_mardia$multivariate_normality
+
+# Normalidad individual
+resultado_mardia$univariate_normality
+```
+
+En la prueba de Mardia, tanto la asimetría como la curtosis presentan valores p menores a 0.001. Como estos valores son menores que 0.05, se rechaza \(H_0\). Por lo tanto, los datos no cumplen con el supuesto de normalidad multivariada.
+
+Las pruebas de Shapiro-Wilk también indican que ninguna de las siete variables cumple individualmente con normalidad al nivel de significancia de 0.05.
+
+# 4. Correlación entre las variables
+
+## 4.a Correlaciones por pares
+
+Se calcula la matriz de correlaciones de Pearson y los valores p correspondientes.
+
+Para determinar significancia estadística se utiliza:
+
+\[
+\alpha = 0.01
+\]
+
+Una correlación será considerada significativa cuando su valor p sea menor a 0.01.
+
+```{r}
+resultado_cor <- psych::corr.test(
+  M1,
+  method = "pearson",
+  adjust = "none"
+)
+
+# Matriz de correlaciones
+R <- resultado_cor$r
+
+# Matriz de valores p
+P <- resultado_cor$p
+
+# Mostrar correlaciones
+knitr::kable(
+  round(R, 3),
+  caption = "Matriz de correlaciones de Pearson"
+)
+
+# Mostrar valores p
+knitr::kable(
+  round(P, 4),
+  caption = "Matriz de valores p"
+)
+```
+
+Todas las correlaciones entre pares resultaron significativas con \(\alpha=0.01\).
+
+Se observan varias relaciones fuertes. Por ejemplo, `cylinders` y `mileage` tienen una correlación de 0.951, mientras que `mileage` y `weight` tienen una correlación de 0.933. Por otro lado, `mpg` presenta correlaciones negativas fuertes con variables como `weight` (-0.832) y `mileage` (-0.805).
+
+Esto indica que existe suficiente relación entre varias de las variables para continuar con técnicas de reducción de dimensiones y análisis factorial.
+
+## 4.b Prueba Kaiser-Meyer-Olkin
+
+La prueba KMO permite determinar si las correlaciones entre las variables son adecuadas para realizar un análisis factorial.
+
+La escala utilizada es:
+
+- 0.00 a 0.49: inaceptable.
+- 0.50 a 0.59: miserable.
+- 0.60 a 0.69: mediocre.
+- 0.70 a 0.79: aceptable.
+- 0.80 a 0.89: meritorio.
+- 0.90 a 1.00: maravilloso.
+
+```{r}
+resultado_kmo <- psych::KMO(R)
+
+# KMO general
+cat("KMO general:", round(resultado_kmo$MSA, 3), "\n")
+
+# KMO individual
+tabla_kmo <- data.frame(
+  Variable = names(resultado_kmo$MSAi),
+  KMO = as.numeric(resultado_kmo$MSAi)
+)
+
+knitr::kable(
+  tabla_kmo,
+  digits = 3,
+  caption = "KMO individual por variable"
+)
+```
+
+El KMO general es 0.813, que se encuentra dentro de la categoría meritoria. Esto indica que las correlaciones presentan una estructura adecuada para realizar un análisis factorial.
+
+Los KMO individuales también son aceptables en general, aunque `model_year` presenta el valor más bajo con 0.633.
+
+# 6. Análisis de Componentes Principales
+
+Se realiza un análisis de componentes principales utilizando las variables estandarizadas, ya que las variables originales se encuentran en escalas y unidades diferentes.
+
+```{r}
+pca <- prcomp(
+  M1,
+  center = TRUE,
+  scale. = TRUE
+)
+
+# Resumen
+summary(pca)
+
+# Autovalores
+autovalores <- pca$sdev^2
+
+# Proporción de varianza
+prop_varianza <- autovalores / sum(autovalores)
+
+# Proporción acumulada
+prop_acumulada <- cumsum(prop_varianza)
+
+# Tabla
+tabla_pca <- data.frame(
+  Componente = paste0("PC", seq_along(autovalores)),
+  Autovalor = autovalores,
+  Porcentaje_varianza = prop_varianza * 100,
+  Porcentaje_acumulado = prop_acumulada * 100
+)
+
+knitr::kable(
+  tabla_pca,
+  digits = 3,
+  caption = "Varianza explicada por los componentes principales"
+)
+```
+
+El primer componente explica 71.581% de la varianza total. El segundo explica 12.366% adicional, por lo que los primeros dos componentes explican conjuntamente 83.946% de la variabilidad de los datos.
+
+El tercer componente aumenta la proporción acumulada hasta 94.352%, pero su contribución individual es considerablemente menor que la del primer componente.
+
+# 7. Selección del número de componentes
+
+Se utiliza el gráfico Scree, el criterio de Kaiser y la proporción acumulada de varianza para decidir cuántos componentes conservar.
+
+Según el criterio de Kaiser, se consideran principalmente los componentes cuyo autovalor sea mayor que 1.
+
+```{r}
+# Gráfico Scree
+psych::scree(
+  R,
+  factors = FALSE,
+  pc = TRUE,
+  main = "Gráfico Scree de los componentes principales"
+)
+
+# Criterio de Kaiser
+n_kaiser <- sum(autovalores > 1)
+
+# Componentes necesarios para explicar al menos 80%
+n_80 <- which(prop_acumulada >= 0.80)[1]
+
+cat("Componentes con autovalor > 1:", n_kaiser, "\n")
+cat("Componentes para explicar al menos 80%:", n_80, "\n")
+```
+
+El criterio de Kaiser conservaría únicamente un componente, ya que solamente PC1 tiene un autovalor mayor que 1.
+
+Sin embargo, un solo componente explica 71.581% de la varianza, mientras que los primeros dos explican 83.946%. Por lo tanto, se consideran dos componentes para representar una mayor proporción de la información original.
+
+# 8. Análisis factorial
+
+Se realiza un análisis factorial de dos factores mediante máxima verosimilitud.
+
+Se comparan dos tipos de rotación ortogonal:
+
+- Varimax.
+- Quartimax.
+
+```{r}
+n_factores <- 2
+
+# Rotación Varimax
+fa_varimax <- psych::fa(
+  R,
+  nfactors = n_factores,
+  n.obs = nrow(M1),
+  rotate = "varimax",
+  fm = "ml"
+)
+
+# Rotación Quartimax
+fa_quartimax <- psych::fa(
+  R,
+  nfactors = n_factores,
+  n.obs = nrow(M1),
+  rotate = "quartimax",
+  fm = "ml"
+)
+
+cat("MODELO VARIMAX\n")
+print(fa_varimax, cut = 0.30, sort = TRUE)
+
+cat("\nMODELO QUARTIMAX\n")
+print(fa_quartimax, cut = 0.30, sort = TRUE)
+```
+
+## Cargas factoriales
+
+```{r}
+# Extraer las cargas
+cargas_varimax <- unclass(fa_varimax$loadings)
+cargas_quartimax <- unclass(fa_quartimax$loadings)
+
+# Tabla Varimax
+tabla_varimax <- data.frame(
+  Variable = rownames(cargas_varimax),
+  round(cargas_varimax, 3),
+  row.names = NULL
+)
+
+# Tabla Quartimax
+tabla_quartimax <- data.frame(
+  Variable = rownames(cargas_quartimax),
+  round(cargas_quartimax, 3),
+  row.names = NULL
+)
+
+knitr::kable(
+  tabla_varimax,
+  caption = "Cargas factoriales - Varimax"
+)
+
+knitr::kable(
+  tabla_quartimax,
+  caption = "Cargas factoriales - Quartimax"
+)
+```
+
+Con Varimax, un factor presenta cargas altas en `weight` (0.939), `mileage` (0.930), `cylinders` (0.909), `horsepower` (0.790) y una carga negativa alta en `mpg` (-0.800).
+
+El otro factor está principalmente asociado con `acceleration`, cuya carga es 0.967.
+
+Quartimax produce una estructura parecida: `mileage`, `weight`, `cylinders` y `horsepower` se concentran principalmente en un factor, mientras que `acceleration` tiene su mayor carga en el segundo.
+
+Por su separación más clara de `acceleration` respecto a las demás variables, se utilizará la rotación Varimax para describir los factores.
+
+## Comunalidades
+
+Las comunalidades representan la proporción de la variabilidad de cada variable que puede ser explicada por los factores obtenidos.
+
+```{r}
+tabla_comunalidades <- data.frame(
+  Variable = rownames(cargas_varimax),
+  Comunalidad = fa_varimax$communality,
+  Unicidad = fa_varimax$uniquenesses
+)
+
+knitr::kable(
+  tabla_comunalidades,
+  digits = 3,
+  caption = "Comunalidades y unicidades - Varimax"
+)
+```
+
+La mayoría de las variables son bien representadas por los dos factores. Por ejemplo, `acceleration` tiene una comunalidad de 0.995, `mileage` de 0.971 y `weight` de 0.919.
+
+En cambio, `model_year` tiene una comunalidad de solo 0.157, por lo que los dos factores explican poco de su variabilidad.
+
+# 9. Composiciones lineales e identificación de los factores
+
+Utilizando las cargas de la rotación Varimax, las variables estandarizadas se pueden expresar aproximadamente en función de los dos factores de la siguiente manera:
+
+\[
+Z_{mpg}=-0.800F_1+0.234F_2+e_{mpg}
+\]
+
+\[
+Z_{cylinders}=0.909F_1-0.291F_2+e_{cylinders}
+\]
+
+\[
+Z_{mileage}=0.930F_1-0.326F_2+e_{mileage}
+\]
+
+\[
+Z_{horsepower}=0.790F_1-0.512F_2+e_{horsepower}
+\]
+
+\[
+Z_{weight}=0.939F_1-0.192F_2+e_{weight}
+\]
+
+\[
+Z_{acceleration}=-0.246F_1+0.967F_2+e_{acceleration}
+\]
+
+\[
+Z_{model\_year}=-0.331F_1+0.217F_2+e_{model\_year}
+\]
+
+El primer factor está principalmente relacionado con `weight`, `mileage`, `cylinders` y `horsepower`, además de presentar una relación negativa con `mpg`. Por ello, puede interpretarse como un factor relacionado con las características físicas, potencia y consumo del automóvil.
+
+El segundo factor está dominado por `acceleration`, con una carga de 0.967, por lo que puede interpretarse principalmente como un factor relacionado con la aceleración.
+
+`model_year` presenta cargas pequeñas en ambos factores, lo cual coincide con su baja comunalidad y muestra que no queda bien representada por esta estructura de dos factores.
+
+# 10. Diferencias entre Componentes Principales y Análisis Factorial
+
+El análisis de componentes principales y el análisis factorial buscan representar varias variables mediante un menor número de dimensiones, pero sus objetivos son diferentes.
+
+El análisis de componentes principales utiliza la varianza total de las variables y construye componentes que buscan explicar la mayor cantidad posible de esa variabilidad. Se utiliza principalmente para reducir la dimensionalidad de los datos.
+
+El análisis factorial busca explicar las correlaciones y la varianza común entre las variables mediante factores latentes. Además, reconoce que existe una parte de cada variable que no es explicada por los factores comunes.
+
+Por lo tanto, componentes principales se enfoca principalmente en reducir el número de variables, mientras que el análisis factorial busca encontrar factores subyacentes que expliquen las relaciones entre ellas.
+
+# Declaratoria de uso de Inteligencia Artificial
+
+Para la realización de esta actividad se utilizó ChatGPT como herramienta de apoyo para estructurar el código en R, revisar la sintaxis, organizar el procedimiento estadístico y apoyar en la interpretación de los resultados. La ejecución del análisis, revisión de los resultados y elaboración final de la actividad fueron supervisadas y validadas por mí.
