@@ -1,0 +1,484 @@
+---
+title: "Actividad 1.8 Análisis Factorial I"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# El problema del Lago
+
+El objetivo es estudiar si las relaciones entre las variables limnológicas pueden explicarse mediante un número reducido de factores latentes. Para ello se analizarán las correlaciones, la viabilidad del análisis factorial y posteriormente se compararán los métodos de máxima verosimilitud y mínimo residuo.
+
+# 0. Preparación de los datos
+
+```{r}
+library(psych)
+library(corrplot)
+library(performance)
+library(GPArotation)
+
+# Seleccionar archivo
+datos <- read.csv("C:\\Users\\reyiv\\Downloads\\datoslago.csv")
+
+# Variables que se utilizarán
+M <- datos[, c(
+  "Tamano",
+  "Temperatura",
+  "Proteinas",
+  "Oxigeno",
+  "LnProteinas",
+  "LnTamano"
+)]
+
+# Eliminar registros incompletos
+M <- na.omit(M)
+
+head(M)
+summary(M)
+nrow(M)
+```
+
+La base utilizada contiene 90 observaciones y seis variables numéricas, las cuales serán utilizadas para estudiar la estructura de correlaciones y posteriormente construir los factores.
+
+# 1. Matriz de correlaciones y valores p
+
+Primero se calcula la matriz de correlaciones de Pearson. También se obtienen los valores p para determinar cuáles relaciones son estadísticamente significativas.
+
+```{r}
+Corr <- corr.test(M, adjust = "none")
+
+# Matriz de correlaciones
+round(Corr$r, 3)
+
+# Valores p
+round(Corr$p, 4)
+```
+
+## Correlaciones significativas
+
+```{r}
+Corr$p < 0.05
+```
+
+La mayoría de las variables presentan correlaciones significativas. Las relaciones positivas más fuertes aparecen entre Tamano y LnTamano (0.974), LnProteinas y LnTamano (0.858) y Tamano y LnProteinas (0.844).
+
+La única relación no significativa al nivel de 0.05 es Temperatura con LnProteinas ($p=0.46$). En general, existe suficiente relación entre varias variables como para continuar evaluando la aplicación del análisis factorial.
+
+# 2. Gráfica de la matriz de correlaciones
+
+```{r}
+corrplot(
+  Corr$r,
+  method = "color",
+  type = "lower",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  diag = FALSE,
+  number.cex = 0.7
+)
+```
+
+La gráfica confirma que Tamano, LnTamano, Proteinas y LnProteinasforman el grupo con relaciones positivas más fuertes. Oxigeno presenta principalmente relaciones negativas, mientras que Temperatura muestra relaciones más débiles.
+
+# 3. Correlaciones parciales
+
+La correlación parcial mide la relación entre dos variables después de controlar el efecto de las demás.
+
+```{r}
+cor_parcial <- partial.r(Corr$r)
+
+round(cor_parcial, 3)
+```
+
+## Gráfica de correlaciones parciales
+
+```{r}
+corrplot(
+  cor_parcial,
+  method = "color",
+  type = "lower",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  diag = FALSE,
+  number.cex = 0.7
+)
+```
+
+Al controlar las demás variables, varias correlaciones disminuyen o cambian. Sin embargo, Tamano y LnTamano continúan fuertemente relacionados (0.904) y Proteinas y LnProteinas mantienen una relación importante (0.625).
+
+Esto indica que algunas relaciones originales estaban parcialmente influenciadas por las demás variables.
+
+# 4. Prueba de esfericidad de Bartlett
+
+La prueba de Bartlett permite comprobar si existe correlación conjunta entre las variables.
+
+Las hipótesis son:
+
+$$H_0: R=I$$
+
+La matriz de correlaciones es una matriz identidad y no existe correlación conjunta.
+
+$$H_1: R\neq I$$
+
+Existe correlación conjunta significativa entre las variables.
+
+```{r}
+bartlett <- cortest.bartlett(
+  Corr$r,
+  n = nrow(M)
+)
+
+bartlett
+```
+
+```{r}
+bartlett$chisq
+bartlett$df
+bartlett$p.value
+```
+
+Se obtuvo:
+
+$$\chi^2 = 557.86,\qquad gl=15,\qquad p<0.001$$
+
+Como el valor p es menor a 0.05, se rechaza $H_0$. Por lo tanto, la matriz de correlaciones es diferente de la identidad y existe correlación conjunta suficiente para considerar el análisis factorial.
+
+# 5. Medida de adecuación muestral KMO
+
+El KMO permite evaluar si las correlaciones tienen una estructura suficientemente compacta para ser explicadas mediante factores comunes.
+
+```{r}
+K <- KMO(Corr$r)
+
+K
+```
+
+## KMO global
+
+```{r}
+K$MSA
+```
+
+## KMO individual
+
+```{r}
+round(K$MSAi, 3)
+```
+
+El KMO global es 0.63, por lo que la adecuación para realizar análisis factorial es mediocre pero aceptable.
+
+La variable más problemática es Temperatura, con KMO = 0.409. En cambio, LnProteinas presenta el mejor resultado, con 0.730.
+
+Esto no contradice Bartlett: Bartlett indica que sí existen correlaciones entre las variables, mientras que KMO muestra que la estructura factorial de esas correlaciones no es especialmente fuerte.
+
+# 6. Determinación del número de factores
+
+Se utilizarán la gráfica de Cattell y el análisis paralelo.
+
+# 6.1 Gráfica de Cattell
+
+```{r}
+scree(
+  M,
+  factors = TRUE,
+  pc = FALSE
+)
+```
+
+La gráfica presenta una caída pronunciada en los primeros factores y después comienza a estabilizarse. El cambio de pendiente sugiere conservar aproximadamente **2 factores**.
+
+# 6.2 Análisis paralelo: máxima verosimilitud
+
+```{r}
+set.seed(123)
+
+paralelo_ml <- fa.parallel(
+  M,
+  fa = "fa",
+  fm = "ml",
+  n.iter = 100,
+  main = "Análisis paralelo - Máxima verosimilitud"
+)
+```
+
+# 6.3 Análisis paralelo: mínimo residuo
+
+```{r, warning=FALSE}
+set.seed(123)
+
+paralelo_minres <- fa.parallel(
+  M,
+  fa = "fa",
+  fm = "minres",
+  n.iter = 100,
+  main = "Análisis paralelo - Mínimo residuo"
+)
+```
+
+Tanto máxima verosimilitud como mínimo residuo recomiendan conservar 2 factores.
+
+Este resultado coincide razonablemente con la gráfica de Cattell, por lo que se utilizarán 2 factores en los modelos posteriores.
+
+# 7. Análisis factorial sin rotación
+
+```{r}
+n_factores <- 2
+```
+
+# 7.1 Máxima verosimilitud
+
+```{r}
+modelo_ml <- fa(
+  M,
+  nfactors = n_factores,
+  rotate = "none",
+  fm = "ml"
+)
+
+print(
+  modelo_ml,
+  cut = 0.30,
+  sort = TRUE
+)
+```
+
+En máxima verosimilitud, el primer factor está asociado principalmente con Tamano, LnTamano, Proteinas y LnProteinas. El segundo factor presenta relaciones importantes con Proteinas y Temperatura.
+
+Los dos factores explican aproximadamente 70.7% de la varianza total.
+
+# 7.2 Mínimo residuo
+
+```{r}
+modelo_minres <- fa(
+  M,
+  nfactors = n_factores,
+  rotate = "none",
+  fm = "minres"
+)
+
+print(
+  modelo_minres,
+  cut = 0.30,
+  sort = TRUE
+)
+```
+
+Con mínimo residuo, el primer factor también está dominado por Tamano, LnTamano, Proteinas y LnProteinas, mientras que el segundo está principalmente relacionado con Temperatura y, en menor medida, Oxigeno.
+
+Los dos factores explican aproximadamente 75.6% de la varianza, ligeramente más que máxima verosimilitud.
+
+# 8. Comparación de comunalidades
+
+La comunalidad indica qué proporción de la variabilidad de cada variable es explicada por los factores.
+
+```{r}
+tabla_comunalidades <- data.frame(
+  Variable = rownames(modelo_ml$loadings),
+  Comunalidad_ML = round(modelo_ml$communality, 3),
+  Unicidad_ML = round(modelo_ml$uniquenesses, 3),
+  Comunalidad_MINRES = round(modelo_minres$communality, 3),
+  Unicidad_MINRES = round(modelo_minres$uniquenesses, 3)
+)
+
+tabla_comunalidades
+```
+
+Tamano, LnTamano y LnProteinas son bien representadas por los factores en ambos métodos.
+
+La variable peor representada es Oxigeno, con comunalidades de 0.207 en máxima verosimilitud y 0.284 en mínimo residuo.
+
+Mínimo residuo representa especialmente mejor a Temperatura, cuya comunalidad aumenta de 0.396 a 0.845.
+
+# 9. Rotación Varimax
+
+Varimax busca obtener una estructura más clara, haciendo que cada variable tenga cargas altas principalmente en un factor.
+
+# 9.1 Varimax con máxima verosimilitud
+
+```{r}
+modelo_ml_varimax <- fa(
+  M,
+  nfactors = n_factores,
+  rotate = "varimax",
+  fm = "ml"
+)
+
+print(
+  modelo_ml_varimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+```{r}
+fa.diagram(
+  modelo_ml_varimax,
+  main = "Varimax - Máxima verosimilitud"
+)
+```
+
+Después de Varimax, el Factor 1 queda principalmente relacionado con Tamano, LnTamano, Proteinas y LnProteinas.
+
+El Factor 2 está relacionado principalmente con Temperatura y también con Proteinas en sentido negativo. La rotación facilita la separación de las variables entre los dos factores.
+
+# 9.2 Varimax con mínimo residuo
+
+```{r}
+modelo_minres_varimax <- fa(
+  M,
+  nfactors = n_factores,
+  rotate = "varimax",
+  fm = "minres"
+)
+
+print(
+  modelo_minres_varimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+```{r}
+fa.diagram(
+  modelo_minres_varimax,
+  main = "Varimax - Mínimo residuo"
+)
+```
+
+Con mínimo residuo, el Factor 1 vuelve a reunir principalmente Tamano, LnTamano, Proteinas y LnProteinas.
+
+El Factor 2 está claramente dominado por Temperatura (0.910), mientras que Oxigeno presenta una relación positiva moderada (0.397).
+
+Esta solución presenta una separación bastante clara entre los dos factores.
+
+# 10. Rotación Quartimax
+
+Quartimax busca simplificar la representación de cada variable haciendo que dependa de la menor cantidad posible de factores.
+
+# 10.1 Quartimax con máxima verosimilitud
+
+```{r}
+modelo_ml_quartimax <- fa(
+  M,
+  nfactors = n_factores,
+  rotate = "quartimax",
+  fm = "ml"
+)
+
+print(
+  modelo_ml_quartimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+```{r}
+fa.diagram(
+  modelo_ml_quartimax,
+  main = "Quartimax - Máxima verosimilitud"
+)
+```
+
+Quartimax produce una estructura muy similar a Varimax. El primer factor concentra principalmente Tamano y las variables relacionadas con proteínas, mientras que el segundo se relaciona principalmente con Temperatura.
+
+# 10.2 Quartimax con mínimo residuo
+
+```{r}
+modelo_minres_quartimax <- fa(
+  M,
+  nfactors = n_factores,
+  rotate = "quartimax",
+  fm = "minres"
+)
+
+print(
+  modelo_minres_quartimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+```{r}
+fa.diagram(
+  modelo_minres_quartimax,
+  main = "Quartimax - Mínimo residuo"
+)
+```
+
+El resultado es nuevamente muy parecido a Varimax. Un factor concentra Tamano y las variables de proteínas, mientras que el otro está principalmente relacionado con Temperatura y Oxigeno.
+
+Por lo tanto, las dos rotaciones producen conclusiones similares.
+
+# 11. Comparación de los modelos
+
+## Máxima verosimilitud + Varimax
+
+```{r}
+print(
+  modelo_ml_varimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+## Máxima verosimilitud + Quartimax
+
+```{r}
+print(
+  modelo_ml_quartimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+## Mínimo residuo + Varimax
+
+```{r}
+print(
+  modelo_minres_varimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+## Mínimo residuo + Quartimax
+
+```{r}
+print(
+  modelo_minres_quartimax$loadings,
+  cutoff = 0.30,
+  sort = TRUE
+)
+```
+
+# 12. Varianza explicada
+
+```{r}
+modelo_ml_varimax$Vaccounted
+```
+
+```{r}
+modelo_minres_varimax$Vaccounted
+```
+
+Con máxima verosimilitud, los dos factores explican aproximadamente 70.7% de la varianza.
+
+Con mínimo residuo explican aproximadamente 75.6%, por lo que este método logra representar una mayor proporción de la información de las variables.
+
+# 13. Conclusión
+
+La prueba de Bartlett confirmó que existen correlaciones suficientes para realizar análisis factorial. Sin embargo, el KMO global de 0.63 indica que la adecuación de los datos es solamente moderada y Temperatura presenta un KMO individual bajo.
+
+La gráfica de Cattell y, especialmente, el análisis paralelo apoyan una solución de 2 factores.
+
+El primer factor está relacionado principalmente con Tamano, LnTamano, Proteinas y LnProteinas, mientras que el segundo está relacionado principalmente con Temperatura y Oxigeno. Por lo tanto, aparece una estructura de dos dimensiones, aunque no coincide perfectamente con la separación teórica entre productividad y hábitat.
+
+Entre las soluciones analizadas, mínimo residuo con rotación Varimax resulta la opción más conveniente, ya que presenta una estructura clara, un menor residuo y explica aproximadamente 75.6% de la varianza.
+
+El modelo es razonable para estos datos, pero debe interpretarse con cierta precaución debido al KMO moderado y a la baja comunalidad de Oxigeno.
