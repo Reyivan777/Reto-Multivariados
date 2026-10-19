@@ -1,0 +1,621 @@
+---
+title: "Actividad 1.7 Componentes principales"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Se realizará un Análisis de Componentes Principales (ACP) sobre 11 indicadores económicos y sociales de 96 países.
+
+Se compararán dos procedimientos:
+
+- ACP con la matriz de varianzas-covarianzas.
+- ACP con la matriz de correlaciones.
+
+El objetivo es determinar cuál representa mejor la estructura de los datos e interpretar las principales componentes obtenidas.
+
+```{r}
+# Librerías
+suppressPackageStartupMessages({
+  library(FactoMineR)
+  library(factoextra)
+})
+
+# Cargar datos
+datos <- read.csv("C:\\Users\\reyiv\\Downloads\\paises_mundo.csv")
+
+# Variables utilizadas
+X <- datos[, c("CrecPobl", "MortInf", "PorcMujeres", "PNB95",
+               "ProdElec", "LinTelf", "ConsAgua", "PropBosq",
+               "PropDefor", "ConsEner", "EmisCO2")]
+```
+
+# PARTE I - Valores y vectores propios
+
+## 1. ACP con la matriz de varianzas-covarianzas
+
+La matriz de covarianzas conserva las unidades y escalas originales de las variables.
+
+```{r}
+S <- cov(X)
+round(S, 2)
+```
+
+### 1.1 Valores y vectores propios
+
+Los valores propios indican cuánta varianza explica cada componente.
+
+Los vectores propios contienen los coeficientes utilizados para construir las componentes principales.
+
+```{r}
+eig_S <- eigen(S)
+
+valores_S <- eig_S$values
+vectores_S <- eig_S$vectors
+
+rownames(vectores_S) <- colnames(X)
+colnames(vectores_S) <- paste0("CP", 1:ncol(X))
+
+round(valores_S, 3)
+round(vectores_S[, 1:2], 4)
+```
+
+### 1.2 Varianza explicada
+
+La proporción de varianza de cada componente se obtiene dividiendo su valor propio entre la varianza total.
+
+```{r}
+prop_S <- valores_S / sum(diag(S))
+acum_S <- cumsum(prop_S)
+
+tabla_S <- data.frame(
+  Componente = paste0("CP", 1:ncol(X)),
+  Valor_Propio = round(valores_S, 3),
+  Varianza = round(prop_S * 100, 2),
+  Acumulada = round(acum_S * 100, 2)
+)
+
+tabla_S
+```
+
+CP1 explica **90.35%** de la variabilidad y CP2 **9.65%**. En conjunto explican prácticamente toda la varianza.
+
+Sin embargo, los primeros componentes están dominados por variables de gran escala. En CP1 destacan principalmente `PNB95` y `ProdElec`, mientras que en CP2 vuelven a dominar estas mismas variables.
+
+Esto indica que el resultado está fuertemente afectado por las diferencias de unidades y magnitudes.
+
+------------------------------------------------------------------------
+
+## 2. ACP con la matriz de correlaciones
+
+La matriz de correlaciones equivale a trabajar con las variables estandarizadas, por lo que todas tienen una escala comparable.
+
+```{r}
+R <- cor(X)
+round(R, 3)
+```
+
+### 2.1 Valores y vectores propios
+
+```{r}
+eig_R <- eigen(R)
+
+valores_R <- eig_R$values
+vectores_R <- eig_R$vectors
+
+rownames(vectores_R) <- colnames(X)
+colnames(vectores_R) <- paste0("CP", 1:ncol(X))
+
+round(valores_R, 3)
+round(vectores_R[, 1:2], 4)
+```
+
+### 2.2 Varianza explicada
+
+```{r}
+prop_R <- valores_R / sum(diag(R))
+acum_R <- cumsum(prop_R)
+
+tabla_R <- data.frame(
+  Componente = paste0("CP", 1:ncol(X)),
+  Valor_Propio = round(valores_R, 3),
+  Varianza = round(prop_R * 100, 2),
+  Acumulada = round(acum_R * 100, 2)
+)
+
+tabla_R
+```
+
+Con la matriz de correlaciones:
+
+- CP1 explica **36.64%**.
+- CP2 explica **17.55%**.
+- En conjunto explican **54.18%** de la variabilidad.
+
+La varianza queda distribuida de manera más equilibrada porque ninguna variable domina únicamente por tener una escala mayor.
+
+------------------------------------------------------------------------
+
+## 3. Variables que más contribuyen
+
+Para identificar las variables más importantes se comparan los coeficientes de los vectores propios en valor absoluto.
+
+```{r}
+cat("Mayor contribución a CP1:\n")
+head(sort(abs(vectores_R[,1]), decreasing = TRUE), 5)
+
+cat("\nMayor contribución a CP2:\n")
+head(sort(abs(vectores_R[,2]), decreasing = TRUE), 5)
+```
+
+En CP1 destacan:
+
+- `LinTelf`
+- `ConsEner`
+- `MortInf`
+- `EmisCO2`
+- `CrecPobl`
+
+En CP2 destacan:
+
+- `PorcMujeres`
+- `PropBosq`
+- `CrecPobl`
+- `ConsAgua`
+- `EmisCO2`
+
+Los coeficientes de mayor magnitud son los que tienen mayor influencia sobre cada componente.
+
+------------------------------------------------------------------------
+
+## 4. Comparación de los métodos
+
+```{r}
+data.frame(
+  Componente = paste0("CP", 1:ncol(X)),
+  Covarianzas = round(prop_S * 100, 2),
+  Correlaciones = round(prop_R * 100, 2)
+)
+```
+
+Aunque el ACP con covarianzas concentra casi toda la variabilidad en dos componentes, este resultado se debe principalmente a las grandes escalas de `PNB95` y `ProdElec`.
+
+Por ello, para estos datos se considera más apropiado utilizar la **matriz de correlaciones**.
+
+------------------------------------------------------------------------
+
+# PARTE II - Puntuaciones y representación de las observaciones
+
+Los *scores* o puntuaciones indican la posición de cada país en el nuevo sistema definido por las componentes principales.
+
+## 1. Scores con la matriz de covarianzas
+
+Para este análisis los datos únicamente se centran.
+
+```{r}
+X_centrada <- scale(X, center = TRUE, scale = FALSE)
+scores_S <- X_centrada %*% vectores_S
+
+head(scores_S[, 1:2])
+```
+
+### Gráfica de las dos primeras componentes
+
+Se muestran todos los países como puntos y únicamente se etiquetan las cinco observaciones más alejadas del centro para evitar saturar el gráfico.
+
+```{r}
+dist_S <- sqrt(rowSums(scores_S[, 1:2]^2))
+lejanos_S <- order(dist_S, decreasing = TRUE)[1:5]
+
+plot(scores_S[,1], scores_S[,2],
+     pch = 19,
+     xlab = paste0("CP1 (", round(prop_S[1]*100, 2), "%)"),
+     ylab = paste0("CP2 (", round(prop_S[2]*100, 2), "%)"),
+     main = "Scores - Matriz de covarianzas")
+
+abline(h = 0, v = 0, lty = 2)
+
+text(scores_S[lejanos_S,1],
+     scores_S[lejanos_S,2],
+     labels = lejanos_S,
+     pos = 3)
+```
+
+Países cercanos presentan perfiles similares, mientras que los puntos alejados presentan características diferentes al comportamiento general.
+
+En este gráfico la separación está fuertemente influenciada por `PNB95` y `ProdElec`.
+
+------------------------------------------------------------------------
+
+## 2. Scores con la matriz de correlaciones
+
+Ahora las variables se estandarizan antes de calcular las puntuaciones.
+
+```{r}
+X_est <- scale(X)
+scores_R <- X_est %*% vectores_R
+
+head(scores_R[, 1:2])
+```
+
+### Gráfica de las dos primeras componentes
+
+```{r}
+dist_R <- sqrt(rowSums(scores_R[, 1:2]^2))
+lejanos_R <- order(dist_R, decreasing = TRUE)[1:5]
+
+plot(scores_R[,1], scores_R[,2],
+     pch = 19,
+     xlab = paste0("CP1 (", round(prop_R[1]*100, 2), "%)"),
+     ylab = paste0("CP2 (", round(prop_R[2]*100, 2), "%)"),
+     main = "Scores - Matriz de correlaciones")
+
+abline(h = 0, v = 0, lty = 2)
+
+text(scores_R[lejanos_R,1],
+     scores_R[lejanos_R,2],
+     labels = lejanos_R,
+     pos = 3)
+```
+
+La distribución es más equilibrada porque todas las variables se encuentran en una escala comparable.
+
+Las observaciones **31, 16, 37, 75 y 48** son las más alejadas en el plano CP1-CP2. Esto no significa automáticamente que sean errores, sino que tienen perfiles especialmente diferentes al resto.
+
+```{r}
+data.frame(
+  Observacion = lejanos_R,
+  CP1 = round(scores_R[lejanos_R,1], 3),
+  CP2 = round(scores_R[lejanos_R,2], 3),
+  Distancia = round(dist_R[lejanos_R], 3)
+)
+```
+
+------------------------------------------------------------------------
+
+## 3. Uso de `princomp()`
+
+La función `princomp()` permite obtener directamente componentes, cargas y puntuaciones.
+
+```{r}
+cpS <- princomp(X, cor = FALSE, scores = TRUE)
+cpR <- princomp(X, cor = TRUE, scores = TRUE)
+
+summary(cpS)
+summary(cpR)
+```
+
+Las cargas indican la relación de las variables con las componentes.
+
+```{r}
+round(cpR$loadings[, 1:2], 3)
+```
+
+Las puntuaciones indican la posición de cada observación.
+
+```{r}
+head(round(cpR$scores[, 1:2], 3))
+```
+
+`summary()` muestra la varianza explicada, `$loadings` contiene los coeficientes de las componentes y `$scores` contiene las puntuaciones de los países.
+
+Los signos pueden aparecer invertidos respecto al cálculo con `eigen()`. Esto no cambia el resultado ni la interpretación del ACP.
+
+------------------------------------------------------------------------
+
+## 4. Biplots
+
+Para evitar la saturación del `biplot()` tradicional se utiliza `factoextra`. Los países se representan como puntos y las etiquetas se reservan para las variables.
+
+```{r}
+pca_S <- PCA(X, scale.unit = FALSE, ncp = ncol(X), graph = FALSE)
+pca_R <- PCA(X, scale.unit = TRUE, ncp = ncol(X), graph = FALSE)
+```
+
+### Biplot de covarianzas
+
+Debido al fuerte efecto de escala, se muestran las cinco variables con mayor contribución.
+
+```{r}
+fviz_pca_biplot(
+  pca_S,
+  geom.ind = "point",
+  label = "var",
+  select.var = list(contrib = 5),
+  repel = TRUE,
+  title = "Biplot - Matriz de covarianzas"
+)
+```
+
+### Biplot de correlaciones
+
+```{r}
+fviz_pca_biplot(
+  pca_R,
+  geom.ind = "point",
+  label = "var",
+  repel = TRUE,
+  title = "Biplot - Matriz de correlaciones"
+)
+```
+
+En los biplots:
+
+- Puntos cercanos representan países similares.
+- Una observación situada en la dirección de una variable tiende a presentar valores altos en ella.
+- Flechas en direcciones similares indican una relación positiva.
+- Flechas opuestas indican una relación negativa.
+
+El biplot de correlaciones resulta más informativo porque las variables tienen escalas comparables.
+
+------------------------------------------------------------------------
+
+# PARTE III - Gráficos del Análisis de Componentes Principales
+
+En esta parte se analizan los individuos, las variables, la varianza explicada y las contribuciones mediante `factoextra`.
+
+## 1. Gráficos con la matriz de covarianzas
+
+### 1.1 Individuos
+
+Para evitar sobreponer 96 etiquetas se muestran únicamente los puntos.
+
+```{r}
+fviz_pca_ind(
+  pca_S,
+  geom.ind = "point",
+  title = "Individuos - Covarianzas"
+)
+```
+
+Cada punto representa un país. Países cercanos tienen perfiles similares y los más alejados presentan características diferentes.
+
+------------------------------------------------------------------------
+
+### 1.2 Variables
+
+Como las diferencias de escala hacen que algunas variables dominen el gráfico, se muestran las cinco de mayor contribución.
+
+```{r}
+fviz_pca_var(
+  pca_S,
+  select.var = list(contrib = 5),
+  repel = TRUE,
+  title = "Variables principales - Covarianzas"
+)
+```
+
+`PNB95` y `ProdElec` dominan la representación. Esto confirma visualmente que el ACP con covarianzas está fuertemente influenciado por las variables de mayor escala.
+
+------------------------------------------------------------------------
+
+### 1.3 Scree plot
+
+```{r}
+fviz_screeplot(
+  pca_S,
+  addlabels = TRUE,
+  title = "Varianza explicada - Covarianzas"
+)
+```
+
+CP1 explica 90.35% y CP2 9.65%. La concentración casi total de la varianza en estas dos componentes se debe principalmente al efecto de las escalas originales.
+
+------------------------------------------------------------------------
+
+### 1.4 Contribución de las variables
+
+Se analiza la contribución conjunta al plano formado por CP1 y CP2.
+
+```{r}
+fviz_contrib(
+  pca_S,
+  choice = "var",
+  axes = 1:2,
+  top = 11,
+  title = "Contribución a CP1-CP2 - Covarianzas"
+)
+```
+
+Las variables de gran escala concentran la mayor contribución, especialmente `PNB95` y `ProdElec`.
+
+------------------------------------------------------------------------
+
+## 2. Gráficos con la matriz de correlaciones
+
+### 2.1 Individuos
+
+```{r}
+fviz_pca_ind(
+  pca_R,
+  geom.ind = "point",
+  title = "Individuos - Correlaciones"
+)
+```
+
+La distribución de los países es más equilibrada porque ninguna variable domina únicamente por su escala.
+
+Los puntos alejados representan países con perfiles económicos y sociales especialmente diferentes.
+
+------------------------------------------------------------------------
+
+### 2.2 Variables
+
+```{r}
+fviz_pca_var(
+  pca_R,
+  repel = TRUE,
+  title = "Variables - Correlaciones"
+)
+```
+
+La dirección de las flechas permite estudiar las relaciones entre variables:
+
+- Direcciones similares indican asociación positiva.
+- Direcciones opuestas indican asociación negativa.
+- Direcciones aproximadamente perpendiculares indican poca relación.
+
+Además, la posición de cada flecha permite observar su relación con CP1 y CP2.
+
+------------------------------------------------------------------------
+
+### 2.3 Scree plot
+
+```{r}
+fviz_screeplot(
+  pca_R,
+  addlabels = TRUE,
+  title = "Varianza explicada - Correlaciones"
+)
+```
+
+CP1 explica 36.64%, CP2 17.55% y CP3 12.46%.
+
+Las primeras dos componentes acumulan 54.18% de la variabilidad y las primeras tres aproximadamente 66.64%.
+
+------------------------------------------------------------------------
+
+### 2.4 Contribución de las variables
+
+```{r}
+fviz_contrib(
+  pca_R,
+  choice = "var",
+  axes = 1:2,
+  top = 11,
+  title = "Contribución a CP1-CP2 - Correlaciones"
+)
+```
+
+La contribución se encuentra distribuida entre distintas variables, lo que confirma que la estandarización evita que una o dos variables dominen todo el análisis.
+
+------------------------------------------------------------------------
+
+## 3. Información adicional de `PCA()`
+
+`PCA()` permite acceder directamente a los resultados utilizados para construir los gráficos.
+
+```{r}
+# Valores propios y varianza explicada
+pca_R$eig
+
+# Contribución de las variables
+round(pca_R$var$contrib[, 1:2], 2)
+
+# Calidad de representación
+round(pca_R$var$cos2[, 1:2], 2)
+
+# Scores de las observaciones
+head(round(pca_R$ind$coord[, 1:2], 2))
+```
+
+- `$eig` muestra los valores propios y la varianza explicada.
+- `$var$contrib` indica cuánto aporta cada variable.
+- `$var$cos2` muestra qué tan bien está representada cada variable.
+- `$ind$coord` contiene las puntuaciones de los países.
+
+Estas opciones permiten complementar la información observada en los gráficos.
+
+------------------------------------------------------------------------
+
+# PARTE IV - Conclusiones
+
+## 1. Comparación de los métodos
+
+Los dos procedimientos permiten reducir la dimensión de los 11 indicadores, pero producen resultados distintos.
+
+Con la matriz de covarianzas, CP1 y CP2 explican prácticamente toda la variabilidad. Sin embargo, el análisis está dominado por `PNB95` y `ProdElec` debido a sus grandes escalas.
+
+Con la matriz de correlaciones, la varianza se distribuye entre más componentes porque todas las variables tienen una escala comparable.
+
+Por lo tanto, para estos datos se recomienda utilizar la **matriz de correlaciones**.
+
+------------------------------------------------------------------------
+
+## 2. Interpretación de CP1
+
+Los coeficientes de mayor magnitud en CP1 corresponden principalmente a:
+
+- `LinTelf`: 0.446
+- `ConsEner`: 0.415
+- `MortInf`: -0.392
+- `EmisCO2`: 0.375
+- `CrecPobl`: -0.314
+
+También presentan coeficientes positivos `PNB95` y `ProdElec`.
+
+Por ello, CP1 puede interpretarse como un **índice de desarrollo e industrialización**.
+
+Valores altos de CP1 están asociados con mayor infraestructura telefónica, consumo de energía, producción económica y emisiones, junto con menor mortalidad infantil y crecimiento poblacional.
+
+------------------------------------------------------------------------
+
+## 3. Interpretación de CP2
+
+En CP2 las variables de mayor magnitud son:
+
+- `PorcMujeres`: -0.583
+- `PropBosq`: -0.457
+- `CrecPobl`: 0.348
+- `ConsAgua`: 0.321
+- `EmisCO2`: 0.292
+
+Esta componente puede interpretarse como una **dimensión demográfico-ambiental**, ya que contrapone principalmente crecimiento poblacional y consumo de recursos con participación femenina y superficie cubierta por bosques.
+
+Su interpretación es menos directa que la de CP1.
+
+------------------------------------------------------------------------
+
+## 4. Combinaciones lineales recomendadas
+
+Debido a que se seleccionó la matriz de correlaciones, las componentes se construyen utilizando las variables estandarizadas.
+
+$$\begin{aligned}
+CP1 ={}& -0.3141Z_{CrecPobl}
+-0.3924Z_{MortInf}
++0.1165Z_{PorcMujeres}\\
+&+0.2954Z_{PNB95}
++0.2590Z_{ProdElec}
++0.4461Z_{LinTelf}\\
+&+0.0924Z_{ConsAgua}
++0.0057Z_{PropBosq}
+-0.2437Z_{PropDefor}\\
+&+0.4150Z_{ConsEner}
++0.3745Z_{EmisCO2}
+\end{aligned}$$
+
+$$\begin{aligned}
+CP2 ={}& 0.3484Z_{CrecPobl}
+-0.0414Z_{MortInf}
+-0.5828Z_{PorcMujeres}\\
+&-0.1769Z_{PNB95}
+-0.1736Z_{ProdElec}
+-0.0272Z_{LinTelf}\\
+&+0.3206Z_{ConsAgua}
+-0.4574Z_{PropBosq}
+-0.1541Z_{PropDefor}\\
+&+0.2329Z_{ConsEner}
++0.2917Z_{EmisCO2}
+\end{aligned}$$
+
+donde:
+
+$$Z_j=\frac{X_j-\bar X_j}{s_j}$$
+
+es la versión estandarizada de cada indicador.
+
+------------------------------------------------------------------------
+
+## 5. Conclusión final
+
+El ACP basado en la **matriz de correlaciones** resulta más adecuado para los indicadores económicos y sociales analizados, ya que evita que las diferencias de unidades y escalas dominen los resultados.
+
+CP1 explica **36.64%** de la variabilidad y representa principalmente una dimensión de desarrollo e industrialización.
+
+CP2 explica **17.55%** y representa principalmente una dimensión demográfico-ambiental.
+
+En conjunto, las dos primeras componentes explican **54.18%** de la variabilidad. Son suficientes para realizar la representación bidimensional solicitada, aunque si se desea conservar más información pueden considerarse componentes adicionales.
