@@ -1,0 +1,141 @@
+---
+title: "Actividad 1.10 Conglomerados no jerárquicos"
+format: html
+editor: visual
+author: 'Rey Iván De La Fuente Chávez'
+---
+
+```{r}
+rm(list = ls())
+```
+
+
+# Análisis clúster no jerárquico con K-means
+
+El objetivo es identificar patrones similares de contaminación atmosférica en las observaciones registradas en Tlalpan durante 2021. Para ello se consideran conjuntamente los contaminantes CO, NO, NO2, NOX, O3, PM10 y SO2.
+
+K-means no busca predecir una variable, sino agrupar observaciones que tengan concentraciones similares de contaminantes.
+
+Primero se elimina la fecha, ya que no se utilizará para calcular las distancias entre observaciones. También se eliminan los valores negativos porque no representan concentraciones válidas. Finalmente, las variables se estandarizan debido a que se encuentran en diferentes escalas y unidades.
+
+```{r}
+library(factoextra)
+library(cluster)
+
+# Leer los datos
+M <- read.csv("C:\\Users\\reyiv\\Downloads\\TLA2021.csv")
+
+# Revisar las variables
+names(M)
+
+# Quitar fecha y hora
+M1 <- M[, !names(M) %in% c("FECHA", "HORA")]
+
+# Convertir valores negativos en datos faltantes
+M1[M1 < 0] <- NA
+
+# Eliminar filas con datos faltantes
+M1 <- na.omit(M1)
+
+# Estandarizar las variables
+Mstand <- scale(M1)
+M1f <- data.frame(Mstand)
+```
+
+# Número óptimo de conglomerados
+
+Para determinar el número adecuado de conglomerados se utilizan el método del codo y el método de la silueta.
+
+El método del codo analiza cómo disminuye la variación dentro de los grupos a medida que aumenta el número de conglomerados. Se busca un punto a partir del cual agregar nuevos grupos produzca una mejora cada vez menor.
+
+```{r}
+set.seed(123)
+
+fviz_nbclust(M1f, kmeans, method = "wss", k.max = 8) +
+  labs(title = "Método del codo")
+```
+
+El gráfico del codo muestra que la reducción de la variación es mayor para los primeros valores de (k) y después comienza a disminuir de forma más gradual. Debido a que este criterio puede ser visual y subjetivo, se complementa con el método de la silueta.
+
+```{r}
+fviz_nbclust(M1f, kmeans, method = "silhouette", k.max = 8) +
+  labs(title = "Método de la silueta")
+```
+
+La silueta mide qué tan bien separadas se encuentran las observaciones entre los distintos conglomerados. Valores más altos indican una mejor agrupación.
+
+Para comparar los resultados con mayor claridad se calcula la silueta promedio para valores de (k) entre 2 y 8.
+
+```{r}
+ks <- 2:8
+
+silueta <- sapply(ks, function(k) {
+  modelo <- kmeans(M1f, centers = k, nstart = 25)
+  mean(silhouette(modelo$cluster, dist(M1f))[, 3])
+})
+
+tabla_silueta <- data.frame(
+  k = ks,
+  Silueta_promedio = round(silueta, 3)
+)
+
+tabla_silueta
+
+k_opt <- ks[which.max(silueta)]
+
+cat("Número óptimo de conglomerados:", k_opt)
+```
+
+El valor más alto de silueta promedio fue de 0.458 para (k=2). Los demás valores presentaron siluetas menores, por lo que se seleccionan 2 conglomerados como la mejor solución entre las opciones evaluadas.
+
+# Modelo final de K-means
+
+A continuación se aplica K-means utilizando los 2 conglomerados seleccionados. El algoritmo asigna cada observación al centro más cercano buscando que las observaciones dentro de cada grupo sean lo más parecidas posible.
+
+```{r}
+set.seed(123)
+
+km_clusters <- kmeans(
+  M1f,
+  centers = k_opt,
+  nstart = 25
+)
+
+fviz_cluster(
+  km_clusters,
+  data = M1f,
+  show.clust.cent = TRUE,
+  ellipse.type = "convex",
+  star.plot = FALSE,
+  repel = TRUE,
+  geom = "point"
+) +
+  labs(title = paste("K-means con", k_opt, "conglomerados"))
+```
+
+El gráfico muestra la separación de las observaciones en dos grupos de acuerdo con el comportamiento conjunto de los contaminantes. Aunque existe cierta cercanía entre algunos puntos, se observa una separación general entre ambos conglomerados.
+
+# Interpretación de los conglomerados
+
+Para interpretar los grupos se calculan los promedios de cada contaminante utilizando nuevamente sus valores originales.
+
+```{r}
+resumen_clusters <- aggregate(
+  M1,
+  by = list(Cluster = km_clusters$cluster),
+  FUN = mean
+)
+
+round(resumen_clusters, 2)
+
+# Cantidad de observaciones por conglomerado
+table(km_clusters$cluster)
+```
+
+El conglomerado 1 contiene 5328 observaciones, aproximadamente el 80% del total. Presenta menores concentraciones promedio de CO, NO, NO2, NOX, PM10 y SO2. Sin embargo, presenta un promedio de O3 más alto, con 29.38 ppb. Este grupo puede interpretarse como el patrón más común de las observaciones, caracterizado por menores niveles de la mayoría de los contaminantes considerados.
+
+El conglomerado 2 contiene 1344 observaciones, aproximadamente el 20% del total. Presenta concentraciones considerablemente mayores de CO, NO, NO2, NOX, PM10 y SO2. Destacan especialmente NO, con 61.90 ppb, y NOX, con 105.88 ppb. En contraste, el O3 es menor que en el conglomerado 1, con un promedio de 10.42 ppb. Este grupo representa observaciones con niveles relativamente mayores de varios contaminantes.
+
+En conjunto, el análisis permitió identificar dos patrones principales de contaminación atmosférica en las observaciones de Tlalpan durante 2021. El primer grupo representa la mayor parte de los registros y presenta menores concentraciones de la mayoría de los contaminantes, mientras que el segundo grupo reúne observaciones con concentraciones mayores de CO, NO, NO2, NOX, PM10 y SO2.
+
+Es importante señalar que esta clasificación es relativa a los datos analizados. El análisis K-means permite identificar diferencias entre los grupos, pero por sí mismo no determina si las concentraciones cumplen o exceden límites oficiales de calidad del aire.
