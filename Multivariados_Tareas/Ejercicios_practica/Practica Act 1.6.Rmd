@@ -1,0 +1,286 @@
+---
+title: "Práctica Act 1.6 - Combinaciones lineales y validación"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+# Instrucciones
+
+Resuelve esta práctica usando principalmente `Formulario_examen/FormularioMultivariado.Rmd` como apoyo.
+
+- No consultes la Actividad 1.6 original mientras la resuelves.
+- Escribe el código necesario debajo de cada inciso.
+- Interpreta brevemente cuando se solicite.
+- Cuando termines, haz Knit a HTML y sube el `.Rmd` y el `.html` al repositorio.
+
+**Valor total: 100 puntos.**
+
+# Problema 1 - Covarianza muestral con matrices (20 puntos)
+
+Considera la matriz de datos
+
+$$X=\begin{pmatrix}
+1 & 3 & 7\\
+2 & 1 & 4\\
+4 & 2 & 8\\
+5 & 4 & 13\\
+7 & 0 & 7
+\end{pmatrix}.$$
+
+Cada fila es una observación y cada columna una variable.
+
+## a) Crear `X` y obtener el vector de medias (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+X <- matrix(c(1, 3, 7,
+              2, 1, 4,
+              4, 2, 8,
+              5, 4, 13,
+              7, 0, 7),
+            nrow = 5, byrow = TRUE)
+```
+
+## b) Calcular la matriz de covarianzas muestral con `cov()` (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+cov(X)
+```
+
+## c) Centrar los datos y comprobar manualmente que
+
+$$S=\frac{1}{n-1}X_c^TX_c$$
+
+(10 puntos)
+
+```{r}
+# Escribe tu código aquí
+medias <- colMeans(X)
+Xc <- sweep(X, 2, medias, "-")
+n <- nrow(X)
+S <- t(Xc) %*% Xc / (n - 1)
+S
+```
+
+# Problema 2 - Combinaciones lineales (25 puntos)
+
+Define
+
+$$b=(1,1,1)^T$$
+
+y
+
+$$c=(2,-1,1)^T.$$
+
+## a) Calcular las combinaciones `bX` y `cX` para cada observación (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+b <- t(matrix(c(1, 1, 1),
+            nrow = 1, byrow = TRUE))
+
+c <- t(matrix(c(2, -1, 1),
+              nrow = 1, byrow = TRUE))
+
+bX <- X %*% b
+cX <- X %*% c
+```
+
+## b) Calcular las medias de ambas combinaciones mediante las fórmulas matriciales (5 puntos)
+
+Usa:
+
+$$E(b^TX)=b^T\bar X$$
+
+$$E(c^TX)=c^T\bar X$$
+
+```{r}
+# Escribe tu código aquí
+t(b) %*% medias 
+t(c) %*% medias 
+```
+
+## c) Calcular
+
+$$Var(b^TX),\qquad Var(c^TX),\qquad Cov(b^TX,c^TX)$$
+
+mediante fórmulas matriciales (10 puntos)
+
+```{r}
+# Escribe tu código aquí
+t(b) %*% S %*% b 
+t(c) %*% S %*% c 
+t(b) %*% S %*% c 
+```
+
+## d) Interpretar la covarianza entre ambas combinaciones (5 puntos)
+
+Escribe tu respuesta aquí: la covarianza es de 27 lo que indica que las variables estan correlacionadas y no son independientes
+
+# Problema 3 - Determinante, valores propios y dependencia lineal (20 puntos)
+
+Usa la matriz de covarianzas `S` del Problema 1.
+
+## a) Calcular el determinante de `S` y la varianza generalizada (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+det(S)
+```
+
+## b) Obtener valores y vectores propios de `S` (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+eigen_S <- eigen(S)
+eigen_S$values
+eigen_S$vectors
+prod(eigen_S$values)
+```
+
+## c) Revisar si existe un valor propio cercano a cero e interpretar qué significa (4 puntos)
+
+Escribe tu respuesta aquí: El tercer valor propio esta muy cercano a 0, lo que indica que la varianza es aproximadamente 0 en esa dirección por lo que es una fuerte señal de que aunque los datos estan en R\^3 realemente se podrían representar en R\^2
+
+## d) Verificar en los datos la relación lineal
+
+$$X_3-X_1-2X_2=0$$
+
+para todas las observaciones (3 puntos)
+
+```{r}
+# Escribe tu código aquí
+0.4082483*X[,1] + 0.8164966*X[,2] + -0.4082483*X[,3]
+```
+
+## e) Comprobar que el producto de los valores propios coincide aproximadamente con `det(S)` (3 puntos)
+
+```{r}
+# Escribe tu código aquí
+1.308008e+01 * 5.819917e+00 * 1.421085e-14
+det(S)
+
+```
+
+# Problema 4 - Prueba de Henze-Zirkler (15 puntos)
+
+Usa los siguientes datos:
+
+```{r datos_hz, echo=TRUE}
+M <- data.frame(
+  X1 = c(8.7, 9.1, 9.4, 9.7, 9.9, 10.0, 10.2, 10.4, 10.6, 10.9, 11.1, 11.4),
+  X2 = c(11.2, 10.1, 10.8, 9.6, 10.4, 9.8, 10.7, 9.4, 10.5, 10.0, 11.0, 9.9)
+)
+
+M
+```
+
+## a) Aplicar la prueba de Henze-Zirkler con `MVN::mvn()` (7 puntos)
+
+```{r}
+# Escribe tu código aquí
+resultado_hz <- MVN::mvn(data = M, mvn_test = "hz")
+resultado_hz
+```
+
+## b) Con $\alpha=0.05$, interpretar la prueba (5 puntos)
+
+Indica claramente:
+
+- $H_0$ Los datos siguen una distribución normal multivariada
+- $H_1$ Los datos no siguen una distribución normal multivariada
+- decisión usando el p-value La distribución es normal multivariada
+- conclusión Todo es normal multivariado y univariado
+
+Escribe tu respuesta aquí:
+
+## c) Generar, si está disponible, una visualización asociada al resultado (3 puntos)
+
+```{r}
+# Escribe tu código aquí
+plot(resultado_hz, type = "persp")
+```
+
+# Problema 5 - Mahalanobis y contorno de probabilidad (20 puntos)
+
+Se tienen datos de edad de automóviles y precio de venta en miles de dólares:
+
+```{r datos_autos, echo=TRUE}
+edad <- c(1, 2, 3, 4, 5, 6, 7, 8, 10, 12)
+precio <- c(24.0, 22.5, 21.0, 19.0, 17.8, 15.5, 13.5, 12.2, 8.5, 6.0)
+
+Autos <- cbind(edad, precio)
+Autos
+```
+
+## a) Crear un diagrama de dispersión y calcular la covarianza entre las dos variables (4 puntos)
+
+```{r}
+# Escribe tu código aquí
+plot(edad, precio,
+     main = "Título",
+     xlab = "Variable X",
+     ylab = "Variable Y",
+     pch = 19)
+
+cov(edad, precio)
+
+```
+
+Interpreta el signo de la covarianza: Estan correlacionadas negativamente
+
+## b) Calcular las distancias de Mahalanobis al cuadrado (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+d2 <- mahalanobis(Autos, colMeans(Autos), cov(Autos))
+d2
+```
+
+## c) Determinar qué observaciones se encuentran dentro del contorno de probabilidad del 50% (5 puntos)
+
+Usa:
+
+$$d_i^2\leq\chi^2_{2,0.50}$$
+
+Calcula también la proporción de observaciones dentro.
+
+```{r}
+# Escribe tu código aquí
+limite <- qchisq(0.5, df = ncol(Autos))
+dentro <- d2 <= limite
+sum(dentro)
+mean(dentro)
+```
+
+## d) Construir el diagrama Chi-cuadrado de las distancias de Mahalanobis (4 puntos)
+
+```{r}
+# Escribe tu código aquí
+n <- nrow(Autos)
+p <- ncol(Autos)
+
+d2_ordenadas <- sort(d2)
+probabilidades <- ((1:n) - 0.5) / n
+chi2 <- qchisq(probabilidades, df = p)
+
+plot(chi2, d2_ordenadas,
+     main = "Diagrama Chi-cuadrado",
+     xlab = "Cuantiles teóricos Chi-cuadrado",
+     ylab = "Distancias de Mahalanobis ordenadas",
+     pch = 19)
+
+abline(0, 1)
+```
+
+## e) Interpretar si los datos parecen aproximadamente compatibles con normalidad bivariada (2 puntos)
+
+Escribe tu respuesta aquí: Los puntos se desvian un poco cuando los cuantiles son más elevados, sin embargo parece que si hay una normalidad bivariada
+
+# Entrega
+
+1.  Haz Knit a HTML.
+2.  Guarda el `.Rmd` y el `.html`.
+3.  Súbelos al repositorio.
+4.  Avísame para revisar código, resultados e interpretación sobre 100 puntos.
