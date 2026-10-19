@@ -1,0 +1,109 @@
+---
+title: "Actividad 2.2. Intervalos de confianza y de predicción"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Actividad 2.2. Intervalos de confianza y de predicción
+
+## 1
+```{r}
+x <- c(1,2,3,4,5)
+y <- c(1.64, 2.3, 3.68, 4.69, 3.89)
+
+modelo <- lm(y ~ x)
+modelo
+
+coef(modelo)
+```
+
+
+
+
+## 2
+```{r}
+datos <- read.csv("C:\\Users\\reyiv\\Downloads\\2_sample_data.csv")
+
+```
+
+```{r}
+# Ajustar el modelo
+modelo <- lm(y ~ x, data = datos)
+
+# Valores de x para construir las bandas
+nuevo_x <- data.frame(
+  x = seq(min(datos$x), max(datos$x), length.out = 200)
+)
+
+# Intervalos de confianza
+confianza <- predict(
+  modelo,
+  newdata = nuevo_x,
+  interval = "confidence",
+  level = 0.95
+)
+
+# Intervalos de predicción
+prediccion <- predict(
+  modelo,
+  newdata = nuevo_x,
+  interval = "prediction",
+  level = 0.95
+)
+
+```
+
+
+```{r}
+# Gráfica de los datos
+plot(
+  datos$x, datos$y,
+  main = "Regresión lineal con bandas de confianza y predicción",
+  xlab = "x",
+  ylab = "y",
+  pch = 19
+)
+
+# Recta de regresión
+lines(
+  nuevo_x$x, confianza[, "fit"],
+  col = "blue", lwd = 3
+)
+
+# Banda de confianza
+lines(
+  nuevo_x$x, confianza[, "lwr"],
+  col = "green", lwd = 2, lty = 2
+)
+
+lines(
+  nuevo_x$x, confianza[, "upr"],
+  col = "green", lwd = 2, lty = 2
+)
+
+# Banda de predicción
+lines(
+  nuevo_x$x, prediccion[, "lwr"],
+  col = "red", lwd = 2, lty = 3
+)
+
+lines(
+  nuevo_x$x, prediccion[, "upr"],
+  col = "red", lwd = 2, lty = 3
+)
+
+# Leyenda
+legend(
+  "topleft",
+  legend = c("Regresión", "95% confianza", "95% predicción"),
+  col = c("blue", "green", "red"),
+  lty = c(1, 2, 3),
+  lwd = c(3, 2, 2)
+)
+```
+
