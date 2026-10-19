@@ -1,0 +1,401 @@
+---
+title: "Actividad 2.4 Detección de datos influyentes"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-25"
+output: html_document
+---
+
+En esta actividad se ajusta un modelo de regresión lineal para explicar la **Resistencia** a partir de las demás variables. Posteriormente se identifican datos atípicos e influyentes y se compara el modelo original con un modelo sin estas observaciones.
+
+```{r}
+# Paquetes necesarios
+library(car)
+library(ggplot2)
+
+# Cargar datos
+datos <- read.csv('C:\\Users\\reyiv\\Downloads\\datosRes-1.csv')
+
+# Revisar la base
+head(datos)
+names(datos)
+```
+
+# 1. Selección de variables por pasos
+
+Primero se construye el modelo completo utilizando todas las variables predictoras.
+
+```{r}
+modelo_completo <- lm(
+  Resistencia ~ Longitud + Altura.matriz + Altura.poste + Altura.amarre,
+  data = datos
+)
+
+summary(modelo_completo)
+```
+
+## 1.1 Selección mediante AIC
+
+Se utiliza el método por pasos para encontrar un modelo con buen ajuste sin incluir variables innecesarias.
+
+```{r}
+modelo_AIC <- step(
+  modelo_completo,
+  direction = "both",
+  trace = 1
+)
+
+summary(modelo_AIC)
+formula(modelo_AIC)
+```
+
+\
+El criterio AIC elimina `Altura.poste` y conserva `Longitud`, `Altura.matriz` y `Altura.amarre`.
+
+## 1.2 Selección mediante BIC
+
+También se realiza la selección mediante BIC, que penaliza más la inclusión de variables adicionales.
+
+```{r}
+n <- nrow(datos)
+
+modelo_BIC <- step(
+  modelo_completo,
+  direction = "both",
+  trace = 1,
+  k = log(n)
+)
+
+summary(modelo_BIC)
+formula(modelo_BIC)
+```
+
+AIC y BIC seleccionan las mismas tres variables, por lo que existe consistencia entre ambos criterios.
+
+Para continuar se utilizará el modelo obtenido mediante AIC.
+
+```{r}
+modelo <- modelo_AIC
+```
+
+# 2. Datos atípicos
+
+## 2.1 Residuos estandarizados
+
+Los residuos estandarizados permiten identificar observaciones cuyo error es mayor al esperado. Se consideran posibles datos atípicos aquellos con valor absoluto mayor a 2.
+
+```{r}
+rstandard_val <- rstandard(modelo)
+
+# Observaciones con |residuo estandarizado| > 2
+which(abs(rstandard_val) > 2)
+```
+
+Las observaciones **9 y 15** presentan residuos estandarizados mayores a 2 en valor absoluto, por lo que pueden considerarse posibles datos atípicos.
+
+## 2.2 Residuos studentizados
+
+Se utiliza un criterio más extremo considerando residuos studentizados mayores a 3 en valor absoluto.
+
+```{r}
+rstudent_val <- rstudent(modelo)
+
+# Observaciones con |residuo studentizado| > 3
+which(abs(rstudent_val) > 3)
+```
+
+No se encontraron observaciones con residuos studentizados mayores a 3, por lo que no existen datos extremadamente atípicos bajo este criterio.
+
+# 3. Datos influyentes
+
+## 3.1 Leverage
+
+El leverage permite identificar observaciones con valores poco comunes en las variables predictoras.
+
+Se utilizará como límite:
+
+$$\frac{2p}{n}$$
+
+donde $p$ es el número de parámetros del modelo y $n$ el número de observaciones.
+
+```{r}
+hat <- hatvalues(modelo)
+
+p <- length(coef(modelo))
+limite_hat <- 2 * p / nrow(datos)
+
+limite_hat
+
+# Observaciones con leverage alto
+which(hat > limite_hat)
+```
+
+La observación **17** presenta leverage alto, por lo que sus valores en las variables predictoras son diferentes a los del resto y podría afectar el modelo.
+
+## 3.2 Distancia de Cook
+
+La distancia de Cook mide qué tanto puede cambiar el modelo por la presencia de una observación.
+
+Se utiliza como referencia:
+
+$$\frac{4}{n}$$
+
+```{r}
+cooks <- cooks.distance(modelo)
+
+limite_cook <- 4 / nrow(datos)
+
+limite_cook
+
+# Observaciones potencialmente influyentes
+which(cooks > limite_cook)
+```
+
+Las observaciones **9, 11, 15 y 17** superan el límite de Cook y se consideran observaciones influyentes.
+
+# 4. Resumen de resultados
+
+Se reúnen los indicadores anteriores en una sola tabla.
+
+```{r}
+tabla <- data.frame(
+  Observacion = 1:nrow(datos),
+  Residual = residuals(modelo),
+  Rstandard = rstandard_val,
+  Rstudent = rstudent_val,
+  Hat = hat,
+  Cooks = cooks
+)
+
+tabla
+```
+
+Para facilitar la revisión, se muestran solamente las observaciones que cumplen al menos uno de los criterios.
+
+```{r}
+
+tabla$Atipico_standard <- abs(tabla$Rstandard) > 2
+tabla$Atipico_student <- abs(tabla$Rstudent) > 3
+tabla$Leverage_alto <- tabla$Hat > limite_hat # 0.32
+tabla$Cook_alto <- tabla$Cooks > limite_cook # 0.16
+
+tabla_importantes <- tabla[
+  tabla$Atipico_standard |
+  tabla$Atipico_student |
+  tabla$Leverage_alto |
+  tabla$Cook_alto,
+]
+
+tabla_importantes
+```
+
+\
+Las observaciones **9, 11, 15 y 17** requieren mayor atención. Las observaciones 9 y 15 son además posibles datos atípicos, mientras que la 17 presenta leverage alto.
+
+# 5. Gráficos complementarios
+
+## 5.1 Variable dependiente contra las variables predictoras
+
+Los gráficos de variable agregada muestran la relación entre cada predictor y la resistencia considerando el efecto de las demás variables.
+
+```{r}
+avPlots(modelo)
+```
+
+\
+Las variables seleccionadas presentan una relación con la resistencia. La relación con `Longitud` es especialmente marcada.
+
+## 5.2 Residuos studentizados absolutos
+
+Se grafican los residuos studentizados absolutos. La línea horizontal representa el límite de 3.
+
+```{r}
+grafica_residuos <- data.frame(
+  Prediccion = predict(modelo),
+  Rstudent = rstudent_val
+)
+
+ggplot(
+  grafica_residuos,
+  aes(x = Prediccion, y = abs(Rstudent))
+) +
+  geom_hline(
+    yintercept = 3,
+    color = "grey",
+    linetype = "dashed"
+  ) +
+  geom_point(
+    aes(color = abs(Rstudent) > 3)
+  ) +
+  scale_color_manual(
+    values = c("FALSE" = "black", "TRUE" = "red")
+  ) +
+  labs(
+    title = "Residuos studentizados",
+    x = "Predicción del modelo",
+    y = "|Residuo studentizado|",
+    color = "|Residuo| > 3"
+  ) +
+  theme_bw()
+```
+
+Ninguna observación supera el límite de 3, por lo que no se identifican valores extremadamente atípicos mediante este criterio.
+
+## 5.3 Gráfico de influencia
+
+El gráfico de influencia permite observar conjuntamente los residuos, leverage y distancia de Cook.
+
+```{r}
+influencePlot(
+  modelo,
+  id = TRUE
+)
+```
+
+El gráfico confirma que algunas observaciones tienen mayor influencia sobre el modelo, especialmente las detectadas anteriormente mediante leverage y distancia de Cook.
+
+# 6. Ajustes al modelo
+
+Como existen observaciones influyentes, se ajustará nuevamente el modelo eliminando las observaciones identificadas mediante la distancia de Cook.
+
+```{r}
+influyentes <- which(cooks > limite_cook)
+
+influyentes
+
+# Base sin las observaciones influyentes
+datos_sin_influyentes <- datos[-influyentes, ]
+
+# Mismo modelo, pero sin esas observaciones
+modelo_sin_influyentes <- lm(
+  formula(modelo),
+  data = datos_sin_influyentes
+)
+
+summary(modelo_sin_influyentes)
+```
+
+Se eliminaron las observaciones **9, 11, 15 y 17** para analizar cuánto cambia el comportamiento del modelo.
+
+## 6.1 Variabilidad explicada
+
+Se comparan $R^2$ y $R^2$ ajustado.
+
+```{r}
+R2_original <- summary(modelo)$r.squared
+R2_nuevo <- summary(modelo_sin_influyentes)$r.squared
+
+R2_ajustado_original <- summary(modelo)$adj.r.squared
+R2_ajustado_nuevo <- summary(modelo_sin_influyentes)$adj.r.squared
+
+R2_original
+R2_nuevo
+
+R2_ajustado_original
+R2_ajustado_nuevo
+```
+
+El $R^2$ aumenta de aproximadamente **0.9896 a 0.9937**. Por lo tanto, después de eliminar las observaciones influyentes, el modelo explica ligeramente más variabilidad de la resistencia.
+
+## 6.2 Significancia global de los modelos
+
+Se calcula el p-valor de la prueba F para ambos modelos.
+
+```{r}
+# Modelo original
+f_original <- summary(modelo)$fstatistic
+
+p_original <- pf(
+  f_original[1],
+  f_original[2],
+  f_original[3],
+  lower.tail = FALSE
+)
+
+# Modelo sin datos influyentes
+f_nuevo <- summary(modelo_sin_influyentes)$fstatistic
+
+p_nuevo <- pf(
+  f_nuevo[1],
+  f_nuevo[2],
+  f_nuevo[3],
+  lower.tail = FALSE
+)
+
+p_original
+p_nuevo
+```
+
+Los dos p-valores son mucho menores a 0.05, por lo que ambos modelos son estadísticamente significativos.
+
+## 6.3 Cumplimiento de los supuestos
+
+Primero se revisan los gráficos de diagnóstico del modelo original.
+
+```{r}
+par(mfrow = c(2, 2))
+
+plot(modelo)
+
+par(mfrow = c(1, 1))
+```
+
+En el modelo original los residuos siguen aproximadamente una distribución normal, pero se observan algunas desviaciones y observaciones con mayor influencia. También existe una ligera curvatura en los residuos.
+
+Ahora se revisa el modelo sin las observaciones influyentes.
+
+```{r}
+par(mfrow = c(2, 2))
+
+plot(modelo_sin_influyentes)
+
+par(mfrow = c(1, 1))
+```
+
+Al eliminar las observaciones influyentes, los residuos presentan un comportamiento más estable y el gráfico Q-Q se mantiene cercano a una línea recta. Existe todavía una ligera curvatura, pero no se observa una violación fuerte de los supuestos.
+
+## 6.4 AIC y BIC
+
+Finalmente se reportan AIC y BIC para ambos modelos.
+
+```{r}
+AIC_original <- AIC(modelo)
+AIC_nuevo <- AIC(modelo_sin_influyentes)
+
+BIC_original <- BIC(modelo)
+BIC_nuevo <- BIC(modelo_sin_influyentes)
+
+AIC_original
+AIC_nuevo
+
+BIC_original
+BIC_nuevo
+```
+
+El modelo sin observaciones influyentes presenta valores menores de AIC y BIC. Sin embargo, los modelos utilizan diferente número de observaciones.
+
+## 6.5 Tabla comparativa
+
+Se resumen los principales indicadores de ambos modelos.
+
+```{r}
+comparacion <- data.frame(
+  Modelo = c("Original", "Sin influyentes"),
+  R2 = c(R2_original, R2_nuevo),
+  R2_ajustado = c(R2_ajustado_original, R2_ajustado_nuevo),
+  P_valor = c(p_original, p_nuevo),
+  AIC = c(AIC_original, AIC_nuevo),
+  BIC = c(BIC_original, BIC_nuevo)
+)
+
+comparacion
+```
+
+El modelo sin observaciones influyentes presenta un $R^2$ ligeramente mayor y residuos más estables. Ambos modelos son estadísticamente significativos.
+
+# 7. Conclusiones
+
+La selección por pasos mediante AIC y BIC produjo el mismo modelo, compuesto por `Longitud`, `Altura.matriz` y `Altura.amarre`. La variable `Altura.poste` fue eliminada durante la selección.
+
+Se identificaron las observaciones **9, 11, 15 y 17** como influyentes mediante la distancia de Cook. Al eliminarlas, el $R^2$ aumentó de aproximadamente **98.96% a 99.37%** y los residuos mostraron un comportamiento más estable.
+
+Por lo tanto, para esta actividad, el modelo sin las observaciones influyentes presenta un ajuste ligeramente mejor. Sin embargo, en una aplicación real estas observaciones deberían revisarse antes de eliminarlas definitivamente.
