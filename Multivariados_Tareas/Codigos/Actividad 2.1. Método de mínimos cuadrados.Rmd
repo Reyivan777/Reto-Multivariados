@@ -1,0 +1,52 @@
+---
+title: "Actividad 2.1. Método de mínimos cuadrados"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Actividad 2.2. Intervalos de confianza y de predicción
+
+## 1.
+```{r}
+x <- c(2.86, 7.29, 2.05, 9.05, 8.61, 5.67)
+y <- c(3.88, 7.47, 2.83, 8.88, 7.43, 4.33)
+
+modelo <- lm(y ~ x)
+modelo
+
+coef(modelo)
+```
+Los resultados que obtuve con el procedimiento a mano fueron muy cercanos pero no los exactos, probablemente debido a que no use todos los decimales en operaciones intermedias.
+
+
+## 2.
+```{r}
+datos <- read.csv("C:\\Users\\reyiv\\Downloads\\2_sample_data.csv")
+
+head(datos)
+str(datos)
+```
+```{r}
+modelo <- lm(y ~ x, data = datos)
+```
+
+```{r}
+coef(modelo)
+summary(modelo)
+```
+```{r}
+plot(datos$x, datos$y,
+     main = "Regresión lineal por mínimos cuadrados",
+     xlab = "x",
+     ylab = "y",
+     pch = 19)
+
+abline(modelo, lwd=3, col='red')
+```
+
