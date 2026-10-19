@@ -1,0 +1,66 @@
+---
+title: "Actividad 1.9 Conglomerados jerárquicos"
+author: 'Rey Iván De La Fuente Chávez'
+format: html
+editor: visual
+---
+
+## Problema 1
+
+Se construye la matriz de distancias entre los cinco objetos y se aplica primero el método jerárquico de promedio (average linkage).
+
+```{r}
+library(ggplot2)
+library(factoextra)
+
+M <- matrix(c(
+  0,   1,   5,   8.5, 7.2,
+  1,   0,   4.5, 7.8, 6.7,
+  5,   4.5, 0,   3.6, 2.2,
+  8.5, 7.8, 3.6, 0,   2,
+  7.2, 6.7, 2.2, 2,   0
+), nrow = 5, byrow = TRUE)
+
+rownames(M) <- colnames(M) <- 1:5
+d <- as.dist(M)
+```
+
+## Método del promedio
+
+```{r}
+J_promedio <- hclust(d, method = "average")
+
+plot(
+  J_promedio,
+  hang = -1,
+  main = "Dendrograma - Método del promedio",
+  xlab = "Objetos",
+  ylab = "Distancia"
+)
+```
+
+En el dendrograma se observa que los objetos 1 y 2 son los primeros en agruparse, a una distancia de 1. Por otro lado, 4 y 5 se agrupan a una distancia de 2 y posteriormente se incorpora el objeto 3. Finalmente, los grupos {1,2} y {3,4,5} se unen a una distancia mucho mayor, por lo que se distinguen claramente dos conglomerados principales.
+
+## Número óptimo de conglomerados
+
+```{r}
+fviz_nbclust(M, FUNcluster = kmeans, method = "wss", k.max = 4)
+```
+
+En la gráfica del método del codo se observa que la disminución de la variación es más importante al pasar de uno a dos conglomerados y después la mejora comienza a reducirse. Esto apoya la elección de 2 conglomerados como una solución adecuada.
+
+## Segundo método: vecino más cercano
+
+```{r}
+J_single <- hclust(d, method = "single")
+
+plot(
+  J_single,
+  hang = -1,
+  main = "Dendrograma - Vecino más cercano",
+  xlab = "Objetos",
+  ylab = "Distancia"
+)
+```
+
+Con el método del vecino más cercano también se agrupan primero los objetos 1 y 2, mientras que 4 y 5 forman otro grupo al que después se incorpora el objeto 3. La estructura final es similar a la del método del promedio, formando los grupos {1,2} y {3,4,5}, aunque las distancias de unión son menores porque este método utiliza únicamente la distancia más corta entre los conglomerados.
