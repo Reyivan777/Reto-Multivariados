@@ -1,0 +1,406 @@
+---
+title: "Actividad 1.1 Normalidad univariada. Transformaciones para normalidad_A01709445"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r}
+rm(list = ls())
+```
+
+
+## Sesgo y curtosis en la Normalidad y fuera de ella
+
+1.  En la normalidad
+
+<!-- -->
+
+A)  Dibuja el gráfico de la distribución normal con media cero y
+    desviación estándar 100
+
+```{r}
+Pob_normal = dnorm(-400:400, 0, 100)
+plot(-400:400, Pob_normal, type="l", main = "Distribución Normal media=0, sigma=100")
+```
+
+B)  Genera 150 datos aleatorios provenientes de una distribución normal
+    con media cero y desviación estándar 100 y dibuja el histograma de
+    los datos generados.
+
+```{r}
+x1=rnorm(150,0,100)
+hist(x1, col=0, main = "Distribución empírica de Normal media=0, sigma=100", freq=FALSE)
+```
+
+C)  Calcula el sesgo y la curtosis de los datos generados:
+
+```{r}
+library (moments)
+sg1 = skewness(x1)
+k1 = kurtosis(x1)
+```
+
+D)  Analiza la normalidad de los datos generados:
+
+```{r}
+# Realiza la prueba de Jarque-Bera: 
+jarque.test(x1)
+
+# Dibuja el QQPlot:
+qqnorm(x1, main = "QQ-Plot de datos Normales")
+qqline(x1, col = "red")
+```
+
+E)  Interpreta:
+
+- Compara el gráfico de la distribución teórica (punto A) con el gráfico
+  de la distribución empírica (punto B), ¿en qué son iguales y en qué
+  son diferentes? El grafico del punto A al ser teórico tiene una
+  distribución normal perfecta, a comparación del grafico B se pueden
+  ver similitudes como que la mayor parte de los datos esta concentrada
+  al centro y mienteas más se aleja de este los valores disminuyen. Sin
+  embargo si se pone más atención al detalle se puede observar que la
+  distribución empírica tiene un sesgo positivo ya que los datos estan
+  muy ligeramente cargados a la derecha, esto se puede comprobar con la
+  prueba de normalidad realizada en el inciso C que nos arrojo un sesgo
+  de 0.007. Por otro lado la distribución empírica no se ve ni muy
+  puntiaguda ni muy aplanada lo que nos lleva a concluir que sus datos
+  estan distribuidos normalmente.
+
+- Relaciona la distribución empírica (punto B) con los valores de sesgo
+  y curtosis (punto C) y el QQPlot y la prueba de normalidad (punto D)
+  El valor calculado del sesgo es 0.007, eso tiene mucho sentido ya que
+  a pesar de que genere valores aleatorios tenian la condición de que
+  siguieran una distrubución normal por lo que es natural que el sesgo
+  tienda a 0. De igual manera se puede ver que la Kurtosis esta muy
+  cerca de 3 (2.74), esto indica que es una kurtosis del tipo
+  Mesocurtica, que de igual manera tiene a el valor teorica de una
+  distribución normal. Ambos valores sesgo y kurtosis tienen al valor
+  teorico de una distrubución normal. En el QQ plot se puede observa que
+  a pesar de que hay algunos puntos que se salen de la linea la gran
+  mayoría estan sobre esta por lo que gracias a este recurso visual se
+  puede concluir con más confianza que la distribución empírica es
+  normal
+
+2.  Fuera de la normalidad Selecciona 3 distribuciones no normales y sus
+    parámetros de forma que su distribución:
+
+- Una que esté muy sesgada a la derecha (puede ser una Exponencial,
+  Weibull o Gamma)
+- Una que esté ligeramente sesgada a la derecha (Weibull o Gamma)
+- Una que esté sesgada a la izquierda (puede ser Weibull o Gamma) OJO:
+  Recuerda que los parámetros de las distribuciones Weibull y Gamma, son
+  alfa y beta, dependiendo de sus valores, la distribución puede ser
+  sesgada a la derecha o a la izquierda. En R, los cálculos de las
+  distribuciones se usa:
+- dgamma(x, alfa, beta) \# función de densidad con una determinada
+  escala y forma
+- pgamma(x, alfa, beta) #función de distribucion acumulada
+- qgamma(p, alfa, beta) #funcion inversa o cuantil
+- rgamma(n, alfa, beta) #numero aleatorios en base a gamma De manera
+  similar, se realiza el cálculo para la Gamma Sigue los pasos de la A a
+  la E que hiciste para la Normal (punto 1)
+
+### Primera distribuciónn
+
+```{r 2.1 A}
+x = seq(0, 10, by = 0.01)
+
+Pob_gamma1 = dgamma(x, shape = 1, rate = 1)
+
+
+plot(x, Pob_gamma1,
+     type = "l",
+     main = "Gamma muy sesgada a la derecha",
+     xlab = "x",
+     ylab = "Densidad")
+```
+
+```{r 2.1 B}
+x2 = rgamma(150, shape = 1, rate = 1)
+
+hist(x2,
+     col = 0,
+     main = "Distribución empírica Gamma muy sesgada a la derecha",
+     freq = FALSE)
+```
+
+```{r 2.1 C}
+sg2 = skewness(x2)
+k2 = kurtosis(x2)
+
+sg2
+k2
+```
+
+```{r 2.1 D}
+jarque.test(x2)
+
+qqnorm(x2, main = "QQ-Plot Gamma muy sesgada a la derecha")
+qqline(x2, col = "red")
+```
+
+### Segunda distribución
+
+```{r 2.2 A}
+x = seq(0, 15, by = 0.01)
+
+Pob_gamma2 = dgamma(x, shape = 5, rate = 1)
+
+plot(x, Pob_gamma2,
+     type = "l",
+     main = "Gamma ligeramente sesgada a la derecha",
+     xlab = "x",
+     ylab = "Densidad")
+```
+
+```{r 2.2 B}
+x3 = rgamma(150, shape = 5, rate = 1)
+
+hist(x3,
+     col = 0,
+     main = "Distribución empírica Gamma ligeramente sesgada a la derecha",
+     freq = FALSE)
+```
+
+```{r 2.2 C}
+sg3 = skewness(x3)
+k3 = kurtosis(x3)
+
+sg3
+k3
+```
+
+```{r 2.2 D}
+jarque.test(x3)
+
+qqnorm(x3, main = "QQ-Plot Gamma ligeramente sesgada a la derecha")
+qqline(x3, col = "red")
+```
+
+### Tercera distribución
+
+```{r 2.3 A}
+x = seq(-10, 0, by = 0.01)
+
+Pob_gamma3 = dgamma(-x, shape = 2, rate = 1)
+
+plot(x, Pob_gamma3,
+     type = "l",
+     main = "Distribución sesgada a la izquierda",
+     xlab = "x",
+     ylab = "Densidad")
+```
+
+```{r 2.3 B}
+x4 = -rgamma(150, shape = 2, rate = 1)
+
+hist(x4,
+     col = 0,
+     main = "Distribución empírica sesgada a la izquierda",
+     freq = FALSE)
+```
+
+```{r 2.3 C}
+sg4 = skewness(x4)
+k4 = kurtosis(x4)
+
+sg4
+k4
+```
+
+```{r 2.3 D}
+jarque.test(x4)
+
+qqnorm(x4, main = "QQ-Plot de datos sesgados a la izquierda")
+qqline(x4, col = "red")
+```
+
+3.  Emite una conclusión de cómo se relaciona la curtosis y el sesgo con
+    la distribución QQPlot y con la prueba de hipótesis de Jarque-Bera.
+
+    La curtosis y el sesgo ayudan a ver que tan diferente es una
+    distribución a comparacion de una normal. Si el sesgo se aleja de 0
+    o la curtosis se aleja de 3 entonces los puntos del QQ plot tienen a
+    separarse de la linea recta. Jarque Bera también utiliza sesgo y
+    curtosis por lo que también afecta y esta tiene a producr p values
+    más pequeños lo que hace que el test sea más propenso a rechazar que
+    la distribución es normal
+
+## Probando normalidad en una base de datos
+
+```{r}
+data(cars)
+library(moments)
+```
+
+```{r}
+# Velocidad
+shapiro.test(cars$speed)
+jarque.test(cars$speed)
+
+# Distancia
+shapiro.test(cars$dist)
+jarque.test(cars$dist)
+```
+
+En el QQ plot de la velocidad se puede ver como casi todos los valores
+estan sobre la linea de referencia que indica distribución normal. Hay
+una pequeña variación en los extremos pero se podría concluir que se
+distribuye normalmente
+
+```{r}
+qqnorm(cars$speed,
+       main = "QQ-Plot de velocidad")
+
+qqline(cars$speed,
+       col = "red")
+```
+
+En el QQ plot de la distancia se puede observar como solo los datos de
+en medio estan sobre la linea mientas que los extremos hacen como una
+forma de gancho, esto confirma lo que decía el saphiro wilk-test. Esa
+variable no se distribuye normalmente.
+
+```{r}
+qqnorm(cars$dist,
+       main = "QQ-Plot de distancia")
+
+qqline(cars$dist,
+       col = "blue")
+```
+
+```{r}
+# Sesgo y curtosis
+
+# Speed
+skew_speed = skewness(cars$speed)
+kurt_speed = kurtosis(cars$speed)
+
+skew_speed
+kurt_speed
+
+
+# Dist
+skew_dist = skewness(cars$dist)
+kurt_dist = kurtosis(cars$dist)
+
+skew_dist
+kurt_dist
+```
+
+```{r}
+# Media mediana y rango medio
+
+# SPEED
+mean_speed = mean(cars$speed)
+median_speed = median(cars$speed)
+midrange_speed = (min(cars$speed) + max(cars$speed)) / 2
+
+mean_speed
+median_speed
+midrange_speed
+
+# Distance
+mean_dist = mean(cars$dist)
+median_dist = median(cars$dist)
+midrange_dist = (min(cars$dist) + max(cars$dist)) / 2
+
+mean_dist
+median_dist
+midrange_dist
+```
+
+La simetria del boxplot de velocidad es relativamente siemtrica, no
+muestra que los datos se concentren hacia alguno de los extremos los que
+sugiere que se comportan normalmente La simetria del boxplot de
+distancia esta algo sesgado a la derecha y se puede ver que los datos
+estan algo concentrados en el extremo izquiero, lo que tiene sentido ya
+que
+
+```{r}
+# Boxplots
+
+# Speed
+boxplot(cars$speed,
+        main = "Boxplot de velocidad",
+        ylab = "Velocidad")
+
+# Distance
+boxplot(cars$dist,
+        main = "Boxplot de distancia",
+        ylab = "Distancia")
+```
+
+En el histograma de la velocidad se puede observar la similitud de ambas
+funciones. La función de la velocidad esta un poco más plana que la
+normal teorica lo que concuerda con la curtosis un poco más bajo de 3
+aunque igual esta muy cerca. Igualmente se puede observar como los datos
+estan muy ligeramente cargados a la derecha lo que también corresponde
+con el sesgo negativo calculado anteriormente. Por otro lado la función
+de la distancia se puede ver como esta sesgada a la derecha ya que los
+datos se concentran más en el extremo izquierdo, ademas también se puede
+ver como la función alcanza un pico más alto a comparación de la
+distribución normal lo que igual corresponde con la curtosis calculada
+de 3.24.
+
+```{r}
+# Histograma, densidad empírica y normal teórica
+
+# Speed
+hist(cars$speed,
+     freq = FALSE,
+     main = "Distribución de velocidad",
+     xlab = "Velocidad")
+
+lines(density(cars$speed),
+      col = "red",
+      lwd = 2)
+
+curve(dnorm(x,
+            mean = mean(cars$speed),
+            sd = sd(cars$speed)),
+      from = min(cars$speed),
+      to = max(cars$speed),
+      add = TRUE,
+      col = "blue",
+      lwd = 2)
+
+
+# Distance
+hist(cars$dist,
+     freq = FALSE,
+     main = "Distribución de distancia",
+     xlab = "Distancia")
+
+lines(density(cars$dist),
+      col = "red",
+      lwd = 2)
+
+curve(dnorm(x,
+            mean = mean(cars$dist),
+            sd = sd(cars$dist)),
+      from = min(cars$dist),
+      to = max(cars$dist),
+      add = TRUE,
+      col = "blue",
+      lwd = 2)
+
+legend("topright",
+       legend = c("Densidad empírica", "Normal teórica"),
+       col = c("red", "blue"),
+       lwd = 2)
+```
+
+
+
+Se utilizó IA de la siguiente forma:
+Herramienta: ChatGPT
+Uso realizado: Hacer más vizuales los diagramas
+Secciones donde se utilizó: Sesgo y curtosis en la Normalidad y fuera de ella, parte 2
+Validación realizada por los estudiantes: Verifique que la información fuera consistente
+Todo el contenido fue revisado
