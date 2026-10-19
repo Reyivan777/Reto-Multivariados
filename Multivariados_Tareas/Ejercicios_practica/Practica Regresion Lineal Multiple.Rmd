@@ -1,0 +1,295 @@
+---
+title: "Práctica - Regresión lineal múltiple"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+# Objetivo
+
+Practicar el flujo completo de regresión lineal múltiple: exploración, ajuste, interpretación, selección de variables, intervalos, validación de supuestos y detección de observaciones influyentes.
+
+Se utilizará la base `mtcars`, incluida en R. La variable respuesta será `mpg` (rendimiento de combustible) y se considerarán como predictores iniciales:
+
+- `wt`: peso del automóvil.
+- `hp`: potencia.
+- `disp`: desplazamiento del motor.
+
+> Intenta resolver cada inciso usando primero tu formulario. No avances a conclusiones sin interpretar las salidas de R.
+
+# 0. Preparación
+
+```{r}
+rm(list = ls())
+
+data(mtcars)
+
+datos <- mtcars[, c("mpg", "wt", "hp", "disp")]
+
+head(datos)
+str(datos)
+summary(datos)
+```
+
+# 1. Exploración de los datos
+
+## 1.1 Diagramas de dispersión
+
+Construye una matriz de diagramas de dispersión entre las cuatro variables.
+
+```{r}
+# Tu código
+vars <- c("mpg","wt","hp","disp")          # sustituir nombres
+pairs(datos[,vars],pch=19)  
+```
+
+**Pregunta:** ¿Qué predictor parece tener la relación lineal más fuerte con `mpg`? Indica también el signo de la relación.
+
+## 1.2 Matriz de correlaciones
+
+Calcula la matriz de correlaciones.
+
+```{r}
+# Tu código
+R <- cor(datos) 
+R
+```
+
+**Preguntas:**
+
+1.  ¿Cuál predictor tiene la mayor correlación en valor absoluto con `mpg`? wt con 0.86
+2.  ¿Existe correlación fuerte entre algunos predictores? ¿Por qué podría ser importante para la regresión? Todos los predictores estan bastante correlacionados. Inclusive el menos correlacionado que sería hp con wt tiene 0.65 lo que sigue siendo una correlación media alta
+
+# 2. Modelo de regresión múltiple
+
+Ajusta el modelo:
+
+$$mpg=\beta_0+\beta_1 wt+\beta_2 hp+\beta_3 disp+\varepsilon$$
+
+```{r}
+# Tu código
+modelo <- lm(mpg ~ wt + hp + disp,data=datos)  # sustituir respuesta/predictores
+summary(modelo); coef(modelo)
+```
+
+## 2.1 Interpretación general
+
+A partir de `summary()` responde:
+
+1.  ¿Cuál es el valor de $R^2$? 0.8268
+2.  ¿Cuál es el $R^2$ ajustado? 0.8083
+3.  ¿El modelo es globalmente significativo? Justifica con la prueba F. El modelo es significativo ya que el p value es diminuto por lo cual al menos un coeficiente de alguna variable es diferente de 0
+4.  ¿Qué predictores son individualmente significativos con $\alpha=0.05$? wt y hp, disp no es significativo ya que tiene un p value bastante alto
+
+## 2.2 Interpretación de coeficientes
+
+Escribe la ecuación estimada del modelo e interpreta los coeficientes de `wt` y `hp` manteniendo constantes las demás variables. cuando wt aumenta en una unidad y todas las variables estan constantes la predicción final baja 3.800891. Cuando hp aumenta en una unidad y todas las demas variables estan constantes la predicción baja -0.031157.
+
+# 3. Mínimos cuadrados con matrices
+
+Construye manualmente la matriz de diseño $X$ y el vector $Y$. Calcula:
+
+$$\hat\beta=(X^TX)^{-1}X^TY$$
+
+```{r}
+# Tu código
+Y <- as.matrix(datos$mpg); X <- cbind(1,datos$wt,datos$hp,datos$disp)
+beta_hat <- solve(t(X)%*%X)%*%t(X)%*%Y
+beta_hat
+
+
+```
+
+Compara los coeficientes obtenidos con `coef(modelo)`.
+
+**Pregunta:** ¿deben ser iguales? Explica brevemente por qué.
+
+# 4. Selección de variables
+
+Obtén un modelo mediante AIC y otro mediante BIC usando selección por pasos en ambas direcciones.
+
+```{r}
+# Tu código
+modelo_AIC <- step(modelo,direction="both",trace=0)
+modelo_BIC <- step(modelo,direction="both",trace=0,k=log(nrow(datos)))
+formula(modelo_AIC); formula(modelo_BIC)
+AIC(modelo); BIC(modelo)
+```
+
+**Preguntas:**
+
+1.  ¿AIC y BIC seleccionan el mismo modelo? SI
+2.  ¿Qué variable o variables se eliminan? eliminan el disp ambos
+3.  Compara $R^2$ ajustado, AIC y BIC del modelo completo y del modelo seleccionado. El $R^2$ ajustado del modelo completo era 0.8083, y del seleccionado es 0.8148 por lo que se gana un poco de explicación de variabilidad
+
+Define como `modelo_final` el modelo que consideres más adecuado y justifica brevemente tu elección.
+
+```{r}
+# Tu código
+modelo <- lm(mpg ~ wt + hp,data=datos)  # sustituir respuesta/predictores
+summary(modelo); coef(modelo)
+```
+
+# 5. Intervalos de confianza y predicción
+
+Considera un automóvil con:
+
+- `wt = 3.0`
+- `hp = 150`
+- `disp = 200`
+
+Adapta `newdata` a las variables que permanezcan en tu `modelo_final`.
+
+```{r}
+nuevo <- data.frame(wt=3,hp=150)   # 1 fila, 2 predictores
+predict(modelo,nuevo,interval="confidence",level=0.95)
+predict(modelo,nuevo,interval="prediction",level=0.95)
+```
+
+Calcula:
+
+1.  Predicción puntual de `mpg`.
+2.  Intervalo de confianza del 95% para la media esperada.
+3.  Intervalo de predicción del 95% para un automóvil individual.
+
+**Pregunta:** ¿cuál intervalo es más ancho y por qué? El intervalo más ancho es el de la predicción individual ya que tener 95% de confianza de que una observación tendra ciertas características es más complicado que la media, por esos sus bandas son más grandes
+
+# 6. Multicolinealidad
+
+Calcula el VIF de los predictores del `modelo_final`. Puedes usar `car::vif()` o calcularlo manualmente con regresiones auxiliares.
+
+```{r}
+# Tu código
+aux_wt <- lm(wt ~ hp,data=datos)          # repetir cambiando predictor respuesta
+VIF_wt <- 1/(1-summary(aux_wt)$r.squared)
+VIF_wt
+
+aux_hp <- lm(hp ~ wt,data=datos)          # repetir cambiando predictor respuesta
+VIF_hp <- 1/(1-summary(aux_hp)$r.squared)
+VIF_hp
+```
+
+**Pregunta:** ¿hay evidencia de multicolinealidad importante usando como referencia VIF \> 5? No hay evidencia de multicolinealidad importante en el modelo final, ya que los VIF de wt y hp son aproximadamente 1.77, ambos menores que 5.
+
+# 7. Validación de supuestos
+
+Obtén residuos y valores ajustados.
+
+```{r}
+# Tu código
+res <- residuals(modelo); fit <- fitted(modelo)
+res
+
+```
+
+## 7.1 Normalidad de residuos
+
+Realiza un histograma, un gráfico Q-Q y la prueba de Shapiro-Wilk.
+
+```{r}
+# Tu código
+shapiro.test(res)                           # H0: normalidad
+plot(fit,res); abline(h=0)                  # homocedasticidad: sin patrón/abanico
+par(mfrow=c(2,2)); plot(modelo); par(mfrow=c(1,1))
+```
+
+**Pregunta:** con $\alpha=0.05$, ¿los residuos son compatibles con normalidad?
+
+## 7.2 Homocedasticidad
+
+Grafica residuos contra valores ajustados y realiza una prueba de Breusch-Pagan.
+
+```{r}
+# Tu código
+e2 <- res^2; bp <- lm(e2 ~ wt + hp,data=datos)
+LM <- nrow(datos)*summary(bp)$r.squared
+p_BP <- pchisq(LM,df=3,lower.tail=FALSE)    # p<0.05 indica heterocedasticidad
+p_BP
+```
+
+**Pregunta:** ¿hay evidencia de heterocedasticidad? no hay evidencia de heterocedastividad ya que el pvalue es alto
+
+## 7.3 Independencia
+
+Grafica los residuos según el orden de observación y calcula el estadístico de Durbin-Watson.
+
+```{r}
+# Tu código
+plot(res,type="b"); abline(h=0)            # independencia visual
+DW <- sum(diff(res)^2)/sum(res^2) 
+DW
+```
+
+**Pregunta:** ¿existe una señal fuerte de autocorrelación?
+
+# 8. Datos atípicos e influyentes
+
+## 8.1 Residuos estandarizados y studentizados
+
+Identifica observaciones con:
+
+- $|rstandard|>2$
+- $|rstudent|>3$
+
+```{r}
+# Tu código
+rs <- rstandard(modelo); rt <- rstudent(modelo)
+which(abs(rs)>2); which(abs(rt)>3)
+```
+
+## 8.2 Leverage
+
+Usa como referencia:
+
+$$h_i>\frac{2p}{n}$$
+
+donde $p$ es el número de parámetros del modelo, incluyendo el intercepto.
+
+```{r}
+# Tu código
+hat <- hatvalues(modelo); lim_hat <- 2*length(coef(modelo))/nrow(datos)
+which(hat>lim_hat)
+```
+
+## 8.3 Distancia de Cook
+
+Usa como referencia:
+
+$$D_i>\frac{4}{n}$$
+
+```{r}
+# Tu código
+cook <- cooks.distance(modelo); lim_cook <- 4/nrow(datos)
+which(cook>lim_cook)
+car::influencePlot(modelo,id=TRUE)
+```
+
+**Preguntas:**
+
+1.  ¿Qué observaciones requieren mayor atención?
+2.  ¿Una observación con leverage alto necesariamente es atípica en la respuesta?
+3.  ¿Una observación con distancia de Cook alta debería eliminarse automáticamente? Explica.
+
+# 9. Comparación final
+
+Si identificaste observaciones influyentes, crea una copia de los datos sin ellas y vuelve a ajustar el mismo modelo únicamente para estudiar cuánto cambian los resultados. No concluyas que deben eliminarse definitivamente solo porque mejoró el ajuste.
+
+```{r}
+# Tu código
+```
+
+Compara:
+
+- Coeficientes.
+- $R^2$ ajustado.
+- Significancia de los predictores.
+- Comportamiento de los residuos.
+
+# 10. Conclusión
+
+Redacta una conclusión breve respondiendo:
+
+1.  ¿Qué variables explican mejor `mpg`?
+2.  ¿Qué tan bueno es el ajuste del modelo final?
+3.  ¿Se cumplen razonablemente los supuestos?
+4.  ¿Existen observaciones que deban revisarse por influencia?
+5.  ¿Usarías el modelo para predicción? Justifica.
