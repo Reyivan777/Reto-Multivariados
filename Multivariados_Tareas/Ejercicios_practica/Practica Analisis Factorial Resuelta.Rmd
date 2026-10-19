@@ -1,0 +1,440 @@
+---
+title: "Práctica resuelta - Análisis Factorial"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Objetivo
+
+El objetivo es estudiar si ocho calificaciones de 30 estudiantes pueden explicarse mediante un número menor de **factores latentes**. El procedimiento sigue el nivel trabajado en las actividades de Análisis Factorial I y II: correlaciones, correlaciones parciales, normalidad multivariada, Bartlett, KMO, número de factores, máxima verosimilitud y mínimo residuo, rotaciones, comunalidades e interpretación de factores.
+
+La pregunta principal es:
+
+> ¿Las ocho variables pueden resumirse mediante algunos factores no observados que expliquen por qué ciertas calificaciones tienden a variar juntas?
+
+# 0. Preparación de los datos
+
+Se utilizará un conjunto didáctico de 30 estudiantes. Las variables representan calificaciones de 0 a 100.
+
+```{r}
+library(psych)
+library(corrplot)
+library(MVN)
+library(GPArotation)
+library(knitr)
+
+datos <- read.csv(text = "
+Matematicas,Estadistica,Programacion,Logica,Comunicacion,Liderazgo,TrabajoEquipo,Presentacion
+61.0,56.0,66.2,64.1,81.5,80.8,76.0,80.6
+51.8,56.7,60.0,55.3,69.8,62.2,68.5,71.3
+60.6,63.4,61.8,63.7,76.1,75.6,77.0,79.2
+61.0,51.7,63.2,58.6,63.0,63.8,60.3,58.6
+62.0,62.6,62.6,61.0,77.0,74.4,83.4,84.0
+64.2,62.7,69.4,67.5,70.2,70.4,66.1,69.5
+64.0,64.4,69.9,66.8,90.0,81.1,85.6,90.8
+65.6,65.9,64.8,66.9,64.1,64.6,66.5,67.4
+68.2,62.4,72.4,69.2,79.7,79.4,74.4,74.7
+62.8,64.9,64.0,62.2,57.3,56.2,66.3,64.7
+76.0,70.0,77.5,76.8,82.0,81.5,76.0,80.8
+67.0,66.9,72.9,70.0,78.0,70.1,75.1,79.0
+78.0,77.8,74.8,78.6,85.0,84.2,84.2,87.6
+71.4,65.1,75.5,72.6,68.4,69.1,64.5,63.6
+74.0,75.6,73.1,72.8,74.0,71.9,80.4,80.8
+77.6,71.1,79.4,78.7,65.1,66.0,61.3,64.2
+77.8,75.2,80.2,78.4,86.3,78.0,82.0,86.9
+80.6,79.9,77.5,81.4,71.6,71.9,72.5,74.4
+79.8,77.0,85.6,84.2,89.3,88.6,82.2,83.7
+80.6,79.7,77.3,77.4,67.6,66.1,74.7,74.4
+57.1,56.0,59.6,58.7,65.1,57.8,64.4,62.7
+63.7,60.2,72.0,66.6,82.7,83.8,78.6,83.6
+68.7,63.0,65.6,64.0,67.7,62.2,71.8,73.0
+68.9,74.9,76.2,77.7,84.9,80.4,78.8,79.7
+72.5,68.1,70.4,69.6,64.0,70.6,67.8,71.1
+81.9,79.2,80.4,82.6,84.4,76.2,80.4,81.1
+81.1,76.1,87.2,83.7,76.1,78.1,72.2,76.7
+68.7,63.4,65.0,63.6,85.7,78.8,87.4,90.6
+57.5,63.8,67.1,67.0,63.0,59.9,60.2,58.5
+77.1,70.8,72.2,71.8,77.6,83.2,79.6,84.3
+")
+
+M <- datos
+
+head(M)
+dim(M)
+summary(M)
+```
+
+**Interpretación.** Tenemos 30 observaciones y 8 variables cuantitativas. No hay variables categóricas ni identificadores dentro de `M`, por lo que todas pueden entrar al análisis.
+
+# 1. Matriz de correlaciones
+
+El análisis factorial tiene sentido cuando varias variables están correlacionadas. Primero calculamos correlaciones de Pearson y sus valores p.
+
+```{r}
+Corr <- psych::corr.test(M, method = "pearson", adjust = "none")
+R <- Corr$r
+P <- Corr$p
+
+knitr::kable(round(R, 3), caption = "Matriz de correlaciones")
+knitr::kable(round(P, 4), caption = "Valores p de las correlaciones")
+```
+
+```{r}
+corrplot(
+  R,
+  method = "color",
+  type = "lower",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  diag = FALSE,
+  number.cex = 0.65
+)
+```
+
+**Interpretación.** Deben observarse dos bloques de relaciones fuertes. `Matematicas`, `Estadistica`, `Programacion` y `Logica` presentan correlaciones altas entre sí; por ejemplo, `Programacion` y `Logica` están alrededor de 0.96. También `Comunicacion`, `Liderazgo`, `TrabajoEquipo` y `Presentacion` presentan relaciones fuertes; `TrabajoEquipo` y `Presentacion` están alrededor de 0.98.
+
+Esto sugiere desde el inicio que podrían existir **dos dimensiones latentes**, pero todavía no podemos concluirlo solamente con la matriz de correlaciones.
+
+# 2. Correlaciones parciales
+
+Una correlación parcial mide la relación entre dos variables después de controlar estadísticamente las demás.
+
+```{r}
+cor_parcial <- psych::partial.r(R)
+round(cor_parcial, 3)
+```
+
+```{r}
+corrplot(
+  cor_parcial,
+  method = "color",
+  type = "lower",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  diag = FALSE,
+  number.cex = 0.65
+)
+```
+
+**Interpretación.** Varias relaciones cambian de magnitud al controlar las otras variables. Esto indica que parte de las correlaciones simples puede deberse a relaciones compartidas con el resto de las variables. Precisamente esa estructura común es la que busca resumir el análisis factorial.
+
+# 3. Normalidad multivariada
+
+En la Actividad de Análisis Factorial II se revisó la normalidad multivariada mediante Mardia. Es especialmente relevante cuando se utiliza máxima verosimilitud (`fm = "ml"`).
+
+Las hipótesis son:
+
+$$H_0:\text{ los datos siguen una distribución normal multivariada}$$
+
+$$H_1:\text{ los datos no siguen una distribución normal multivariada}$$
+
+```{r}
+resultado_mardia <- MVN::mvn(
+  data = M,
+  mvn_test = "mardia"
+)
+
+resultado_mardia$multivariate_normality
+```
+
+**Interpretación.** Se revisan los valores p de asimetría y curtosis de Mardia. Si ambos son mayores o iguales a 0.05, no se rechaza la normalidad multivariada. Si alguno es menor a 0.05, existe evidencia contra este supuesto y conviene prestar especial atención a una alternativa como mínimo residuo (`minres`).
+
+En estos datos la estructura fue construida de forma relativamente regular, por lo que el objetivo del ejercicio es comparar ambos métodos y verificar si producen conclusiones semejantes.
+
+# 4. Prueba de esfericidad de Bartlett
+
+Bartlett responde una pregunta diferente a KMO: verifica si la matriz de correlaciones es significativamente distinta de una matriz identidad.
+
+$$H_0:R=I$$
+
+$$H_1:R\neq I$$
+
+```{r}
+bartlett <- psych::cortest.bartlett(R, n = nrow(M))
+bartlett
+```
+
+**Interpretación.** El valor p debe ser muy pequeño (`p < 0.05`), por lo que se rechaza $H_0$. Hay evidencia de correlación conjunta entre las variables y, por este criterio, **sí tiene sentido continuar con análisis factorial**.
+
+# 5. Medida KMO
+
+KMO estudia si la estructura de correlaciones es suficientemente compacta para ser explicada mediante factores comunes.
+
+```{r}
+K <- psych::KMO(R)
+K$MSA
+round(K$MSAi, 3)
+```
+
+Escala utilizada en las actividades:
+
+- 0.00–0.49: inaceptable
+- 0.50–0.59: miserable
+- 0.60–0.69: mediocre
+- 0.70–0.79: aceptable
+- 0.80–0.89: meritorio
+- 0.90–1.00: maravilloso
+
+**Interpretación.** El KMO global debe quedar aproximadamente en la zona de **0.60–0.69**, es decir, una adecuación mediocre pero utilizable. Los KMO individuales permiten detectar si alguna variable encaja peor que las demás. Esto enseña una diferencia importante: Bartlett puede indicar que existen correlaciones significativas mientras KMO advierte que la estructura factorial no es perfecta.
+
+# 6. ¿Cuántos factores conservar?
+
+No se debe elegir el número de factores arbitrariamente. Igual que en la Actividad I, utilizaremos gráfica de Cattell y análisis paralelo.
+
+## 6.1 Valores propios de la matriz de correlaciones
+
+```{r}
+autovalores <- eigen(R)$values
+round(autovalores, 3)
+```
+
+**Interpretación.** Los primeros dos autovalores son aproximadamente **5.09** y **2.22**. Los siguientes son menores que 1. Esto ya apunta a una estructura de dos dimensiones.
+
+## 6.2 Gráfica de Cattell
+
+```{r}
+psych::scree(
+  M,
+  factors = TRUE,
+  pc = FALSE,
+  main = "Gráfica de Cattell - Factores"
+)
+```
+
+**Interpretación.** Se espera un cambio fuerte de pendiente después del segundo factor. El punto donde la caída comienza a estabilizarse sugiere conservar **2 factores**.
+
+## 6.3 Análisis paralelo
+
+```{r}
+set.seed(123)
+paralelo_ml <- psych::fa.parallel(
+  M,
+  fa = "fa",
+  fm = "ml",
+  n.iter = 100,
+  main = "Análisis paralelo - ML"
+)
+```
+
+```{r}
+set.seed(123)
+paralelo_minres <- psych::fa.parallel(
+  M,
+  fa = "fa",
+  fm = "minres",
+  n.iter = 100,
+  main = "Análisis paralelo - MINRES"
+)
+```
+
+**Interpretación.** El análisis paralelo compara los valores propios observados con los que aparecerían por azar. La estructura de los datos está diseñada para que los dos primeros factores sean claramente dominantes. Si el análisis paralelo conserva dos factores, coincide con el scree plot y con los dos grandes autovalores observados.
+
+Por lo tanto, continuaremos con:
+
+```{r}
+n_factores <- 2
+```
+
+# 7. Modelos sin rotación
+
+Primero ajustamos los factores sin rotación. Esto permite ver por qué la rotación puede ser útil: la solución inicial puede explicar bien los datos, pero ser más difícil de interpretar.
+
+## 7.1 Máxima verosimilitud
+
+```{r}
+modelo_ml <- psych::fa(
+  M,
+  nfactors = n_factores,
+  rotate = "none",
+  fm = "ml"
+)
+
+print(modelo_ml, cut = 0.30, sort = TRUE)
+```
+
+## 7.2 Mínimo residuo
+
+```{r}
+modelo_minres <- psych::fa(
+  M,
+  nfactors = n_factores,
+  rotate = "none",
+  fm = "minres"
+)
+
+print(modelo_minres, cut = 0.30, sort = TRUE)
+```
+
+**Interpretación.** Ambos métodos deben reconocer esencialmente las mismas dos dimensiones. Sin rotación es posible que algunas variables tengan cargas repartidas entre ambos factores, por lo que todavía no conviene ponerles un nombre definitivo.
+
+- `ml`: máxima verosimilitud.
+- `minres`: busca minimizar los residuos entre la matriz observada y la reproducida por el modelo.
+
+# 8. Comunalidades y unicidades
+
+Para cada variable:
+
+$$h_i^2=\text{proporción explicada por los factores}$$
+
+$$u_i^2=1-h_i^2$$
+
+```{r}
+tabla_comunalidades <- data.frame(
+  Variable = rownames(modelo_ml$loadings),
+  Comunalidad_ML = round(modelo_ml$communality, 3),
+  Unicidad_ML = round(modelo_ml$uniquenesses, 3),
+  Comunalidad_MINRES = round(modelo_minres$communality, 3),
+  Unicidad_MINRES = round(modelo_minres$uniquenesses, 3)
+)
+
+tabla_comunalidades
+```
+
+**Interpretación.** Una comunalidad cercana a 1 significa que los factores representan muy bien a la variable. Una comunalidad baja significa que gran parte de la variable queda sin explicar. En este ejemplo se espera que la mayoría de las variables tenga comunalidades altas, porque fueron construidas alrededor de una estructura clara de dos factores.
+
+# 9. Rotación Varimax
+
+Varimax es una rotación ortogonal: mantiene los factores sin correlacionar y busca que cada variable tenga una carga alta principalmente en un factor y baja en los demás.
+
+## 9.1 ML + Varimax
+
+```{r}
+modelo_ml_varimax <- psych::fa(
+  M,
+  nfactors = n_factores,
+  rotate = "varimax",
+  fm = "ml"
+)
+
+print(modelo_ml_varimax$loadings, cutoff = 0.30, sort = TRUE)
+psych::fa.diagram(modelo_ml_varimax)
+```
+
+## 9.2 MINRES + Varimax
+
+```{r}
+modelo_minres_varimax <- psych::fa(
+  M,
+  nfactors = n_factores,
+  rotate = "varimax",
+  fm = "minres"
+)
+
+print(modelo_minres_varimax$loadings, cutoff = 0.30, sort = TRUE)
+psych::fa.diagram(modelo_minres_varimax)
+```
+
+**Interpretación.** Después de Varimax debe aparecer una estructura mucho más clara:
+
+- un factor queda dominado por `Matematicas`, `Estadistica`, `Programacion` y `Logica`;
+- el otro queda dominado por `Comunicacion`, `Liderazgo`, `TrabajoEquipo` y `Presentacion`.
+
+Con ML + Varimax las cargas principales deberían estar aproximadamente entre **0.7 y 0.9** en valor absoluto. Por ello, una interpretación razonable es:
+
+- **Factor de habilidades técnicas:** Matemáticas, Estadística, Programación y Lógica.
+- **Factor de habilidades interpersonales:** Comunicación, Liderazgo, Trabajo en equipo y Presentación.
+
+**Importante:** R puede intercambiar el nombre `ML1`/`ML2` o cambiar todos los signos de un factor. Eso **no cambia la solución**. Para interpretar se observa principalmente la magnitud absoluta y qué variables cargan juntas.
+
+# 10. Rotación Quartimax
+
+La Actividad I también compara Quartimax.
+
+```{r}
+modelo_ml_quartimax <- psych::fa(
+  M,
+  nfactors = n_factores,
+  rotate = "quartimax",
+  fm = "ml"
+)
+
+modelo_minres_quartimax <- psych::fa(
+  M,
+  nfactors = n_factores,
+  rotate = "quartimax",
+  fm = "minres"
+)
+
+print(modelo_ml_quartimax$loadings, cutoff = 0.30, sort = TRUE)
+print(modelo_minres_quartimax$loadings, cutoff = 0.30, sort = TRUE)
+```
+
+**Interpretación.** Varimax y Quartimax deberían conducir a una conclusión semejante porque los dos grupos de variables están bastante definidos. Si una rotación produce una separación más limpia y fácil de explicar, esa es una razón válida para preferirla en la interpretación.
+
+# 11. Comparación de modelos y varianza explicada
+
+```{r}
+modelo_ml_varimax$Vaccounted
+modelo_minres_varimax$Vaccounted
+```
+
+```{r}
+cat("ML + Varimax\n")
+print(modelo_ml_varimax$loadings, cutoff = 0.30, sort = TRUE)
+
+cat("\nMINRES + Varimax\n")
+print(modelo_minres_varimax$loadings, cutoff = 0.30, sort = TRUE)
+```
+
+**Interpretación.** Los dos factores deben explicar una proporción grande de la información común. La solución ML + Varimax debería explicar alrededor de **85–90%** de la varianza de las variables estandarizadas en este ejemplo. Lo importante no es escoger el modelo únicamente por tener un porcentaje ligeramente mayor, sino revisar también:
+
+1.  si el método es razonable para los datos;
+2.  si las cargas forman una estructura clara;
+3.  si las comunalidades son adecuadas;
+4.  si la interpretación de los factores tiene sentido.
+
+Como Mardia no debería mostrar una violación extrema y ML produce una estructura clara, **ML + Varimax** es una elección razonable para este ejemplo. Si la normalidad fuera claramente problemática, MINRES sería una alternativa especialmente útil para comparar.
+
+# 12. Modelo factorial e identificación de los factores
+
+La forma general del modelo para una variable estandarizada es:
+
+$$Z_i=\lambda_{i1}F_1+\lambda_{i2}F_2+e_i$$
+
+Las $\lambda$ son las **cargas factoriales**. Para ver las ecuaciones de este ejemplo:
+
+```{r}
+cargas <- unclass(modelo_ml_varimax$loadings)
+round(cargas, 3)
+```
+
+Por ejemplo, si `Matematicas` tiene una carga grande en el factor técnico y pequeña en el interpersonal, su ecuación se interpreta aproximadamente como:
+
+$$Z_{Matematicas}=\lambda_1F_{Tecnico}+\lambda_2F_{Interpersonal}+e$$
+
+con $|\lambda_1|>|\lambda_2|$.
+
+**Interpretación.** No se trata de predecir Matemáticas exactamente. El modelo dice que una parte importante de su variación puede explicarse por los factores comunes y otra parte queda en el término específico o error $e$.
+
+# 13. Comparación breve con PCA
+
+En la Actividad II también se pide distinguir PCA de Análisis Factorial.
+
+```{r}
+pca <- prcomp(M, center = TRUE, scale. = TRUE)
+summary(pca)
+pca$sdev^2
+```
+
+**Interpretación.** En estos datos los primeros dos componentes principales también concentran la mayor parte de la variabilidad. Sin embargo:
+
+- **PCA** utiliza la varianza total y construye componentes para reducir dimensionalidad.
+- **Análisis Factorial** intenta explicar la **varianza común y las correlaciones** mediante factores latentes, separando además la unicidad de cada variable.
+
+Por eso pueden producir estructuras parecidas, pero responden preguntas diferentes.
+
+# 14. Conclusión
+
+El análisis muestra una estructura factorial clara de **dos dimensiones**. Las correlaciones, Bartlett, KMO, el scree plot y el análisis paralelo proporcionan evidencia para continuar con una solución de dos factores.
+
+Después de la rotación Varimax, las variables técnicas (`Matematicas`, `Estadistica`, `Programacion`, `Logica`) se agrupan en un factor, mientras que las variables interpersonales (`Comunicacion`, `Liderazgo`, `TrabajoEquipo`, `Presentacion`) se agrupan en el otro.
+
+El punto central del análisis factorial no es solamente reducir ocho variables a dos números. La meta es proponer que las relaciones observadas entre las variables pueden explicarse mediante dos características no medidas directamente: una dimensión de **habilidades técnicas** y otra de **habilidades interpersonales**.
+
+Esta práctica reproduce los elementos principales solicitados en las actividades del curso: evaluar si el análisis factorial es adecuado, decidir cuántos factores conservar, comparar métodos y rotaciones, interpretar cargas, comunalidades y unicidades, y finalmente dar significado a los factores obtenidos.
