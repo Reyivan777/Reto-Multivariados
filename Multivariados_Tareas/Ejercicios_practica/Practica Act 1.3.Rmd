@@ -1,0 +1,227 @@
+---
+title: "Práctica Act 1.3 - Matrices y Estadística"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+# Instrucciones
+
+Resuelve esta práctica usando únicamente tu formulario `FormularioMultivariado.Rmd` como apoyo.
+
+- Escribe el código necesario debajo de cada inciso.
+- No consultes la Actividad 1.3 original mientras la resuelves.
+- En el Problema 3 usa las fórmulas matriciales del formulario; evita `mean()`, `cov()` y `cor()` para obtener directamente los resultados.
+- Cuando termines, haz Knit a HTML y súbelo al repositorio para revisarlo y calificarlo.
+
+**Valor total: 100 puntos.**
+
+# Problema 1 - Operaciones con matrices (30 puntos)
+
+Considera las matrices
+
+$$A=\begin{pmatrix}
+3 & -1 & 2\\
+4 & 0 & 5\\
+-2 & 6 & 1
+\end{pmatrix},
+\qquad
+B=\begin{pmatrix}
+1 & 4 & -3\\
+2 & -2 & 6\\
+5 & 1 & 0
+\end{pmatrix}.$$
+
+## a) Crear las matrices A y B (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+A <- matrix(c(3, -1, 2,
+              4, 0, 5,
+              -2, 6, 1),
+            nrow = 3, byrow = TRUE)
+
+B <- matrix(c(1, 4, -3,
+              2, -2, 6,
+              5, 1, 0),
+            nrow = 3, byrow = TRUE)
+```
+
+## b) Calcular A + B (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+A + B
+```
+
+## c) Calcular 3A - 2B (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+3*A - 2*B
+```
+
+## d) Calcular la transpuesta de A (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+t(A)
+```
+
+## e) Calcular la inversa de A (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+solve(A)
+```
+
+## f) Calcular det(A) y det(A') (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+det(A)
+det(t(A))
+```
+
+# Problema 2 - Producto de matrices (20 puntos)
+
+Considera
+
+$$C=\begin{pmatrix}
+2 & 1 & -1 & 3\\
+0 & 4 & 2 & -2\\
+5 & -3 & 1 & 0
+\end{pmatrix}$$
+
+$$D=\begin{pmatrix}
+1 & 2\\
+3 & -1\\
+2 & 4\\
+-2 & 5
+\end{pmatrix}.$$
+
+## a) Crear C y D en R (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+C <- matrix(c(2, 1, -1, 3,
+              0, 4, 2, -2,
+              5, -3, 1, 0),
+            nrow = 3, byrow = TRUE)
+
+D <- matrix(c(1, 2,
+              3, -1,
+              2, 4,
+              -2, 5),
+            nrow = 4, byrow = TRUE)
+```
+
+## b) Antes de multiplicar, indica las dimensiones de C, D y del resultado CD (5 puntos)
+
+Escribe tu respuesta aquí: La matriz C es 3x4 y la D es 4x2
+
+## c) Calcular CD usando multiplicación matricial (10 puntos)
+
+```{r}
+# Escribe tu código aquí
+C %*% D
+```
+
+# Problema 3 - Estadística con matrices (50 puntos)
+
+Usa los siguientes datos. Cada fila representa una observación y cada columna una variable cuantitativa.
+
+```{r datos, echo=TRUE}
+datos <- data.frame(
+  X1 = c(12, 15, 11, 18, 20, 16, 14, 19),
+  X2 = c(5,  7,  6,  9, 10,  8,  6, 11),
+  X3 = c(30, 28, 35, 25, 22, 27, 32, 24),
+  X4 = c(8, 10,  9, 13, 15, 12, 10, 14)
+)
+
+datos
+```
+
+## a) Seleccionar X1, X2, X3 y X4 y convertirlas en una matriz X. Obtener n (5 puntos)
+
+```{r}
+# Escribe tu código aquí
+# Lo hice manual por accidente
+X <- matrix(c(12, 5, 30, 8,
+              15, 7, 28, 10,
+              11, 6, 35, 9,
+              18, 9, 25, 13,
+              20, 10, 22, 15,
+              16, 8, 27, 12,
+              14, 6, 32, 10,
+              19, 11, 24, 14),
+            nrow = 8, byrow = TRUE)
+
+variables <- c("X1", "X2", "X3", "X4")
+X <- as.matrix(datos[, variables])
+n <- nrow(X)
+```
+
+## b) Calcular el vector de medias poblacional mediante notación matricial (10 puntos)
+
+Usa
+
+$$\mu=\frac{1}{n}\mathbf{1}'X.$$
+
+```{r}
+# Escribe tu código aquí
+unos <- matrix(1, nrow = 8, ncol = 1)
+mu <- (t(unos) %*% X) / 8
+mu
+```
+
+## c) Calcular la matriz poblacional de varianzas y covarianzas (10 puntos)
+
+Usa división entre **n**, como en la Actividad 1.3.
+
+$$\Sigma=\frac{1}{n}X_c'X_c.$$
+
+```{r}
+# Escribe tu código aquí
+Sigma <- t(X - unos %*% mu) %*% (X - unos %*% mu) / 8
+Sigma
+```
+
+## d) Construir la matriz de correlación R a partir de Sigma (10 puntos)
+
+Usa las varianzas de la diagonal de `Sigma`, sus desviaciones estándar y una matriz diagonal con sus inversos.
+
+```{r}
+# Escribe tu código aquí
+varianzas <- diag(Sigma)
+desviaciones <- sqrt(varianzas)
+D_inv <- diag(1 / desviaciones)
+R <- D_inv %*% Sigma %*% D_inv
+R
+```
+
+## e) Obtener valores y vectores propios de Sigma (7.5 puntos)
+
+```{r}
+# Escribe tu código aquí
+eigen_cov <- eigen(Sigma)
+eigen_cov$values
+eigen_cov$vectors
+```
+
+## f) Obtener valores y vectores propios de R (7.5 puntos)
+
+```{r}
+# Escribe tu código aquí
+eigen_cor <- eigen(R)
+eigen_cor$values
+eigen_cor$vectors
+```
+
+# Entrega
+
+Cuando termines:
+
+1.  Haz Knit a HTML.
+2.  Guarda el `.Rmd` y el `.html`.
+3.  Súbelos al repositorio.
+4.  Avísame y revisaré procedimiento, código y resultados sobre 100 puntos.
