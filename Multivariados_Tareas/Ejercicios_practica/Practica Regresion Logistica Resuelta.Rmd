@@ -1,0 +1,403 @@
+---
+title: "Práctica resuelta - Regresión Logística"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Objetivo
+
+El objetivo es construir un modelo de **regresión logística binaria** para clasificar si una paciente presenta diabetes (`Yes`) o no (`No`) utilizando como predictor la concentración de glucosa (`glu`).
+
+La práctica sigue el nivel trabajado en la Actividad 2.8: división entrenamiento/prueba, ajuste del modelo, ecuación logística, interpretación de coeficientes y odds ratio, probabilidades, análisis de deviance, clasificación, matriz de confusión, métricas y revisión de supuestos.
+
+# 1. Datos de entrenamiento y prueba
+
+El paquete `MASS` contiene dos conjuntos relacionados con diabetes en mujeres Pima: `Pima.tr` para entrenamiento y `Pima.te` para prueba.
+
+```{r}
+library(MASS)
+library(car)
+library(lmtest)
+
+data(Pima.tr)
+data(Pima.te)
+
+entrenamiento <- Pima.tr
+prueba <- Pima.te
+
+dim(entrenamiento)
+dim(prueba)
+head(entrenamiento)
+str(entrenamiento)
+```
+
+La variable `type` es la respuesta binaria:
+
+- `No`: no presenta diabetes.
+- `Yes`: presenta diabetes.
+
+```{r}
+levels(entrenamiento$type)
+table(entrenamiento$type)
+round(prop.table(table(entrenamiento$type)), 3)
+```
+
+**Interpretación.** La regresión logística se utiliza porque la variable respuesta tiene solamente dos categorías. En este ejemplo el modelo estimará:
+
+$$p=P(type=Yes)$$
+
+# 2. Ajuste del modelo logístico
+
+Se utiliza `glu` como único predictor para mantener el mismo nivel de complejidad que la actividad del curso, donde se utilizó únicamente `Lag2`.
+
+```{r}
+modelo <- glm(
+  type ~ glu,
+  data = entrenamiento,
+  family = binomial
+)
+
+summary(modelo)
+```
+
+**Interpretación.** El signo del coeficiente de `glu` indica la dirección del efecto:
+
+- coeficiente positivo → al aumentar glucosa, aumenta la probabilidad de `Yes`;
+- coeficiente negativo → al aumentar glucosa, disminuye esa probabilidad.
+
+El valor p asociado a `glu` permite probar:
+
+$$H_0:\beta_1=0$$
+
+$$H_1:\beta_1\neq0$$
+
+```{r}
+p_glu <- coef(summary(modelo))["glu", "Pr(>|z|)"]
+p_glu
+```
+
+Si `p_glu < 0.05`, `glu` es estadísticamente significativa para explicar la respuesta.
+
+# 3. Ecuación del modelo
+
+La regresión logística modela el **logit**:
+
+$$\log\left(\frac{p}{1-p}\right)=\beta_0+\beta_1 glu$$
+
+```{r}
+beta0 <- coef(modelo)[1]
+beta1 <- coef(modelo)[2]
+
+beta0
+beta1
+```
+
+La probabilidad se recupera mediante:
+
+$$p=\frac{e^{\beta_0+\beta_1 glu}}{1+e^{\beta_0+\beta_1 glu}}$$
+
+Para una paciente con `glu = 140`:
+
+```{r}
+p140 <- predict(
+  modelo,
+  newdata = data.frame(glu = 140),
+  type = "response"
+)
+
+p140
+```
+
+**Interpretación.** `p140` es la probabilidad estimada de que una paciente con glucosa de 140 pertenezca a la categoría `Yes`.
+
+# 4. Odds ratio
+
+El coeficiente $\beta_1$ trabaja sobre el logaritmo de los odds. Para interpretarlo de manera más directa se utiliza:
+
+$$OR=e^{\beta_1}$$
+
+```{r}
+odds_ratio <- exp(beta1)
+cambio_porcentual <- (odds_ratio - 1) * 100
+
+odds_ratio
+cambio_porcentual
+```
+
+**Interpretación.** Por cada unidad adicional de glucosa, los odds de presentar diabetes se multiplican por `odds_ratio`. Si el OR es mayor que 1, los odds aumentan; si es menor que 1, disminuyen.
+
+El cambio porcentual de los odds es:
+
+$$100(OR-1)\%$$
+
+# 5. Curva logística
+
+```{r}
+plot(
+  entrenamiento$glu,
+  as.numeric(entrenamiento$type == "Yes"),
+  xlab = "Glucosa",
+  ylab = "Probabilidad de diabetes",
+  main = "Regresión logística: type ~ glu",
+  pch = 19
+)
+
+curve(
+  predict(modelo,
+          newdata = data.frame(glu = x),
+          type = "response"),
+  add = TRUE,
+  lwd = 2
+)
+```
+
+**Interpretación.** La respuesta observada solamente puede tomar 0 o 1, mientras que la curva representa probabilidades entre 0 y 1. Si la curva aumenta, valores mayores de glucosa se relacionan con mayor probabilidad estimada de diabetes.
+
+# 6. ¿El predictor mejora al modelo nulo?
+
+El modelo nulo utiliza únicamente el intercepto. El análisis de deviance compara si incluir `glu` mejora significativamente el ajuste.
+
+```{r}
+modelo_nulo <- glm(
+  type ~ 1,
+  data = entrenamiento,
+  family = binomial
+)
+
+comparacion <- anova(
+  modelo_nulo,
+  modelo,
+  test = "Chisq"
+)
+
+comparacion
+```
+
+Hipótesis conceptual:
+
+$$H_0:\text{el predictor no mejora al modelo nulo}$$
+
+$$H_1:\text{el predictor sí mejora al modelo nulo}$$
+
+**Interpretación.** Un valor p menor a 0.05 indica que incorporar `glu` produce una mejora estadísticamente significativa respecto al modelo sin predictores.
+
+# 7. Predicción en datos de prueba
+
+Primero se calculan probabilidades y después se convierten a clases utilizando un umbral de 0.5, igual que en la actividad del curso.
+
+```{r}
+probabilidades <- predict(
+  modelo,
+  newdata = prueba,
+  type = "response"
+)
+
+prediccion <- ifelse(
+  probabilidades > 0.5,
+  "Yes",
+  "No"
+)
+
+prediccion <- factor(
+  prediccion,
+  levels = levels(prueba$type)
+)
+
+head(data.frame(
+  Real = prueba$type,
+  Probabilidad_Yes = probabilidades,
+  Prediccion = prediccion
+))
+```
+
+**Interpretación.** El modelo no produce directamente una categoría: primero estima $P(Yes)$ y el umbral transforma esa probabilidad en una clasificación.
+
+# 8. Matriz de confusión
+
+```{r}
+tabla <- table(
+  Real = prueba$type,
+  Predicho = prediccion
+)
+
+tabla
+```
+
+La diagonal contiene los aciertos:
+
+- `No-No`: verdaderos negativos.
+- `Yes-Yes`: verdaderos positivos.
+
+Fuera de la diagonal aparecen los errores:
+
+- `No-Yes`: falsos positivos.
+- `Yes-No`: falsos negativos.
+
+```{r}
+mosaicplot(
+  tabla,
+  main = "Valores reales vs predicciones",
+  xlab = "Clase real",
+  ylab = "Clase predicha"
+)
+```
+
+# 9. Métricas de clasificación
+
+En esta práctica la clase positiva es `Yes`.
+
+```{r}
+exactitud <- sum(diag(tabla)) / sum(tabla)
+error <- 1 - exactitud
+
+sensibilidad <- tabla["Yes", "Yes"] /
+  sum(tabla["Yes", ])
+
+especificidad <- tabla["No", "No"] /
+  sum(tabla["No", ])
+
+metricas <- c(
+  Exactitud = exactitud,
+  Error = error,
+  Sensibilidad = sensibilidad,
+  Especificidad = especificidad
+) * 100
+
+round(metricas, 2)
+```
+
+**Interpretación.**
+
+- **Exactitud:** porcentaje total de clasificaciones correctas.
+- **Error:** porcentaje total de clasificaciones incorrectas.
+- **Sensibilidad:** porcentaje de pacientes `Yes` que el modelo identifica correctamente.
+- **Especificidad:** porcentaje de pacientes `No` que el modelo identifica correctamente.
+
+No basta con observar solamente la exactitud. Si una clase se predice mucho mejor que la otra, sensibilidad y especificidad permiten detectar el problema.
+
+# 10. Independencia
+
+En la actividad original los datos eran semanales y tenían un orden temporal claro. Aquí las observaciones corresponden a pacientes, por lo que no existe una secuencia temporal equivalente.
+
+Aun así, puede revisarse visualmente que los residuos no presenten un patrón evidente respecto al orden de las filas.
+
+```{r}
+residuos <- residuals(modelo, type = "deviance")
+orden <- seq_along(residuos)
+
+plot(
+  orden,
+  residuos,
+  xlab = "Orden de observación",
+  ylab = "Residuos de deviance",
+  main = "Residuos vs orden"
+)
+abline(h = 0, lty = 2)
+```
+
+**Importante.** La independencia depende principalmente del diseño/muestreo. La prueba Durbin-Watson tiene más sentido cuando existe un orden natural, especialmente temporal; por eso aquí no se utiliza como evidencia principal.
+
+Si en el examen los datos sí tienen orden temporal, como en `Weekly`, el comando trabajado fue:
+
+```{r, eval=FALSE}
+lmtest::dwtest(residuos ~ tiempo)
+```
+
+Un estadístico cercano a 2 y un resultado no significativo favorecen ausencia de autocorrelación.
+
+# 11. Multicolinealidad
+
+Este modelo tiene un solo predictor (`glu`). Por lo tanto, **no puede existir multicolinealidad entre predictores**.
+
+Si el modelo tuviera varios predictores, entonces sí sería necesario revisar VIF.
+
+# 12. Linealidad del predictor con el logit
+
+La regresión logística no exige que `glu` sea normal ni que la respuesta tenga una relación lineal con `glu`. El supuesto relevante es que el predictor continuo se relacione aproximadamente de forma lineal con el **logit**.
+
+Se divide `glu` en grupos y se compara su media con el logit observado.
+
+```{r}
+entrenamiento$Yes <- ifelse(
+  entrenamiento$type == "Yes",
+  1,
+  0
+)
+
+grupos <- cut(
+  entrenamiento$glu,
+  breaks = unique(quantile(
+    entrenamiento$glu,
+    probs = seq(0, 1, 0.1)
+  )),
+  include.lowest = TRUE
+)
+
+linealidad <- aggregate(
+  cbind(glu, Yes) ~ grupos,
+  data = entrenamiento,
+  FUN = mean
+)
+
+# Evitar logits infinitos si un grupo tiene proporción exactamente 0 o 1
+p_ajustada <- pmin(pmax(linealidad$Yes, 0.001), 0.999)
+linealidad$logit <- qlogis(p_ajustada)
+
+plot(
+  linealidad$glu,
+  linealidad$logit,
+  xlab = "Glucosa media",
+  ylab = "Logit",
+  main = "Linealidad de glucosa con el logit",
+  pch = 19
+)
+
+abline(lm(logit ~ glu, data = linealidad))
+```
+
+**Interpretación.** Una tendencia aproximadamente recta favorece el supuesto de linealidad con el logit. Curvaturas fuertes sugerirían que la forma lineal utilizada por el modelo puede ser inadecuada.
+
+# 13. Prueba de Box-Tidwell
+
+Se replica la prueba utilizada en la actividad. Box-Tidwell requiere valores positivos.
+
+```{r}
+entrenamiento$glu_pos <- entrenamiento$glu -
+  min(entrenamiento$glu) + 0.001
+
+box_tidwell <- car::boxTidwell(
+  Yes ~ glu_pos,
+  data = entrenamiento
+)
+
+box_tidwell
+```
+
+**Interpretación.** En el enfoque utilizado en la actividad, un valor p mayor a 0.05 indica que no existe evidencia suficiente de una desviación importante de la linealidad con el logit.
+
+# 14. Tamaño de muestra
+
+```{r}
+table(entrenamiento$type)
+```
+
+**Interpretación.** Se debe comprobar que ambas categorías tengan suficientes observaciones. Una clase con muy pocos casos puede producir estimaciones inestables y hacer que la exactitud global sea engañosa.
+
+# 15. Conclusión
+
+El flujo completo de una regresión logística en el nivel trabajado en el curso es:
+
+1. definir una respuesta binaria y separar entrenamiento/prueba;
+2. ajustar `glm(..., family = binomial)`;
+3. interpretar signo, significancia y odds ratio;
+4. convertir el logit en probabilidades;
+5. comparar con el modelo nulo mediante deviance;
+6. transformar probabilidades en clases mediante un umbral;
+7. evaluar matriz de confusión, exactitud, sensibilidad y especificidad;
+8. revisar independencia, multicolinealidad cuando corresponda, linealidad con el logit y tamaño de muestra.
+
+La diferencia central respecto a una regresión lineal es que aquí **no se predice directamente un valor continuo**. Primero se estima una probabilidad entre 0 y 1 y después, si se desea clasificar, se aplica un umbral para convertir esa probabilidad en una categoría.
