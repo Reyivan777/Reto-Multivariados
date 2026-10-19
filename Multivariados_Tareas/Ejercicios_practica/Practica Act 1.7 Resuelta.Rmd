@@ -1,0 +1,259 @@
+---
+title: "Práctica resuelta Act 1.7 - Componentes principales"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+# Objetivo
+
+Esta práctica está **completamente resuelta y explicada**. La idea es usarla como ejemplo de estudio para repetir el procedimiento después con otros datos.
+
+Todo el código necesario aparece también en `Formulario_examen/FormularioMultivariado.Rmd`.
+
+Se trabajará con cuatro indicadores de 10 países ficticios. Las variables tienen escalas muy distintas para que sea clara la diferencia entre hacer ACP con **covarianzas** y con **correlaciones**.
+
+```{r datos}
+datos <- data.frame(
+  Pais = paste0("P", 1:10),
+  Ingreso = c(1200, 1600, 2000, 2300, 2700, 3100, 3500, 3900, 4300, 4700),
+  Educacion = c(5.0, 6.5, 5.8, 7.0, 7.5, 8.4, 8.0, 9.5, 9.0, 10.0),
+  Mortalidad = c(46, 41, 38, 35, 30, 27, 25, 19, 17, 13),
+  Bosque = c(65, 30, 55, 25, 60, 35, 50, 40, 45, 42)
+)
+
+X <- as.matrix(datos[, c("Ingreso", "Educacion", "Mortalidad", "Bosque")])
+X
+```
+
+`Ingreso` está en miles, mientras que las otras variables toman valores mucho menores. Por ello esperamos que el ACP con covarianzas quede fuertemente influenciado por la escala de `Ingreso`.
+
+# Problema 1 - ACP con matriz de covarianzas
+
+## a) Matriz de covarianzas
+
+La matriz de covarianzas conserva las unidades originales.
+
+```{r}
+S <- cov(X)
+round(S, 3)
+```
+
+La varianza de `Ingreso` es muchísimo mayor que la de las demás variables. Esto ya sugiere que esta variable puede dominar el ACP si usamos `S`.
+
+## b) Valores propios y vectores propios
+
+Los valores propios indican cuánta varianza explica cada componente. Los vectores propios contienen los coeficientes con los que se construyen las componentes.
+
+```{r}
+eig_S <- eigen(S)
+lambda_S <- eig_S$values
+V_S <- eig_S$vectors
+
+rownames(V_S) <- colnames(X)
+
+lambda_S
+round(V_S[,1:2], 4)
+```
+
+## c) Varianza explicada
+
+La proporción explicada por cada componente es:
+
+$$Prop_j=\frac{\lambda_j}{\sum_k \lambda_k}$$
+
+```{r}
+prop_S <- lambda_S / sum(lambda_S)
+acum_S <- cumsum(prop_S)
+
+tabla_S <- data.frame(
+  CP = paste0("CP", 1:length(lambda_S)),
+  Eigenvalue = round(lambda_S, 3),
+  Varianza = round(100*prop_S, 4),
+  Acumulada = round(100*acum_S, 4)
+)
+
+tabla_S
+```
+
+**Interpretación:** CP1 explica aproximadamente **99.99%** de la varianza cuando usamos covarianzas. Esto no significa necesariamente que exista una sola dimensión importante; ocurre principalmente porque `Ingreso` tiene una escala muchísimo mayor que las demás variables.
+
+Por eso, para estos datos no conviene basar la interpretación principal en la matriz de covarianzas.
+
+# Problema 2 - ACP con matriz de correlaciones
+
+La matriz de correlaciones equivale a trabajar con las variables estandarizadas, por lo que todas tienen una escala comparable.
+
+## a) Matriz de correlaciones
+
+```{r}
+R <- cor(X)
+round(R, 3)
+```
+
+Ahora todas las variables tienen varianza 1 en la escala estandarizada, por lo que ninguna domina solamente por sus unidades.
+
+## b) Valores propios, vectores propios y varianza explicada
+
+```{r}
+eig_R <- eigen(R)
+lambda_R <- eig_R$values
+V_R <- eig_R$vectors
+
+rownames(V_R) <- colnames(X)
+
+prop_R <- lambda_R / sum(lambda_R)
+acum_R <- cumsum(prop_R)
+
+tabla_R <- data.frame(
+  CP = paste0("CP", 1:length(lambda_R)),
+  Eigenvalue = round(lambda_R, 4),
+  Varianza = round(100*prop_R, 2),
+  Acumulada = round(100*acum_R, 2)
+)
+
+tabla_R
+eig_R$values
+round(V_R[,1:2], 4)
+```
+
+**Interpretación:** con correlaciones, CP1 explica aproximadamente **75.88%** y CP2 **23.43%**. Juntas explican aproximadamente **99.31%** de la variabilidad estandarizada.
+
+Esta distribución es mucho más razonable que el 99.99% obtenido con covarianzas, porque ahora las escalas originales ya no dominan el resultado.
+
+# Problema 3 - ¿Qué variables definen CP1 y CP2?
+
+Para identificar las variables más influyentes se comparan los coeficientes de los eigenvectores en **valor absoluto**.
+
+```{r}
+sort(abs(V_R[,1]), decreasing = TRUE)
+sort(abs(V_R[,2]), decreasing = TRUE)
+```
+
+**Interpretación de CP1:** `Educacion`, `Mortalidad` e `Ingreso` tienen los coeficientes de mayor magnitud. Además, `Ingreso` y `Educacion` aparecen en una dirección y `Mortalidad` en la contraria. Por tanto, CP1 puede interpretarse como una dimensión general relacionada con **desarrollo**: mayores ingresos y educación se asocian con menor mortalidad.
+
+**Interpretación de CP2:** `Bosque` tiene, por mucho, el coeficiente de mayor magnitud. Por ello CP2 representa principalmente diferencias relacionadas con esta variable.
+
+El signo completo de un eigenvector puede aparecer invertido en R. Eso no cambia la componente ni su interpretación; lo importante son las magnitudes relativas y qué variables aparecen en direcciones iguales u opuestas.
+
+# Problema 4 - Scores de las observaciones
+
+Los *scores* indican dónde queda cada país en el nuevo sistema de componentes principales.
+
+Como usamos la matriz de correlaciones, primero estandarizamos los datos.
+
+```{r}
+X_est <- scale(X)
+scores_R <- X_est %*% V_R
+
+rownames(scores_R) <- datos$Pais
+head(round(scores_R[,1:2], 3)) # Solo muestra los primeros 2 PCA
+```
+
+Graficamos las dos primeras componentes:
+
+```{r}
+plot(scores_R[,1], scores_R[,2],
+     xlab = paste0("CP1 (", round(prop_R[1]*100, 2), "%)"),
+     ylab = paste0("CP2 (", round(prop_R[2]*100, 2), "%)"),
+     main = "Scores del ACP con correlaciones",
+     pch = 19)
+
+abline(h = 0, v = 0, lty = 2)
+```
+
+**Interpretación:** observaciones cercanas en el gráfico tienen perfiles parecidos considerando simultáneamente las cuatro variables. Observaciones muy separadas representan países con perfiles diferentes.
+
+El eje horizontal resume principalmente la combinación `Ingreso` + `Educacion` frente a `Mortalidad`, mientras que el eje vertical está fuertemente asociado con `Bosque`.
+
+# Problema 5 - Resolver el ACP directamente con `princomp()`
+
+El mismo análisis puede hacerse de manera directa con `princomp()`.
+
+Como las variables tienen escalas diferentes usamos `cor = TRUE`.
+
+```{r}
+cp <- princomp(X, cor = TRUE, scores = TRUE)
+
+summary(cp)
+round(cp$loadings[,1:2], 3)
+head(round(cp$scores[,1:2], 3))
+```
+
+**Cómo leer la salida:**
+
+- `summary(cp)` muestra la desviación estándar y la proporción de varianza explicada por las componentes.
+- `cp$loadings` contiene los pesos de las variables en cada componente.
+- `cp$scores` contiene la posición de cada observación.
+
+Los signos de las cargas pueden aparecer al revés respecto al cálculo manual con `eigen()`. Eso es normal y no cambia el ACP.
+
+# Problema 6 - Gráficos con `FactoMineR` y `factoextra`
+
+Primero construimos el ACP. `scale.unit = TRUE` indica que se estandarizan las variables, por lo que corresponde al análisis con correlaciones.
+
+```{r}
+pca <- FactoMineR::PCA(
+  X,
+  scale.unit = TRUE,
+  ncp = ncol(X),
+  graph = FALSE
+)
+```
+
+## a) Scree plot
+
+```{r}
+factoextra::fviz_screeplot(
+  pca,
+  addlabels = TRUE,
+  title = "Varianza explicada"
+)
+```
+
+El scree plot permite ver visualmente qué porcentaje explica cada componente. En este caso las dos primeras concentran casi toda la variabilidad.
+
+## b) Individuos
+
+```{r}
+factoextra::fviz_pca_ind(
+  pca,
+  geom.ind = "point",
+  title = "Países en el plano CP1-CP2"
+)
+```
+
+Cada punto es una observación. Puntos cercanos representan perfiles similares.
+
+## c) Variables
+
+```{r}
+factoextra::fviz_pca_var(
+  pca,
+  repel = TRUE,
+  title = "Variables del ACP"
+)
+```
+
+Flechas con direcciones parecidas indican asociación positiva. Flechas opuestas indican asociación negativa.
+
+## d) Biplot
+
+```{r}
+factoextra::fviz_pca_biplot(
+  pca,
+  geom.ind = "point",
+  label = "var",
+  repel = TRUE,
+  title = "Biplot del ACP"
+)
+```
+
+El biplot combina observaciones y variables. Una observación situada en la dirección de una flecha tiende a presentar valores altos en esa variable.
+
+# Conclusión final
+
+Para estos datos, el ACP con **matriz de correlaciones** es más apropiado porque las variables tienen escalas muy diferentes. El ACP con covarianzas concentra casi toda la varianza en CP1 por el tamaño numérico de `Ingreso`, mientras que el análisis estandarizado distribuye la información de forma más interpretable.
+
+Con correlaciones, las dos primeras componentes explican aproximadamente **99.31%** de la variabilidad. CP1 resume principalmente la relación entre ingreso, educación y mortalidad; CP2 está dominada por la proporción de bosque.
+
+Por tanto, las cuatro variables originales pueden representarse razonablemente mediante **dos componentes principales** para este ejemplo.
