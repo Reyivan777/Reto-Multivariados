@@ -1,0 +1,809 @@
+---
+title: "Actividad 2.6 Análisis discriminante"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-30"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Preparación de los datos
+
+El objetivo del análisis es clasificar las viviendas de acuerdo con su
+nivel de calidad de construcción mediante un análisis discriminante
+lineal (LDA).
+
+La variable `grade` representa la calidad de construcción de la
+vivienda. Para utilizarla como variable categórica dependiente se agrupa
+en tres niveles:
+
+- **Baja:** `grade <= 6`
+- **Media:** `grade` entre 7 y 8
+- **Alta:** `grade >= 9`
+
+Esta agrupación permite trabajar con categorías suficientemente
+representadas y facilita la interpretación del modelo.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(ggplot2)
+library(MASS)
+library(MVN)
+library(biotools)
+
+# Cargar la base de datos
+datos <- read.csv('C:\\Users\\reyiv\\Downloads\\kc_house_data-1.csv')
+
+# Dimensiones de la base
+dim(datos)
+
+# Primeras observaciones
+head(datos)
+
+# Estructura de las variables
+str(datos)
+```
+
+La base contiene 21 variables relacionadas con características físicas,
+ubicación, precio y calidad de las viviendas.
+
+## 2. Definición de la variable dependiente
+
+Se crea la variable categórica `grade_cat` a partir de `grade`.
+
+```{r}
+datos$grade_cat <- cut(
+  datos$grade,
+  breaks = c(-Inf, 6, 8, Inf),
+  labels = c("Baja", "Media", "Alta")
+)
+
+datos$grade_cat <- factor(
+  datos$grade_cat,
+  levels = c("Baja", "Media", "Alta")
+)
+
+# Distribución en la base completa
+table(datos$grade_cat)
+
+# Proporciones
+round(prop.table(table(datos$grade_cat)), 4)
+```
+
+La variable `grade` original no se utilizará como predictora, ya que
+`grade_cat` fue construida directamente a partir de ella y hacerlo
+produciría fuga de información.
+
+## 3. Selección de variables predictoras
+
+Se seleccionan variables numéricas que describen características de las
+viviendas.
+
+Se excluyen identificadores como `id` y `zipcode`, la fecha, la variable
+`grade` utilizada para crear la respuesta y variables categóricas
+codificadas con números como `waterfront`, `view` y `condition`.
+
+También se evita utilizar simultáneamente `sqft_above`, `sqft_basement`
+y `sqft_living`, debido a que existe una relación directa entre estas
+medidas.
+
+```{r}
+predictores <- c(
+  "price",
+  "bedrooms",
+  "bathrooms",
+  "sqft_living",
+  "sqft_lot",
+  "floors",
+  "sqft_basement",
+  "yr_built",
+  "lat",
+  "long",
+  "sqft_living15",
+  "sqft_lot15"
+)
+
+predictores
+```
+
+## 4. Muestreo aleatorio de 300 observaciones
+
+De acuerdo con las instrucciones, se selecciona una muestra aleatoria de
+300 observaciones.
+
+Se utiliza una semilla para que el muestreo pueda reproducirse y obtener
+los mismos resultados cada vez que se ejecute el documento.
+
+```{r}
+# Conservar únicamente casos completos
+datos_modelo <- datos[
+  complete.cases(datos[, c(predictores, "grade_cat")]),
+]
+
+# Semilla reproducible
+set.seed(123)
+
+# Seleccionar 300 observaciones
+indices <- sample(
+  1:nrow(datos_modelo),
+  size = 300,
+  replace = FALSE
+)
+
+muestra <- datos_modelo[indices, ]
+
+# Verificar tamaño
+dim(muestra)
+
+# Distribución de categorías
+table(muestra$grade_cat)
+```
+
+La muestra contiene 27 viviendas de calidad baja, 216 de calidad media y
+57 de calidad alta. La categoría media representa la mayoría de las
+observaciones, por lo que existe cierto desbalance entre las clases.
+
+# 5. Segmentación original de los datos
+
+Antes de construir el modelo se busca identificar qué variables
+presentan mayores diferencias entre los tres grupos.
+
+Para ello se calcula el estadístico F de un ANOVA para cada predictor.
+Un valor F más grande indica una mayor diferencia entre las medias de
+los grupos.
+
+```{r}
+f_valores <- sapply(
+  predictores,
+  function(variable) {
+
+    modelo_anova <- aov(
+      muestra[[variable]] ~ muestra$grade_cat
+    )
+
+    summary(modelo_anova)[[1]][["F value"]][1]
+  }
+)
+
+ranking_discriminacion <- data.frame(
+  Variable = names(f_valores),
+  F = as.numeric(f_valores)
+)
+
+ranking_discriminacion <- ranking_discriminacion[
+  order(ranking_discriminacion$F, decreasing = TRUE),
+]
+
+rownames(ranking_discriminacion) <- NULL
+
+ranking_discriminacion
+```
+
+Las variables que mejor separan inicialmente los grupos son
+`sqft_living`, `bathrooms` y `sqft_living15`. En particular,
+`sqft_living` presenta el mayor estadístico F, por lo que es la variable
+con mayores diferencias entre las categorías.
+
+## 5.1 Gráfico de la segmentación original
+
+Se utilizan las dos variables con mayor estadístico F para observar la
+separación de los grupos.
+
+```{r}
+var1 <- ranking_discriminacion$Variable[1]
+var2 <- ranking_discriminacion$Variable[2]
+
+var1
+var2
+```
+
+```{r}
+ggplot(
+  muestra,
+  aes(
+    x = .data[[var1]],
+    y = .data[[var2]],
+    color = grade_cat
+  )
+) +
+  geom_point(
+    alpha = 0.75,
+    size = 2.5
+  ) +
+  labs(
+    title = "Segmentación original de las viviendas",
+    x = var1,
+    y = var2,
+    color = "Categoría"
+  ) +
+  theme_minimal()
+```
+
+Las viviendas de calidad baja tienden a presentar menor superficie
+habitable y menos baños, mientras que las de calidad alta se concentran
+en valores mayores. Sin embargo, existe traslape entre los grupos,
+principalmente en la categoría media.
+
+# 6. Análisis discriminante lineal
+
+## 6.1 Medias de las variables predictoras por grupo
+
+Se calcula la media de cada predictor dentro de cada categoría
+utilizando `tapply()`.
+
+```{r}
+medias_por_grupo <- sapply(
+  predictores,
+  function(variable) {
+
+    tapply(
+      muestra[[variable]],
+      muestra$grade_cat,
+      mean
+    )
+  }
+)
+
+medias_por_grupo <- round(
+  medias_por_grupo,
+  2
+)
+
+medias_por_grupo
+```
+
+En general, las viviendas de calidad alta presentan mayores valores de
+precio, habitaciones, baños y superficie habitable. Por ejemplo, la
+superficie habitable promedio aumenta de aproximadamente 1,070 pies
+cuadrados en el grupo bajo a 3,277 en el grupo alto.
+
+## 6.2 Probabilidades a priori
+
+Las probabilidades a priori representan la probabilidad inicial de
+pertenecer a cada grupo antes de considerar los predictores.
+
+Se calculan mediante:
+
+$$P(G_k)=\frac{n_k}{n}$$
+
+donde $n_k$ es el número de observaciones del grupo y $n$ es el tamaño
+total de la muestra.
+
+```{r}
+# Frecuencias
+frecuencias <- table(
+  muestra$grade_cat
+)
+
+frecuencias
+```
+
+```{r}
+# Probabilidades a priori
+probabilidades_priori <- prop.table(
+  table(muestra$grade_cat)
+)
+
+round(
+  probabilidades_priori,
+  4
+)
+```
+
+Las probabilidades a priori son 0.09 para calidad baja, 0.72 para media
+y 0.19 para alta. Por lo tanto, antes de utilizar los predictores, una
+vivienda de la muestra tiene mayor probabilidad de pertenecer a la
+categoría media.
+
+# 7. Construcción del modelo LDA
+
+El análisis discriminante lineal busca construir combinaciones lineales
+de los predictores que permitan separar lo mejor posible los grupos.
+
+La forma general de una función discriminante es:
+
+$$LD_k =
+a_1X_1+a_2X_2+\cdots+a_pX_p$$
+
+donde los coeficientes $a_i$ son determinados por el modelo.
+
+```{r}
+# Construir fórmula
+formula_lda <- as.formula(
+  paste(
+    "grade_cat ~",
+    paste(
+      predictores,
+      collapse = " + "
+    )
+  )
+)
+
+formula_lda
+```
+
+```{r}
+# Ajustar modelo
+modelo_lda <- MASS::lda(
+  formula_lda,
+  data = muestra
+)
+
+modelo_lda
+```
+
+Como existen tres grupos, el modelo genera dos funciones discriminantes:
+LD1 y LD2. La primera función explica aproximadamente 90.54% de la
+separación entre los grupos, mientras que LD2 explica el 9.46% restante.
+Por lo tanto, LD1 contiene la mayor parte de la información
+discriminante.
+
+# 8. Funciones lineales discriminantes
+
+El número máximo de funciones discriminantes es:
+
+$$\min(p,g-1)$$
+
+donde $p$ es el número de predictores y $g$ es el número de grupos.
+
+En este caso:
+
+$$g-1=3-1=2$$
+
+por lo que se obtienen dos funciones: LD1 y LD2.
+
+## 8.1 Coeficientes
+
+```{r}
+coeficientes_lda <- modelo_lda$scaling
+
+coeficientes_lda
+```
+
+## 8.2 Centro de las variables
+
+Para obtener las funciones completas también se calcula el centro
+ponderado utilizado por el modelo.
+
+```{r}
+centro_lda <- colSums(
+  modelo_lda$prior *
+    modelo_lda$means
+)
+
+round(
+  centro_lda,
+  4
+)
+```
+
+Las funciones discriminantes pueden escribirse de manera centrada como:
+
+$$LD_k =
+a_1(X_1-\bar X_1)
++\cdots+
+a_p(X_p-\bar X_p)$$
+
+## 8.3 Escritura automática de LD1 y LD2
+
+El siguiente código utiliza notación científica para evitar que
+coeficientes pequeños sean mostrados como cero.
+
+```{r}
+funciones_lda <- sapply(
+  1:ncol(coeficientes_lda),
+  function(k) {
+
+    coef_k <- coeficientes_lda[, k]
+
+    terminos <- paste0(
+      format(
+        coef_k,
+        scientific = TRUE,
+        digits = 6
+      ),
+      "*(",
+      rownames(coeficientes_lda),
+      " - ",
+      round(
+        centro_lda[
+          rownames(coeficientes_lda)
+        ],
+        4
+      ),
+      ")"
+    )
+
+    paste0(
+      colnames(coeficientes_lda)[k],
+      " = ",
+      paste(
+        terminos,
+        collapse = " + "
+      )
+    )
+  }
+)
+
+cat(
+  paste(
+    funciones_lda,
+    collapse = "\n\n"
+  )
+)
+```
+
+LD1 es la función más importante para distinguir las categorías, ya que
+concentra más del 90% de la capacidad discriminante. LD2 aporta una
+separación adicional mucho menor.
+
+# 9. Valores discriminantes
+
+Una vez construido el modelo se obtiene el valor de LD1 y LD2 de cada
+vivienda.
+
+```{r}
+predicciones <- predict(
+  modelo_lda,
+  newdata = muestra
+)
+
+head(
+  predicciones$x
+)
+```
+
+```{r}
+scores_lda <- data.frame(
+  Clase = muestra$grade_cat,
+  predicciones$x
+)
+
+head(
+  scores_lda
+)
+```
+
+# 10. Histogramas de valores discriminantes
+
+## 10.1 Histograma de LD1
+
+```{r}
+ggplot(
+  scores_lda,
+  aes(x = LD1)
+) +
+  geom_histogram(
+    bins = 20,
+    color = "white"
+  ) +
+  facet_wrap(
+    ~ Clase
+  ) +
+  labs(
+    title = "Distribución de LD1 por categoría",
+    x = "LD1",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
+
+LD1 presenta una separación clara entre los extremos: las viviendas de
+calidad baja se concentran principalmente en valores negativos y las de
+calidad alta en valores positivos. La categoría media se encuentra entre
+ambas y presenta mayor traslape.
+
+## 10.2 Histograma de LD2
+
+```{r}
+ggplot(
+  scores_lda,
+  aes(x = LD2)
+) +
+  geom_histogram(
+    bins = 20,
+    color = "white"
+  ) +
+  facet_wrap(
+    ~ Clase
+  ) +
+  labs(
+    title = "Distribución de LD2 por categoría",
+    x = "LD2",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
+
+En LD2 existe un traslape considerable entre las tres categorías, por lo
+que esta segunda función discrimina menos que LD1. Esto coincide con su
+menor porcentaje de información discriminante.
+
+# 11. Segmentación predicha por el modelo
+
+Se obtiene la clasificación estimada por el modelo para cada vivienda.
+
+```{r}
+muestra$prediccion_lda <- predicciones$class
+
+table(
+  muestra$prediccion_lda
+)
+```
+
+```{r}
+ggplot(
+  muestra,
+  aes(
+    x = .data[[var1]],
+    y = .data[[var2]],
+    color = prediccion_lda
+  )
+) +
+  geom_point(
+    alpha = 0.75,
+    size = 2.5
+  ) +
+  labs(
+    title = "Segmentación predicha por el modelo LDA",
+    x = var1,
+    y = var2,
+    color = "Predicción"
+  ) +
+  theme_minimal()
+```
+
+El modelo conserva el patrón general de los datos: valores pequeños de
+`sfqt_living` y `bathrooms` se relacionan con calidad baja y valores
+altos con calidad alta. Sin embargo, el modelo clasifica una gran
+cantidad de viviendas como calidad media.
+
+# 12. Evaluación de la precisión del modelo
+
+Para evaluar el poder predictivo se utiliza validación cruzada
+**Leave-One-Out (LOOCV)**.
+
+En cada iteración se deja fuera una observación, el modelo se construye
+con las 299 restantes y después intenta clasificar la observación
+excluida. El proceso se repite para las 300 viviendas.
+
+Este procedimiento ofrece una evaluación más realista que medir el
+desempeño con las mismas observaciones utilizadas para ajustar el
+modelo.
+
+```{r}
+modelo_cv <- MASS::lda(
+  formula_lda,
+  data = muestra,
+  CV = TRUE
+)
+
+clase_real <- muestra$grade_cat
+
+clase_predicha <- modelo_cv$class
+```
+
+## 12.1 Tabla de contingencia
+
+Las filas corresponden a las clases reales y las columnas a las clases
+predichas. Los valores de la diagonal representan clasificaciones
+correctas.
+
+```{r}
+tabla_contingencia <- table(
+  Real = clase_real,
+  Predicha = clase_predicha
+)
+
+tabla_contingencia
+```
+
+## 12.2 Precisión global
+
+La precisión se calcula como:
+
+$$Precisión =
+\frac{\text{Predicciones correctas}}
+{\text{Total de predicciones}}
+\times 100$$
+
+```{r}
+precision <- mean(
+  clase_real == clase_predicha
+)
+
+porcentaje_precision <- precision * 100
+
+round(
+  porcentaje_precision,
+  2
+)
+```
+
+## 12.3 Porcentaje de error
+
+$$Error = 100 - Precisión$$
+
+```{r}
+porcentaje_error <- (
+  1 - precision
+) * 100
+
+round(
+  porcentaje_error,
+  2
+)
+```
+
+```{r}
+cat(
+  "Precisión:",
+  round(porcentaje_precision, 2),
+  "%\n"
+)
+
+cat(
+  "Error:",
+  round(porcentaje_error, 2),
+  "%"
+)
+```
+
+## 12.4 Acierto por categoría
+
+Debido a que los grupos no tienen el mismo tamaño, también es útil
+observar qué porcentaje de cada clase se clasificó correctamente.
+
+```{r}
+acierto_por_clase <- (
+  diag(tabla_contingencia) /
+    rowSums(tabla_contingencia)
+) * 100
+
+round(
+  acierto_por_clase,
+  2
+)
+```
+
+El modelo obtiene una precisión global de **78.67%** y un error de
+**21.33%**. Clasifica correctamente 197 de 216 viviendas de calidad
+media, pero solo 8 de 27 de calidad baja y 31 de 57 de calidad alta.
+
+Por ello, el desempeño global es aceptable, pero el modelo funciona
+mucho mejor para la categoría media que para las demás. No puede
+considerarse un clasificador completamente sólido para las tres
+categorías.
+
+# 13. Validación de supuestos
+
+El análisis discriminante lineal supone principalmente:
+
+1.  Normalidad multivariada dentro de cada grupo.
+2.  Igualdad de las matrices de varianzas y covarianzas entre grupos.
+
+## 13.1 Normalidad multivariada
+
+Se utiliza la prueba de Mardia.
+
+Las hipótesis son:
+
+$$H_0:
+\text{Los datos siguen una distribución normal multivariada}$$
+
+$$H_1:
+\text{Los datos no siguen una distribución normal multivariada}$$
+
+Se utiliza un nivel de significancia de:
+
+$$\alpha = 0.05$$
+
+Si $p < 0.05$, se rechaza la hipótesis nula.
+
+```{r}
+resultados_normalidad <- list()
+
+for (grupo in levels(muestra$grade_cat)) {
+
+  datos_grupo <- muestra[
+    muestra$grade_cat == grupo,
+    predictores
+  ]
+
+
+
+  cat(
+    "Grupo:",
+    grupo,
+    "\n"
+  )
+
+  cat(
+    "Número de observaciones:",
+    nrow(datos_grupo),
+    "\n"
+  )
+
+
+  resultado <- MVN::mvn(
+    data = datos_grupo,
+    mvn_test = "mardia"
+  )
+
+  resultados_normalidad[[grupo]] <- resultado
+
+  print(
+    resultado$multivariate_normality
+  )
+}
+```
+
+La prueba de Mardia detecta falta de normalidad en los tres grupos. En
+calidad baja se rechaza la normalidad por asimetría, mientras que en los
+grupos media y alta tanto la asimetría como la curtosis presentan
+valores p menores a 0.05.
+
+Por lo tanto, **no se cumple el supuesto de normalidad multivariada**.
+
+# 14. Homogeneidad de matrices de covarianzas
+
+Para comprobar si los grupos presentan matrices de covarianzas
+semejantes se utiliza la prueba M de Box.
+
+Las hipótesis son:
+
+$$H_0:
+\Sigma_{Baja}
+=
+\Sigma_{Media}
+=
+\Sigma_{Alta}$$
+
+$$H_1:
+\text{Al menos una matriz de covarianzas es diferente}$$
+
+Si $p < 0.05$, se rechaza la igualdad de matrices de covarianzas.
+
+```{r}
+X <- muestra[
+  ,
+  predictores
+]
+
+resultado_boxm <- biotools::boxM(
+  X,
+  muestra$grade_cat
+)
+
+resultado_boxm
+```
+
+La prueba M de Box obtiene un valor p menor a 0.05, por lo que se
+rechaza la hipótesis de igualdad de matrices de covarianzas.
+
+Por lo tanto, **no se cumple el supuesto de homogeneidad de las matrices
+de covarianzas**.
+
+# 15. Conclusiones
+
+El análisis muestra que las características que más ayudan a distinguir
+la calidad de las viviendas son principalmente la superficie habitable
+(`sqft_living`), el número de baños y la superficie habitable de
+viviendas cercanas (`sqft_living15`).
+
+El modelo LDA alcanza una precisión de **78.67%**, con un error de
+**21.33%**. Su mejor desempeño ocurre en viviendas de calidad media,
+mientras que presenta más dificultades para identificar las categorías
+baja y alta.
+
+Además, las pruebas de Mardia y M de Box muestran que no se cumplen los
+supuestos de normalidad multivariada ni de igualdad de matrices de
+covarianzas. Por esta razón, aunque el modelo logra una clasificación
+razonable, sus resultados deben interpretarse con precaución.
