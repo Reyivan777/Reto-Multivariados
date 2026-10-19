@@ -1,0 +1,371 @@
+---
+title: "Práctica resuelta - Clustering jerárquico y no jerárquico"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Objetivo
+
+En esta práctica se trabajan los dos tipos de clustering vistos en las actividades del curso:
+
+1.  **Clustering jerárquico:** construir conglomerados a partir de una matriz de distancias y comparar los métodos de promedio (`average`) y vecino más cercano (`single`).
+2.  **Clustering no jerárquico:** aplicar K-means, seleccionar el número de conglomerados mediante codo y silueta, y después interpretar los grupos en la escala original.
+
+En ambos casos el objetivo es **agrupar observaciones parecidas**, no predecir una variable respuesta.
+
+# PARTE I. Clustering jerárquico
+
+## 1. Matriz de distancias
+
+Supongamos que tenemos seis objetos: A, B, C, D, E y F. Ya se conocen las distancias entre cada par.
+
+```{r}
+M <- matrix(c(
+  0.0, 1.0, 5.0, 5.5, 8.0, 8.4,
+  1.0, 0.0, 4.6, 5.1, 7.5, 7.9,
+  5.0, 4.6, 0.0, 1.4, 3.8, 4.2,
+  5.5, 5.1, 1.4, 0.0, 3.2, 3.6,
+  8.0, 7.5, 3.8, 3.2, 0.0, 1.2,
+  8.4, 7.9, 4.2, 3.6, 1.2, 0.0
+), nrow = 6, byrow = TRUE)
+
+rownames(M) <- colnames(M) <- c("A", "B", "C", "D", "E", "F")
+M
+```
+
+**Interpretación.** La diagonal es cero porque la distancia de un objeto consigo mismo es cero. La matriz es simétrica: la distancia de A a B es la misma que de B a A.
+
+Las distancias más pequeñas son:
+
+- A-B = 1.0
+- E-F = 1.2
+- C-D = 1.4
+
+Por lo tanto, esperamos que esos pares se formen primero.
+
+## 2. Convertir a objeto de distancias
+
+`hclust()` no recibe directamente una matriz cuadrada; se convierte con `as.dist()`.
+
+```{r}
+d <- as.dist(M)
+d
+```
+
+# 3. Método del vecino más cercano: single linkage
+
+En `single`, la distancia entre dos conglomerados se define como la **menor distancia** entre cualquier par de objetos, uno de cada grupo.
+
+$$D_{single}(A,B)=\min d(i,j)$$
+
+```{r}
+J_single <- hclust(d, method = "single")
+
+plot(
+  J_single,
+  hang = -1,
+  main = "Dendrograma - Vecino más cercano",
+  xlab = "Objetos",
+  ylab = "Distancia"
+)
+```
+
+**Interpretación.** Primero se forman los pares A-B, E-F y C-D. Después los grupos {C,D} y {E,F} se unen a una distancia de 3.2, porque la menor distancia entre ambos grupos es:
+
+$$\min(3.8,4.2,3.2,3.6)=3.2$$
+
+Finalmente {A,B} se une con {C,D,E,F}. Con vecino más cercano basta con que exista un par relativamente próximo para conectar dos conglomerados.
+
+## 4. Verificación manual de una distancia single
+
+Después de formar los grupos {C,D} y {E,F}, las distancias cruzadas son:
+
+- C-E = 3.8
+- C-F = 4.2
+- D-E = 3.2
+- D-F = 3.6
+
+```{r}
+distancias_cruzadas <- c(3.8, 4.2, 3.2, 3.6)
+min(distancias_cruzadas)
+```
+
+El resultado es 3.2, que coincide con la altura a la que se unen esos conglomerados en el dendrograma de `single`.
+
+# 5. Método del promedio: average linkage
+
+En `average`, la distancia entre dos conglomerados es el **promedio de todas las distancias** entre los objetos de un grupo y los objetos del otro.
+
+$$D_{average}(A,B)=\frac{1}{n_A n_B}\sum_{i\in A}\sum_{j\in B}d(i,j)$$
+
+```{r}
+J_average <- hclust(d, method = "average")
+
+plot(
+  J_average,
+  hang = -1,
+  main = "Dendrograma - Método del promedio",
+  xlab = "Objetos",
+  ylab = "Distancia"
+)
+```
+
+**Interpretación.** Los primeros pares vuelven a ser A-B, E-F y C-D. Sin embargo, la distancia de unión entre {C,D} y {E,F} cambia porque ahora se utilizan las cuatro distancias entre ambos grupos.
+
+## 6. Verificación manual de average linkage
+
+```{r}
+mean(c(3.8, 4.2, 3.2, 3.6))
+```
+
+$$D_{average}(\{C,D\},\{E,F\})=3.7$$
+
+Por eso esos dos grupos se unen aproximadamente a una altura de 3.7 en el dendrograma de promedio, en lugar de 3.2 como en `single`.
+
+# 7. Comparación de las últimas uniones
+
+La diferencia entre los métodos se vuelve todavía más visible en la última unión.
+
+Para `single`, la distancia entre {A,B} y {C,D,E,F} es la menor de todas las distancias cruzadas:
+
+```{r}
+cruzadas_final <- c(
+  5.0, 5.5, 8.0, 8.4,
+  4.6, 5.1, 7.5, 7.9
+)
+
+min(cruzadas_final)
+mean(cruzadas_final)
+```
+
+- `single` une los dos grandes grupos a **4.6**.
+- `average` los une a **6.5**.
+
+**Interpretación.** La estructura de agrupación es parecida, pero las alturas cambian porque cada método define de manera distinta la distancia entre conglomerados.
+
+# 8. Cortar el dendrograma
+
+El dendrograma presenta un salto grande antes de la última unión, por lo que una solución razonable es trabajar con **2 conglomerados**.
+
+```{r}
+grupo_single <- cutree(J_single, k = 2)
+grupo_average <- cutree(J_average, k = 2)
+
+grupo_single
+grupo_average
+```
+
+En ambos métodos se obtiene esencialmente:
+
+- Conglomerado 1: A, B
+- Conglomerado 2: C, D, E, F
+
+Si se cortara en 3 grupos, aparecerían aproximadamente los tres pares originales.
+
+```{r}
+cutree(J_average, k = 3)
+```
+
+# 9. Conclusión del clustering jerárquico
+
+El análisis jerárquico comienza con cada objeto como un conglomerado individual y va fusionando grupos progresivamente. En este ejemplo, `single` y `average` encuentran una estructura semejante, pero las distancias de unión son distintas:
+
+- **Single:** utiliza solamente la distancia mínima entre dos grupos.
+- **Average:** utiliza el promedio de todas las distancias entre ambos grupos.
+
+El dendrograma permite observar tanto **qué objetos se unen** como **a qué distancia ocurre cada unión**.
+
+# PARTE II. Clustering no jerárquico con K-means
+
+Ahora utilizaremos la base `iris`, disponible directamente en R. Para el clustering solo se emplearán sus cuatro variables numéricas; `Species` no entra al algoritmo porque es categórica.
+
+# 10. Preparación de los datos
+
+```{r}
+data(iris)
+
+M1 <- iris[, 1:4]
+
+head(M1)
+summary(M1)
+```
+
+Las variables están medidas en centímetros, pero tienen dispersiones diferentes. Como K-means utiliza distancias, estandarizamos para que ninguna variable domine únicamente por su escala.
+
+```{r}
+Mstand <- scale(M1)
+M1f <- data.frame(Mstand)
+
+head(M1f)
+```
+
+**Interpretación.** Después de `scale()`, cada variable queda aproximadamente con media 0 y desviación estándar 1. El clustering se realiza con los datos estandarizados, pero posteriormente interpretaremos los grupos usando los valores originales.
+
+# 11. Número de conglomerados: método del codo
+
+El método del codo analiza la variación dentro de los conglomerados (WSS). Al aumentar $k$, la WSS siempre disminuye; buscamos el punto donde agregar más grupos deja de producir una mejora grande.
+
+```{r}
+library(factoextra)
+library(cluster)
+
+set.seed(123)
+
+fviz_nbclust(
+  M1f,
+  FUNcluster = kmeans,
+  method = "wss",
+  k.max = 8
+) +
+  labs(title = "Método del codo")
+```
+
+**Interpretación.** La gráfica presenta una reducción fuerte en los primeros valores de $k$ y después la mejora se vuelve más gradual. Como el codo puede ser subjetivo, lo complementamos con la silueta.
+
+# 12. Método de la silueta
+
+La silueta toma valores aproximadamente entre -1 y 1:
+
+- cerca de 1: observación bien asignada a su conglomerado;
+- cerca de 0: observación cerca de la frontera entre grupos;
+- negativa: podría estar mejor ubicada en otro grupo.
+
+Para elegir $k$, buscamos la **mayor silueta promedio**.
+
+```{r}
+fviz_nbclust(
+  M1f,
+  FUNcluster = kmeans,
+  method = "silhouette",
+  k.max = 8
+) +
+  labs(title = "Método de la silueta")
+```
+
+Para verlo numéricamente:
+
+```{r}
+ks <- 2:8
+
+silueta <- sapply(ks, function(k) {
+  modelo <- kmeans(M1f, centers = k, nstart = 25)
+  mean(cluster::silhouette(modelo$cluster, dist(M1f))[, 3])
+})
+
+tabla_silueta <- data.frame(
+  k = ks,
+  Silueta_promedio = round(silueta, 3)
+)
+
+tabla_silueta
+
+k_opt <- ks[which.max(silueta)]
+k_opt
+```
+
+**Interpretación.** Para estos datos estandarizados, la silueta promedio más alta se obtiene con **k = 2**. Por lo tanto, utilizaremos dos conglomerados, igual que en la actividad de K-means del curso se seleccionó el valor de $k$ combinando codo y silueta.
+
+# 13. Modelo final de K-means
+
+K-means necesita que indiquemos previamente el número de conglomerados. El algoritmo busca centros y asigna cada observación al centro más cercano, tratando de minimizar la variación dentro de los grupos.
+
+`nstart = 25` hace que R pruebe diferentes centros iniciales y conserve la mejor solución encontrada.
+
+```{r}
+set.seed(123)
+
+km <- kmeans(
+  M1f,
+  centers = k_opt,
+  nstart = 25
+)
+
+km
+```
+
+Elementos útiles:
+
+```{r}
+km$centers          # centros en escala estandarizada
+table(km$cluster)   # tamaño de cada conglomerado
+km$tot.withinss     # variación total dentro de los grupos
+```
+
+# 14. Visualización de los conglomerados
+
+Como existen cuatro variables, `fviz_cluster()` proyecta la información a un plano para visualizar los grupos.
+
+```{r}
+fviz_cluster(
+  km,
+  data = M1f,
+  show.clust.cent = TRUE,
+  ellipse.type = "convex",
+  star.plot = FALSE,
+  repel = TRUE,
+  geom = "point"
+) +
+  labs(title = paste("K-means con", k_opt, "conglomerados"))
+```
+
+**Interpretación.** El gráfico permite observar la separación general entre los dos conglomerados. La representación es una proyección visual; el modelo realmente utilizó simultáneamente las cuatro variables estandarizadas.
+
+# 15. Interpretación en la escala original
+
+Los centros estandarizados sirven para el algoritmo, pero para describir los conglomerados es más claro calcular las medias de las variables originales.
+
+```{r}
+resumen_clusters <- aggregate(
+  M1,
+  by = list(Cluster = km$cluster),
+  FUN = mean
+)
+
+round(resumen_clusters, 2)
+```
+
+```{r}
+table(km$cluster)
+```
+
+**Interpretación.** Uno de los conglomerados presenta, en promedio, pétalos y sépalos de menor tamaño; el otro reúne observaciones con medidas mayores, especialmente en longitud y ancho de pétalo.
+
+El número asignado a cada cluster (`1` o `2`) puede intercambiarse entre ejecuciones o configuraciones sin cambiar la estructura del resultado. Lo importante es el perfil de cada conglomerado, no su etiqueta numérica.
+
+# 16. ¿Qué está optimizando K-means?
+
+Para cada observación, K-means calcula su distancia al centro de cada conglomerado y la asigna al centro más cercano. Después recalcula los centros y repite el proceso hasta estabilizarse.
+
+El objetivo es minimizar la suma de cuadrados dentro de los conglomerados:
+
+$$WSS=\sum_{k=1}^{K}\sum_{i\in C_k}\|x_i-\mu_k\|^2$$
+
+Por eso:
+
+- observaciones del mismo cluster deben quedar relativamente cerca;
+- los centros representan el perfil promedio de cada grupo en el espacio estandarizado;
+- la WSS disminuye al aumentar $k$, por lo que no basta con escoger el valor más pequeño de WSS.
+
+# 17. Diferencia entre jerárquico y K-means
+
+| Característica | Jerárquico | K-means |
+|----|----|----|
+| ¿Se indica $k$ desde el inicio? | No | Sí |
+| Resultado principal | Dendrograma | Asignación y centros |
+| Base del método | Distancias entre objetos/grupos | Distancia a centroides |
+| Métodos vistos | Average y Single | K-means |
+| Elección de grupos | Cortar dendrograma | Codo + silueta |
+
+Ambos son métodos **no supervisados**: buscan estructura en las observaciones sin una variable objetivo que se quiera predecir.
+
+# 18. Conclusión general
+
+En clustering jerárquico, la decisión central es cómo definir la distancia entre conglomerados. `single` utiliza el vecino más cercano y `average` utiliza la distancia promedio, por lo que pueden producir alturas de unión diferentes aun cuando la estructura de grupos sea semejante.
+
+En K-means, primero se preparan y, cuando sea necesario, se estandarizan los datos; después se selecciona $k$ mediante criterios como codo y silueta; finalmente se ajusta el modelo y se interpretan los conglomerados utilizando sus medias en la escala original.
+
+La idea común es la misma: **observaciones parecidas deben quedar en el mismo conglomerado y observaciones diferentes deben quedar separadas**.
