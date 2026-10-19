@@ -1,0 +1,132 @@
+---
+date: today
+lang: es
+title-block: false
+format:
+  pdf:
+    toc: false
+    number-sections: false
+    geometry:
+      - margin=1in
+    fontsize: 11pt
+    linestretch: 1.0
+execute:
+  echo: false
+---
+
+```{=latex}
+\begin{titlepage}
+\begin{center}
+```
+
+![](https://raw.githubusercontent.com/Reyivan777/Reto-Multivariados/trunk/quarto/logotec.png){width=65%}
+
+```{=latex}
+\vspace{1.5cm}
+
+{\large \textbf{Aplicación de métodos multivariados en ciencia de datos (Gpo 101)}}
+
+\vspace{1cm}
+
+{\LARGE \textbf{
+Predicción de ozono a 24 horas\\[0.3cm] en la Zona Metropolitana de Monterrey
+}}
+
+\vspace{0.7cm}
+
+{\Large Reflexión individual del reto}
+
+\vspace{1cm}
+
+{\large \textbf{Equipo 4}}
+
+\vspace{1cm}
+
+{\large \textbf{Profesores}}
+
+\vspace{0.3cm}
+
+{\large Blanca Rosa Ruiz Hernandez}
+
+{\large Raúl Gómez Muñoz}
+
+\vfill
+
+{\large \textbf{Estudiante}}
+
+\vspace{0.3cm}
+
+{\large Rey Iván de la Fuente Chávez, A01709445}
+
+\vfill
+
+{\large Monterrey, Nuevo León}
+
+{\large 12 de septiembre de 2026}
+
+\end{center}
+\end{titlepage}
+\clearpage
+```
+
+# Parte A. Reflexión argumentada
+
+## 1. Afirmación
+
+Después de terminar el reto, creo que la principal utilidad del modelado multivariado es que ayuda a entender problemas donde varias cosas cambian al mismo tiempo. En calidad del aire esto se vio muy claro, porque el O3 no se puede entender viendo una sola variable. La temperatura, la radiación solar, la humedad, el viento, la estación y el comportamiento previo del mismo O3 aportan información distinta. Para mí, lo más útil fue juntar esas variables y ver cuáles realmente ayudaban a entender y anticipar el comportamiento del ozono.
+
+## 2. Evidencia
+
+Una parte que me ayudó a darme cuenta de esto fue el análisis de componentes principales. Se necesitaron cinco componentes para superar el 80 % de la variación total, así que la información no estaba concentrada en una sola variable. En los primeros componentes aparecieron relaciones entre O3, temperatura, radiación y humedad, mientras que el viento aportó información diferente. Esto me hizo ver que el problema tenía varias partes y que revisar cada variable por separado se hubiera quedado corto.
+
+También me pareció importante comparar los modelos contra una referencia sencilla. En 2025, la persistencia diaria tuvo un RMSE de 19.561, mientras que GAM y XGBoost lo redujeron a 16.620 y 16.579. La diferencia entre los dos modelos fue pequeña, pero ambos mejoraron la referencia. Para mí, esto tuvo más sentido que solo decir que un modelo “funcionó”, porque permitió ver si de verdad estaba aportando algo extra.
+
+## 3. Justificación
+
+Estos resultados apoyan mi idea porque muestran que combinar distintas variables sí agregó información. El valor de O3 del día anterior ya era una referencia bastante buena, pero no explicaba todo lo que pasaba. Cuando se agregaron variables meteorológicas, temporales y de estación, el error bajó.
+
+Otra cosa que aprendí fue que la preparación de los datos cambia mucho lo que puede hacer un modelo. Al principio teníamos información desde 2020, pero después vimos que ese año tenía más del 93 % de O3 faltante en las estaciones analizadas. Incluirlo solo porque estaba disponible hubiera hecho parecer que teníamos más información útil de la que realmente había. Ese tipo de decisiones me ayudó a entender que la calidad del análisis depende tanto de los datos como del modelo.
+
+## 4. Respaldo
+
+Lo que pasó en el proyecto también se puede relacionar con varios temas que vimos en clase. El PCA ayudó a resumir variables que estaban relacionadas entre sí y el GAM permitió trabajar con relaciones que no tenían que ser lineales. Además, la validación respetó el orden del tiempo: se usaron años anteriores para entrenar y 2025 para probar. Así se evitó usar información futura para predecir el pasado y la evaluación fue más parecida a una situación real.
+
+## 5. Contraargumento o limitaciones
+
+Aunque los resultados fueron buenos, no creo que el modelo explique por completo la contaminación por ozono. Una relación estadística no significa que una variable sea la causa de otra y también hay factores que no estaban incluidos en la base. Además, hubo faltantes y diferencias entre estaciones. Otro límite es que 2025 solo tiene información hasta junio, así que la prueba final no representa un año completo. También puede pasar que el error promedio sea razonable y aun así el modelo falle en episodios de O3 alto. Por eso creo que los resultados siempre se tienen que revisar junto con el contexto y la calidad de los datos.
+
+## 6. Conclusión
+
+Al terminar el reto, mi forma de ver el modelado multivariado cambió. Antes pensaba más en encontrar el modelo con el menor error, pero ahora veo que también importa entender los datos, decidir qué variables usar, comparar métodos y reconocer sus límites. En este proyecto, el análisis permitió encontrar patrones entre O3, meteorología y tiempo, y además mejorar una predicción sencilla. Para mí, el valor del modelado multivariado está en convertir muchas mediciones relacionadas en información que realmente se pueda entender y usar.
+
+---
+
+# Parte B. Autoevaluación personal — Modelo PER
+
+## 1. Propósito
+
+Creo que el reto buscaba que aprendiéramos a trabajar un problema real desde una pregunta bastante abierta hasta llegar a un análisis que se pudiera justificar con datos. No era solo aplicar técnicas porque las vimos en clase, sino entender cuándo tenía sentido usarlas y qué nos podían decir. También se pusieron en práctica la programación, la interpretación, la comunicación de resultados y el trabajo en equipo.
+
+## 2. Estrategia
+
+Nuestra estrategia fue cambiando durante el reto. Al principio queríamos estudiar varios contaminantes, pero vimos que el objetivo era demasiado amplio y terminamos enfocándonos en predecir O3 con 24 horas de anticipación. También cambiamos algunas decisiones cuando encontramos problemas como la falta de datos en 2020.
+
+En lo personal, traté de no quedarme solo con correr código. Me ayudó detenerme a entender qué representaban las bases y los resultados antes de seguir. R y Quarto ayudaron a mantener el análisis ordenado y GitHub a integrar el trabajo del equipo. También aprendí que en un proyecto largo es fácil perderse si el código y las decisiones no están bien organizados.
+
+## 3. Resultado
+
+Me llevo tres aprendizajes principales. Primero, los datos reales casi nunca están listos para usarse directamente y la limpieza también forma parte del análisis. Segundo, la forma de validar un modelo puede cambiar mucho qué tan confiables son los resultados; en este caso era necesario respetar el orden temporal. Tercero, el modelo con menor error no siempre es automáticamente el mejor para todo. XGBoost tuvo una pequeña ventaja en error y cobertura, mientras que GAM fue más fácil de interpretar y tuvo un desempeño muy parecido.
+
+Todavía quiero mejorar en la interpretación de modelos no lineales y series de tiempo, sobre todo en entender mejor sus supuestos y errores. También quiero organizar mejor el código desde el inicio para no tener que rehacer tantas partes cuando cambia el objetivo. En general, el reto me ayudó a conectar mejor la teoría del análisis multivariado con un problema real y a entender todo lo que hay detrás de una conclusión estadística.
+
+---
+
+# Declaratoria de uso de IA durante el desarrollo del trabajo
+
+Opción B. Se utilizó IA.
+
+Herramienta: ChatGPT de OpenAI.
+
+Uso realizado: apoyo para organizar ideas, revisar redacción y aclarar conceptos durante el desarrollo del reto.
+
+Validación realizada por el estudiante: revisé el contenido, los resultados y las interpretaciones con base en el trabajo realizado durante el proyecto y asumo la responsabilidad de la versión final entregada.
