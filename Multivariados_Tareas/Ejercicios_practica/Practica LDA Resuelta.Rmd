@@ -1,0 +1,477 @@
+---
+title: "Práctica resuelta - Análisis Discriminante Lineal (LDA)"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Objetivo
+
+El objetivo es construir un modelo de **Análisis Discriminante Lineal (LDA)** para clasificar flores de iris en tres especies a partir de cuatro medidas físicas.
+
+Esta práctica sigue el nivel trabajado en la actividad del curso: preparación de la respuesta categórica, selección y exploración de predictores, probabilidades a priori, construcción de las funciones discriminantes, scores, clasificación, validación cruzada LOOCV y revisión de los supuestos de normalidad multivariada y homogeneidad de matrices de covarianzas.
+
+La pregunta principal es:
+
+> ¿Podemos clasificar correctamente la especie de una flor usando sus medidas de sépalo y pétalo?
+
+# 0. Preparación
+
+Usaremos `iris`, una base incluida en R. Tiene 150 observaciones, cuatro variables cuantitativas y una respuesta categórica con tres especies.
+
+```{r}
+library(MASS)
+library(ggplot2)
+library(MVN)
+library(biotools)
+
+# Cargar datos
+datos <- iris
+
+# Renombrar para facilitar la lectura
+names(datos) <- c(
+  "LargoSepalo",
+  "AnchoSepalo",
+  "LargoPetalo",
+  "AnchoPetalo",
+  "Especie"
+)
+
+str(datos)
+head(datos)
+table(datos$Especie)
+```
+
+**Interpretación.** Hay 150 flores y tres clases balanceadas: 50 `setosa`, 50 `versicolor` y 50 `virginica`. La respuesta `Especie` ya es un factor, por lo que puede utilizarse directamente en LDA.
+
+# 1. Selección de predictores
+
+Las variables explicativas son las cuatro medidas numéricas.
+
+```{r}
+predictores <- c(
+  "LargoSepalo",
+  "AnchoSepalo",
+  "LargoPetalo",
+  "AnchoPetalo"
+)
+
+X <- datos[, predictores]
+summary(X)
+```
+
+En LDA la respuesta debe ser categórica y los predictores deben contener información que permita separar los grupos.
+
+# 2. ¿Qué variables separan mejor las especies?
+
+Igual que en la actividad del curso, calculamos un ANOVA por predictor. Un estadístico F grande significa que las medias de esa variable difieren más entre los grupos.
+
+```{r}
+f_valores <- sapply(
+  predictores,
+  function(variable) {
+    modelo_anova <- aov(datos[[variable]] ~ datos$Especie)
+    summary(modelo_anova)[[1]][["F value"]][1]
+  }
+)
+
+ranking <- data.frame(
+  Variable = names(f_valores),
+  F = as.numeric(f_valores)
+)
+
+ranking <- ranking[order(ranking$F, decreasing = TRUE), ]
+rownames(ranking) <- NULL
+ranking
+```
+
+**Interpretación.** Las variables relacionadas con el pétalo son las que mejor separan las especies. `LargoPetalo` y `AnchoPetalo` presentan los estadísticos F más altos. Esto anticipa que estas medidas serán especialmente útiles para la clasificación.
+
+# 3. Segmentación original
+
+Visualizamos las dos variables con mayor F.
+
+```{r}
+var1 <- ranking$Variable[1]
+var2 <- ranking$Variable[2]
+
+ggplot(
+  datos,
+  aes(
+    x = .data[[var1]],
+    y = .data[[var2]],
+    color = Especie
+  )
+) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  labs(
+    title = "Segmentación original por especie",
+    x = var1,
+    y = var2
+  ) +
+  theme_minimal()
+```
+
+**Interpretación.** `setosa` se encuentra claramente separada. `versicolor` y `virginica` están más cercanas y presentan algo de traslape. Por lo tanto, esperamos que la mayor parte de los errores de clasificación ocurra entre esas dos especies.
+
+# 4. Medias por grupo
+
+LDA utiliza la información sobre las medias de cada grupo y una matriz de covarianzas común.
+
+```{r}
+medias_por_grupo <- sapply(
+  predictores,
+  function(variable) {
+    tapply(datos[[variable]], datos$Especie, mean)
+  }
+)
+
+round(medias_por_grupo, 3)
+```
+
+**Interpretación.** Las medias del largo y ancho del pétalo aumentan claramente de `setosa` a `versicolor` y luego a `virginica`. Esta diferencia ayuda a separar las clases.
+
+# 5. Probabilidades a priori
+
+Las probabilidades a priori representan la probabilidad inicial de pertenecer a cada clase antes de usar los predictores:
+
+$$P(G_k)=\frac{n_k}{n}$$
+
+```{r}
+frecuencias <- table(datos$Especie)
+priori <- prop.table(frecuencias)
+
+frecuencias
+priori
+```
+
+**Interpretación.** Como las tres especies tienen 50 observaciones, sus probabilidades a priori son iguales:
+
+$$P(setosa)=P(versicolor)=P(virginica)=\frac{1}{3}$$
+
+Esto significa que ninguna clase tiene ventaja inicial por ser más frecuente.
+
+# 6. Construcción del modelo LDA
+
+La forma general de una función discriminante es:
+
+$$LD_k=a_1X_1+a_2X_2+\cdots+a_pX_p$$
+
+El número máximo de funciones discriminantes es:
+
+$$\min(p,g-1)$$
+
+Aquí hay $p=4$ predictores y $g=3$ grupos, así que:
+
+$$\min(4,3-1)=2$$
+
+Por lo tanto, tendremos **LD1 y LD2**.
+
+```{r}
+formula_lda <- as.formula(
+  paste(
+    "Especie ~",
+    paste(predictores, collapse = " + ")
+  )
+)
+
+modelo_lda <- MASS::lda(
+  formula_lda,
+  data = datos
+)
+
+modelo_lda
+```
+
+# 7. ¿Cuánta separación explica cada función?
+
+`modelo_lda$svd` contiene valores relacionados con la capacidad discriminante de cada eje. Al elevarlos al cuadrado y dividir entre la suma obtenemos la proporción relativa explicada por cada función.
+
+```{r}
+prop_ld <- modelo_lda$svd^2 / sum(modelo_lda$svd^2)
+round(prop_ld * 100, 2)
+```
+
+**Resultado esperado:**
+
+- LD1 explica aproximadamente **99.1%** de la separación.
+- LD2 explica aproximadamente **0.9%**.
+
+**Interpretación.** Prácticamente toda la separación entre las tres especies ocurre sobre LD1. LD2 agrega muy poca información discriminante adicional.
+
+# 8. Coeficientes de las funciones discriminantes
+
+```{r}
+coeficientes_lda <- modelo_lda$scaling
+round(coeficientes_lda, 4)
+```
+
+Los coeficientes indican cómo se combinan los predictores para construir LD1 y LD2.
+
+**Importante:** no conviene interpretar la importancia de una variable únicamente por el tamaño bruto de un coeficiente si las variables tienen escalas diferentes. En este ejemplo todas son medidas de longitud comparables, pero la interpretación principal se complementa con la separación observada entre grupos.
+
+# 9. Centro de las variables y forma centrada de LD1/LD2
+
+En la actividad del curso las funciones se escribieron de forma centrada:
+
+$$LD_k=a_1(X_1-\bar X_1)+\cdots+a_p(X_p-\bar X_p)$$
+
+El centro utilizado se obtiene ponderando las medias de grupo por sus probabilidades a priori.
+
+```{r}
+centro_lda <- colSums(
+  modelo_lda$prior * modelo_lda$means
+)
+
+round(centro_lda, 4)
+```
+
+Podemos escribir automáticamente las funciones:
+
+```{r}
+funciones_lda <- sapply(
+  1:ncol(coeficientes_lda),
+  function(k) {
+    coef_k <- coeficientes_lda[, k]
+
+    terminos <- paste0(
+      round(coef_k, 4),
+      "*(",
+      rownames(coeficientes_lda),
+      " - ",
+      round(centro_lda[rownames(coeficientes_lda)], 4),
+      ")"
+    )
+
+    paste0(
+      colnames(coeficientes_lda)[k],
+      " = ",
+      paste(terminos, collapse = " + ")
+    )
+  }
+)
+
+cat(paste(funciones_lda, collapse = "\n\n"))
+```
+
+**Interpretación.** Cada flor recibe un valor en LD1 y LD2. Esos nuevos ejes están construidos para maximizar la separación entre las especies, no para explicar la varianza total como en PCA.
+
+# 10. Scores discriminantes
+
+```{r}
+predicciones <- predict(
+  modelo_lda,
+  newdata = datos
+)
+
+scores_lda <- data.frame(
+  Especie = datos$Especie,
+  predicciones$x
+)
+
+head(scores_lda)
+```
+
+# 11. Gráfico LD1 vs LD2
+
+```{r}
+ggplot(
+  scores_lda,
+  aes(x = LD1, y = LD2, color = Especie)
+) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  labs(
+    title = "Flores en el espacio discriminante",
+    x = "LD1",
+    y = "LD2"
+  ) +
+  theme_minimal()
+```
+
+**Interpretación.** `setosa` aparece completamente separada. `versicolor` y `virginica` también se separan bastante, aunque existe una zona pequeña de cercanía. El gráfico muestra por qué LDA puede clasificar esta base con alta precisión.
+
+# 12. Histogramas de LD1 y LD2
+
+```{r}
+ggplot(scores_lda, aes(x = LD1)) +
+  geom_histogram(bins = 15, color = "white") +
+  facet_wrap(~ Especie) +
+  labs(title = "Distribución de LD1 por especie") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(scores_lda, aes(x = LD2)) +
+  geom_histogram(bins = 15, color = "white") +
+  facet_wrap(~ Especie) +
+  labs(title = "Distribución de LD2 por especie") +
+  theme_minimal()
+```
+
+**Interpretación.** LD1 presenta la mayor separación, coherente con el 99.1% de información discriminante. LD2 tiene mucha menor capacidad de separación.
+
+# 13. Clasificación usando el modelo ajustado
+
+```{r}
+datos$Prediccion_LDA <- predicciones$class
+
+tabla_entrenamiento <- table(
+  Real = datos$Especie,
+  Predicha = datos$Prediccion_LDA
+)
+
+tabla_entrenamiento
+```
+
+Esta tabla usa los mismos datos con los que se ajustó el modelo. Es útil para describir el ajuste, pero puede ser optimista para evaluar desempeño predictivo.
+
+# 14. Validación cruzada LOOCV
+
+Igual que en la actividad, utilizamos **Leave-One-Out Cross Validation**. Cada observación se clasifica usando un modelo construido con todas las demás.
+
+```{r}
+modelo_cv <- MASS::lda(
+  formula_lda,
+  data = datos,
+  CV = TRUE
+)
+
+clase_real <- datos$Especie
+clase_predicha <- modelo_cv$class
+
+tabla_cv <- table(
+  Real = clase_real,
+  Predicha = clase_predicha
+)
+
+tabla_cv
+```
+
+**Resultado esperado:**
+
+```text
+            Predicha
+Real         setosa versicolor virginica
+setosa           50          0         0
+versicolor        0         48         2
+virginica         0          1        49
+```
+
+# 15. Precisión global, error y acierto por clase
+
+```{r}
+precision <- mean(clase_real == clase_predicha)
+error <- 1 - precision
+
+acierto_por_clase <- diag(tabla_cv) / rowSums(tabla_cv)
+
+round(precision * 100, 2)
+round(error * 100, 2)
+round(acierto_por_clase * 100, 2)
+```
+
+**Resultado esperado:**
+
+- Precisión global: **98%**.
+- Error: **2%**.
+- Setosa: **100%** correctamente clasificada.
+- Versicolor: **96%**.
+- Virginica: **98%**.
+
+**Interpretación.** El modelo clasifica muy bien las tres especies. Los pocos errores ocurren entre `versicolor` y `virginica`, exactamente donde vimos mayor cercanía en los gráficos.
+
+# 16. Probabilidades posteriores
+
+Además de la clase final, `predict()` entrega la probabilidad posterior de pertenecer a cada grupo.
+
+```{r}
+head(predicciones$posterior)
+```
+
+**Interpretación.** Para cada observación, las probabilidades posteriores suman 1. La clase asignada es la que obtiene la probabilidad posterior más alta.
+
+# 17. Supuesto 1: normalidad multivariada dentro de cada grupo
+
+LDA supone normalidad multivariada de los predictores dentro de cada clase.
+
+$$H_0:\text{ normalidad multivariada en el grupo}$$
+
+$$H_1:\text{ no normalidad multivariada}$$
+
+```{r}
+for (grupo in levels(datos$Especie)) {
+
+  datos_grupo <- datos[
+    datos$Especie == grupo,
+    predictores
+  ]
+
+  cat("\nGrupo:", grupo, "\n")
+
+  resultado <- MVN::mvn(
+    data = datos_grupo,
+    mvn_test = "mardia"
+  )
+
+  print(resultado$multivariate_normality)
+}
+```
+
+**Interpretación.** En esta base, las pruebas de Mardia no deberían mostrar evidencia fuerte contra la normalidad multivariada de los grupos al nivel de 0.05. Si `p >= 0.05`, no rechazamos $H_0$.
+
+No demostrar normalidad es distinto de decir que no encontramos evidencia suficiente para rechazarla.
+
+# 18. Supuesto 2: igualdad de matrices de covarianzas
+
+LDA también supone:
+
+$$H_0:\Sigma_1=\Sigma_2=\Sigma_3$$
+
+$$H_1:\text{al menos una matriz de covarianzas es distinta}$$
+
+```{r}
+resultado_boxm <- biotools::boxM(
+  datos[, predictores],
+  datos$Especie
+)
+
+resultado_boxm
+```
+
+**Interpretación.** En `iris`, Box M produce un valor p muy pequeño, por lo que se rechaza $H_0$. Las matrices de covarianzas no son iguales entre las tres especies.
+
+Por lo tanto, **el supuesto de homogeneidad de covarianzas no se cumple**, aunque el modelo sigue obteniendo una precisión predictiva muy alta. Esto muestra por qué debemos separar dos preguntas:
+
+1. ¿El modelo clasifica bien?
+2. ¿Se cumplen perfectamente sus supuestos teóricos?
+
+No son la misma pregunta.
+
+# 19. ¿Qué hace realmente LDA?
+
+LDA es un método **supervisado**: conocemos la clase real durante el entrenamiento.
+
+Su objetivo es encontrar combinaciones lineales de las variables que produzcan la mayor separación posible entre grupos, considerando al mismo tiempo la variabilidad dentro de ellos.
+
+Esto lo diferencia de clustering:
+
+- En **LDA** ya existen etiquetas (`Especie`) y queremos clasificar.
+- En **clustering** no conocemos grupos previamente; el algoritmo intenta descubrirlos.
+
+También se diferencia de PCA:
+
+- **PCA** busca direcciones que expliquen la mayor varianza total.
+- **LDA** busca direcciones que separen lo mejor posible las clases conocidas.
+
+# 20. Conclusión
+
+El modelo LDA utiliza las cuatro medidas de las flores para separar tres especies mediante dos funciones discriminantes. LD1 concentra aproximadamente **99.1%** de la capacidad de separación, mientras LD2 aporta alrededor de **0.9%**.
+
+La validación LOOCV alcanza aproximadamente **98% de precisión**, con clasificación perfecta de `setosa` y solamente algunos errores entre `versicolor` y `virginica`.
+
+La prueba de Mardia no muestra una violación fuerte de normalidad multivariada dentro de los grupos, pero la prueba M de Box sí indica que las matrices de covarianzas difieren entre especies. Por ello, el modelo tiene excelente capacidad clasificatoria en estos datos, aunque uno de los supuestos formales de LDA no se cumple.
+
+Esta práctica cubre los elementos solicitados en la actividad del curso: análisis previo de los grupos, probabilidades a priori, medias por clase, construcción e interpretación de LD1/LD2, scores, clasificación, LOOCV, matriz de confusión, precisión por clase y validación de los principales supuestos.
