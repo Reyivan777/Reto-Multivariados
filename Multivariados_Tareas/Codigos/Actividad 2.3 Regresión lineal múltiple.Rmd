@@ -1,0 +1,877 @@
+---
+title: "Actividad 2.3 Regresión lineal múltiple"
+author: "Rey Iván De La Fuente Chávez"
+output: html_document
+---
+
+### 1. Análisis exploratorio
+
+Primero se importan los datos y se revisa su estructura.
+
+La variable dependiente es **Resistencia** y las variables independientes son:
+
+- Longitud
+- Altura de la matriz
+- Altura del poste
+- Altura del amarre
+
+```{r}
+# Importar datos
+datos <- read.csv("C:/Users/reyiv/Downloads/datosRes-1.csv")
+
+# Renombrar columnas
+names(datos) <- c(
+  "Resistencia",
+  "Longitud",
+  "AlturaMatriz",
+  "AlturaPoste",
+  "AlturaAmarre"
+)
+
+# Revisar los datos
+head(datos)
+str(datos)
+summary(datos)
+```
+
+#### 1.1 Diagramas de dispersión
+
+```{r}
+pairs(
+  datos,
+  main = "Matriz de diagramas de dispersión",
+  pch = 19
+)
+```
+
+Diagramas de disperción entre resistencia y cada variable independiente
+
+```{r}
+par(mfrow = c(2, 2))
+
+plot(
+  datos$Longitud,
+  datos$Resistencia,
+  pch = 19,
+  xlab = "Longitud",
+  ylab = "Resistencia",
+  main = "Resistencia vs Longitud"
+)
+
+plot(
+  datos$AlturaMatriz,
+  datos$Resistencia,
+  pch = 19,
+  xlab = "Altura de matriz",
+  ylab = "Resistencia",
+  main = "Resistencia vs Altura de matriz"
+)
+
+plot(
+  datos$AlturaPoste,
+  datos$Resistencia,
+  pch = 19,
+  xlab = "Altura de poste",
+  ylab = "Resistencia",
+  main = "Resistencia vs Altura de poste"
+)
+
+plot(
+  datos$AlturaAmarre,
+  datos$Resistencia,
+  pch = 19,
+  xlab = "Altura de amarre",
+  ylab = "Resistencia",
+  main = "Resistencia vs Altura de amarre"
+)
+
+par(mfrow = c(1, 1))
+```
+
+La relación más clara se observa entre longitud y resistencia aunque también se observan relaciones positivas con AlturaPoste y AlturaAmarre.
+
+#### 1.2 Matriz de correlación
+
+```{r}
+matriz_cor <- cor(datos)
+
+round(matriz_cor, 3)
+```
+
+La variable con mayor correlación con Resistencia es:
+
+$$r_{\text{Longitud, Resistencia}} = 0.982$$
+
+#### 1.3 Histogramas
+
+Los histogramas permiten observar la distribución de cada variable.
+
+```{r}
+par(mfrow = c(2, 3))
+
+hist(
+  datos$Resistencia,
+  main = "Resistencia",
+  xlab = "Resistencia"
+)
+
+hist(
+  datos$Longitud,
+  main = "Longitud",
+  xlab = "Longitud"
+)
+
+hist(
+  datos$AlturaMatriz,
+  main = "Altura de matriz",
+  xlab = "Altura de matriz"
+)
+
+hist(
+  datos$AlturaPoste,
+  main = "Altura de poste",
+  xlab = "Altura de poste"
+)
+
+hist(
+  datos$AlturaAmarre,
+  main = "Altura de amarre",
+  xlab = "Altura de amarre"
+)
+
+par(mfrow = c(1, 1))
+```
+
+#### 1.4 Diagramas de caja
+
+```{r}
+par(mfrow = c(2, 3))
+
+boxplot(
+  datos$Resistencia,
+  main = "Resistencia"
+)
+
+boxplot(
+  datos$Longitud,
+  main = "Longitud"
+)
+
+boxplot(
+  datos$AlturaMatriz,
+  main = "Altura de matriz"
+)
+
+boxplot(
+  datos$AlturaPoste,
+  main = "Altura de poste"
+)
+
+boxplot(
+  datos$AlturaAmarre,
+  main = "Altura de amarre"
+)
+
+par(mfrow = c(1, 1))
+```
+
+Los diagramas de caja permiten comparar la dispersión de las variables e identificar visualmente posibles observaciones atípicas.
+
+### 2. Método de mínimos cuadrados
+
+El modelo de regresión lineal múltiple puede expresarse como:
+
+$$Y = X\beta + \varepsilon$$
+
+El estimador de mínimos cuadrados de los coeficientes es:
+
+$$\hat{\beta} =
+(X^TX)^{-1}X^TY$$
+
+Se utiliza esta expresión para calcular los coeficientes del modelo manualmente mediante operaciones matriciales.
+
+```{r}
+# Vector de la variable dependiente
+Y <- as.matrix(datos$Resistencia)
+
+# Matriz de diseño
+X <- cbind(
+  1,
+  datos$Longitud,
+  datos$AlturaMatriz,
+  datos$AlturaPoste,
+  datos$AlturaAmarre
+)
+
+colnames(X) <- c(
+  "Intercepto",
+  "Longitud",
+  "AlturaMatriz",
+  "AlturaPoste",
+  "AlturaAmarre"
+)
+
+# Coeficientes por mínimos cuadrados
+beta_hat <- solve(t(X) %*% X) %*%
+            t(X) %*%
+            Y
+
+beta_hat
+```
+
+Los coeficientes obtenidos son aproximadamente:
+
+$$\hat{\beta}_0 = 1.0681$$
+
+$$\hat{\beta}_1 = 2.4842$$
+
+$$\hat{\beta}_2 = 0.00855$$
+
+$$\hat{\beta}_3 = 0.6224$$
+
+$$\hat{\beta}_4 = 2.2939$$
+
+Por lo tanto, el modelo completo estimado es:
+
+$$\hat{Y}
+=
+1.0681
++
+2.4842X_1
++
+0.00855X_2
++
+0.6224X_3
++
+2.2939X_4$$
+
+#### Valores estimados y residuos
+
+Los valores predichos se calculan mediante:
+
+$$\hat{Y}=X\hat{\beta}$$
+
+y los residuos mediante:
+
+$$e=Y-\hat{Y}$$
+
+```{r}
+# Valores estimados
+Y_hat <- X %*% beta_hat
+
+# Residuos
+residuos_mc <- Y - Y_hat
+
+# Suma de cuadrados del error
+SSE <- sum(residuos_mc^2)
+
+SSE
+```
+
+El método de mínimos cuadrados encuentra los coeficientes que hacen que la suma de los residuos al cuadrado sea lo más pequeña posible.
+
+### 3. Regresión lineal múltiple con R
+
+Ahora se obtiene el mismo modelo utilizando la función `lm()`.
+
+```{r}
+modelo_completo <- lm(
+  Resistencia ~ Longitud +
+    AlturaMatriz +
+    AlturaPoste +
+    AlturaAmarre,
+  data = datos
+)
+
+summary(modelo_completo)
+```
+
+El modelo completo tiene:
+
+$$R^2 = 0.9899$$
+
+y:
+
+$$R^2_{ajustado} = 0.9879$$
+
+Esto significa que el modelo explica aproximadamente el 98.99% de la variabilidad de la resistencia.
+
+Sin embargo, AlturaPoste presenta un valor p de aproximadamente:
+
+$$p = 0.452$$
+
+por lo que no resulta estadísticamente significativa dentro del modelo completo.
+
+#### Comparación con el método matricial
+
+```{r}
+comparacion <- data.frame(
+  Matricial = as.numeric(beta_hat),
+  lm = coef(modelo_completo)
+)
+
+rownames(comparacion) <-
+  names(coef(modelo_completo))
+
+comparacion
+```
+
+\
+Los coeficientes calculados mediante operaciones matriciales son iguales a los obtenidos con `lm()`. Esto confirma que ambos métodos están calculando el mismo modelo de mínimos cuadrados.
+
+### 4. Evaluación y selección del mejor modelo
+
+Se comparan todos los modelos posibles construidos con las cuatro variables independientes.
+
+```{r}
+# Modelos con una variable
+
+m1 <- lm(
+  Resistencia ~ Longitud,
+  data = datos
+)
+
+m2 <- lm(
+  Resistencia ~ AlturaMatriz,
+  data = datos
+)
+
+m3 <- lm(
+  Resistencia ~ AlturaPoste,
+  data = datos
+)
+
+m4 <- lm(
+  Resistencia ~ AlturaAmarre,
+  data = datos
+)
+
+# Modelos con dos variables
+
+m5 <- lm(
+  Resistencia ~ Longitud + AlturaMatriz,
+  data = datos
+)
+
+m6 <- lm(
+  Resistencia ~ Longitud + AlturaPoste,
+  data = datos
+)
+
+m7 <- lm(
+  Resistencia ~ Longitud + AlturaAmarre,
+  data = datos
+)
+
+m8 <- lm(
+  Resistencia ~ AlturaMatriz + AlturaPoste,
+  data = datos
+)
+
+m9 <- lm(
+  Resistencia ~ AlturaMatriz + AlturaAmarre,
+  data = datos
+)
+
+m10 <- lm(
+  Resistencia ~ AlturaPoste + AlturaAmarre,
+  data = datos
+)
+
+# Modelos con tres variables
+
+m11 <- lm(
+  Resistencia ~ Longitud +
+    AlturaMatriz +
+    AlturaPoste,
+  data = datos
+)
+
+m12 <- lm(
+  Resistencia ~ Longitud +
+    AlturaMatriz +
+    AlturaAmarre,
+  data = datos
+)
+
+m13 <- lm(
+  Resistencia ~ Longitud +
+    AlturaPoste +
+    AlturaAmarre,
+  data = datos
+)
+
+m14 <- lm(
+  Resistencia ~ AlturaMatriz +
+    AlturaPoste +
+    AlturaAmarre,
+  data = datos
+)
+
+# Modelo completo
+m15 <- modelo_completo
+```
+
+Se guardan todos los modelos en una lista.
+
+```{r}
+modelos <- list(
+  m1, m2, m3, m4, m5,
+  m6, m7, m8, m9, m10,
+  m11, m12, m13, m14, m15
+)
+```
+
+Se comparan mediante $R^2$, $R^2$ ajustado, AIC y BIC.
+
+```{r}
+comparacion_modelos <- data.frame(
+  Modelo = paste0("m", 1:15),
+  R2 = sapply(
+    modelos,
+    function(m) summary(m)$r.squared
+  ),
+  R2_Ajustado = sapply(
+    modelos,
+    function(m) summary(m)$adj.r.squared
+  ),
+  AIC = sapply(modelos, AIC),
+  BIC = sapply(modelos, BIC)
+)
+
+comparacion_modelos
+```
+
+Se ordenan los modelos de menor a mayor BIC.
+
+```{r}
+comparacion_modelos[
+  order(comparacion_modelos$BIC),
+]
+```
+
+El modelo con menor BIC es el modelo 12.
+
+```{r}
+modelo_mejor <- m12
+
+formula(modelo_mejor)
+
+summary(modelo_mejor)
+```
+
+El modelo seleccionado es:
+
+$$\boxed{
+Resistencia
+\sim
+Longitud
++
+AlturaMatriz
++
+AlturaAmarre
+}$$
+
+Su ecuación estimada es:
+
+$$\boxed{
+\hat{Y}
+=
+1.3671
++
+2.5349(Longitud)
++
+0.00852(AlturaMatriz)
++
+2.5993(AlturaAmarre)
+}$$\
+Se eliminó AlturaPoste porque su inclusión aporta muy poca mejora y no es significativa en el modelo completo. El modelo con tres variables es más sencillo y mantiene prácticamente la misma capacidad explicativa.
+
+#### 4.1 Variabilidad explicada
+
+```{r}
+summary(modelo_mejor)$r.squared
+
+summary(modelo_mejor)$adj.r.squared
+```
+
+Se obtiene:
+
+$$R^2 = 0.9896$$
+
+y:
+
+$$R^2_{ajustado}=0.9881$$\
+El modelo explica aproximadamente el **98.96%** de la variabilidad de la resistencia. Es un porcentaje muy alto.
+
+Además, su $R^2$ ajustado es ligeramente mayor que el del modelo completo, a pesar de utilizar una variable menos.
+
+#### 4.2 Significancia global del modelo
+
+Se prueba:
+
+$$H_0:
+\beta_1=\beta_2=\beta_3=0$$
+
+contra:
+
+$$H_1:
+\text{al menos un coeficiente es diferente de cero}$$
+
+```{r}
+Fmodelo <-
+  summary(modelo_mejor)$fstatistic
+
+Fmodelo
+
+p_F <- pf(
+  Fmodelo[1],
+  Fmodelo[2],
+  Fmodelo[3],
+  lower.tail = FALSE
+)
+
+p_F
+```
+
+Se obtiene aproximadamente:
+
+$$F=667.04$$
+
+con:
+
+$$p=5.60\times10^{-21}$$
+
+**Interpretación:**\
+Como el valor p es mucho menor a 0.05, se rechaza $H_0$. Por lo tanto, el modelo es estadísticamente significativo.
+
+#### 4.3 Significancia de los coeficientes
+
+Para cada variable se prueba:
+
+$$H_0:\beta_i=0$$
+
+contra:
+
+$$H_1:\beta_i\neq0$$
+
+```{r}
+coef(summary(modelo_mejor))
+```
+
+Los valores p aproximados son:
+
+- Longitud: $p < 2\times10^{-16}$
+- AlturaMatriz: $p = 0.0015$
+- AlturaAmarre: $p = 0.000465$
+
+**Interpretación:**\
+Las tres variables tienen valores p menores a 0.05. Por lo tanto, Longitud, AlturaMatriz y AlturaAmarre son significativas dentro del modelo.
+
+#### 4.4 Interpretación de los coeficientes
+
+El coeficiente de Longitud es:
+
+$$2.5349$$
+
+Esto significa que, manteniendo constantes las demás variables, aumentar una unidad la Longitud se relaciona con un aumento promedio de aproximadamente 2.53 unidades de Resistencia.
+
+El coeficiente de AlturaMatriz es:
+
+$$0.00852$$
+
+Por cada unidad adicional de AlturaMatriz, la Resistencia aumenta en promedio aproximadamente **0.0085 unidades**, manteniendo constantes las demás variables.
+
+El coeficiente de AlturaAmarre es:
+
+$$2.5993$$
+
+Por cada unidad adicional de AlturaAmarre, la Resistencia aumenta en promedio aproximadamente **2.60 unidades**, manteniendo constantes las demás variables.
+
+#### 4.5 Colinealidad
+
+Se calcula manualmente el factor de inflación de la varianza:
+
+$$VIF_j =
+\frac{1}{1-R_j^2}$$
+
+```{r}
+predictores <-
+  names(coef(modelo_mejor))[-1]
+
+VIF <- numeric(
+  length(predictores)
+)
+
+names(VIF) <- predictores
+
+for(i in seq_along(predictores)){
+  
+  y_aux <- predictores[i]
+  
+  x_aux <- predictores[-i]
+  
+  formula_aux <- as.formula(
+    paste(
+      y_aux,
+      "~",
+      paste(
+        x_aux,
+        collapse = " + "
+      )
+    )
+  )
+  
+  modelo_aux <- lm(
+    formula_aux,
+    data = datos
+  )
+  
+  R2_aux <-
+    summary(modelo_aux)$r.squared
+  
+  VIF[i] <-
+    1 / (1 - R2_aux)
+}
+
+VIF
+```
+
+Se obtienen aproximadamente:
+
+$$VIF_{\text{Longitud}}=1.76$$
+
+$$VIF_{\text{AlturaMatriz}}=1.41$$
+
+$$VIF_{\text{AlturaAmarre}}=2.12$$\
+Todos los VIF son menores a 5, por lo que no se observa un problema importante de multicolinealidad.
+
+### 5. Validación del modelo
+
+Ahora se revisan los residuos para comprobar los principales supuestos del modelo de regresión.
+
+```{r}
+residuos <-
+  residuals(modelo_mejor)
+
+ajustados <-
+  fitted(modelo_mejor)
+```
+
+#### 5.1 Normalidad de los residuos
+
+Primero se observa el histograma y el gráfico Q-Q.
+
+```{r}
+par(mfrow = c(1, 2))
+
+hist(
+  residuos,
+  main = "Histograma de residuos",
+  xlab = "Residuos"
+)
+
+qqnorm(
+  residuos,
+  pch = 19,
+  main = "Gráfico Q-Q"
+)
+
+qqline(residuos)
+
+par(mfrow = c(1, 1))
+```
+
+También se utiliza la prueba de Shapiro-Wilk.
+
+Las hipótesis son:
+
+$$H_0:
+\text{los residuos siguen una distribución normal}$$
+
+$$H_1:
+\text{los residuos no siguen una distribución normal}$$
+
+```{r}
+shapiro.test(residuos)
+```
+
+Se obtiene:
+
+$$p=0.9504$$\
+Como $p>0.05$, no se rechaza la normalidad. Los residuos son compatibles con una distribución normal.
+
+#### 5.2 Media cero de los residuos
+
+```{r}
+mean(residuos)
+```
+
+Se obtiene aproximadamente:
+
+$$3.23\times10^{-17}$$\
+Este valor es prácticamente cero, por lo que se cumple la condición de media cero de los residuos.
+
+#### 5.3 Homocedasticidad
+
+Se observa la relación entre los residuos y los valores ajustados.
+
+```{r}
+plot(
+  ajustados,
+  residuos,
+  pch = 19,
+  xlab = "Valores ajustados",
+  ylab = "Residuos",
+  main = "Residuos vs valores ajustados"
+)
+
+abline(h = 0)
+```
+
+También se realiza una prueba de Breusch-Pagan mediante una regresión auxiliar.
+
+Las hipótesis son:
+
+$$H_0:
+\text{la varianza de los errores es constante}$$
+
+$$H_1:
+\text{existe heterocedasticidad}$$
+
+```{r}
+# Residuos al cuadrado
+e2 <- residuos^2
+
+# Datos para la regresión auxiliar
+datos_bp <-
+  datos[, predictores, drop = FALSE]
+
+datos_bp$e2 <- e2
+
+formula_bp <- as.formula(
+  paste(
+    "e2 ~",
+    paste(
+      predictores,
+      collapse = " + "
+    )
+  )
+)
+
+modelo_bp <- lm(
+  formula_bp,
+  data = datos_bp
+)
+
+# Estadístico de Breusch-Pagan
+R2_bp <-
+  summary(modelo_bp)$r.squared
+
+LM <-
+  nrow(datos) * R2_bp
+
+gl <-
+  length(predictores)
+
+p_BP <- pchisq(
+  LM,
+  df = gl,
+  lower.tail = FALSE
+)
+
+LM
+p_BP
+```
+
+Se obtiene:
+
+$$LM=2.881$$
+
+y:
+
+$$p=0.4104$$\
+Como $p>0.05$, no existe evidencia de heterocedasticidad. La varianza de los residuos puede considerarse aproximadamente constante.
+
+#### 5.4 Independencia de los residuos
+
+Se representan los residuos según el orden de las observaciones.
+
+```{r}
+plot(
+  residuos,
+  type = "b",
+  pch = 19,
+  xlab = "Orden de observación",
+  ylab = "Residuo",
+  main = "Residuos según el orden"
+)
+
+abline(h = 0)
+```
+
+Se calcula también el estadístico de Durbin-Watson:
+
+$$DW =
+\frac{
+\sum_{i=2}^{n}
+(e_i-e_{i-1})^2
+}{
+\sum_{i=1}^{n}e_i^2
+}$$
+
+```{r}
+DW <-
+  sum(diff(residuos)^2) /
+  sum(residuos^2)
+
+DW
+```
+
+Se obtiene:
+
+$$DW=1.669$$\
+El valor se encuentra relativamente cerca de 2, por lo que no se observa una señal fuerte de autocorrelación entre los residuos.
+
+#### 5.5 Gráficos generales de diagnóstico
+
+Finalmente se muestran los gráficos de diagnóstico generados por R.
+
+```{r}
+par(mfrow = c(2, 2))
+
+plot(modelo_mejor)
+
+par(mfrow = c(1, 1))
+```
+
+\
+En conjunto, los gráficos y las pruebas anteriores no muestran problemas importantes con los supuestos del modelo.
+
+### 6. Conclusiones
+
+Después de comparar los diferentes modelos, se seleccionó:
+
+$$\boxed{
+Resistencia
+\sim
+Longitud
++
+AlturaMatriz
++
+AlturaAmarre
+}$$
+
+El modelo explica aproximadamente:
+
+$$98.96\%$$
+
+de la variabilidad de la Resistencia.
+
+Las tres variables incluidas en el modelo son estadísticamente significativas.
+
+Además, los valores VIF son menores a 5, por lo que no existe un problema importante de multicolinealidad.
+
+La prueba de Shapiro-Wilk indica que los residuos son compatibles con una distribución normal y la prueba de Breusch-Pagan no muestra evidencia de heterocedasticidad.
+
+Por lo tanto, el modelo seleccionado presenta un buen ajuste y cumple razonablemente con los principales supuestos de la regresión lineal múltiple.
