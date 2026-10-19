@@ -1,0 +1,452 @@
+---
+title: "Actividad 1.5 La Normal Multivariada"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 1. Probabilidad $P(X_1 \leq 3, X_2 \leq 2)$
+
+Se tiene una distribución normal bivariada con vector de medias
+
+```{r}
+library(mnormt)
+
+mu <- c(2.5, 4)
+
+sigma <- matrix(c(1.2, 0,
+                  0, 2.3),
+                nrow = 2,
+                byrow = TRUE)
+
+x <- c(3, 2)
+
+probabilidad <- pmnorm(x, mean = mu, varcov = sigma)
+
+probabilidad
+```
+
+### 2. Distribución bivariada del problema 1
+
+Para visualizar la distribución se construye una gráfica tridimensional de su función de densidad.
+
+Se toman valores aproximadamente cuatro desviaciones estándar alrededor de cada media.
+
+```{r}
+sd1 <- sqrt(1.2)
+sd2 <- sqrt(2.3)
+
+x1 <- seq(mu[1] - 4*sd1,
+          mu[1] + 4*sd1,
+          length.out = 100)
+
+x2 <- seq(mu[2] - 4*sd2,
+          mu[2] + 4*sd2,
+          length.out = 100)
+
+f <- function(x1, x2) {
+  dmnorm(cbind(x1, x2), mean = mu, varcov = sigma)
+}
+
+z <- outer(x1, x2, f)
+
+persp(x1, x2, z,
+      theta = 30,
+      phi = 25,
+      expand = 0.6,
+      ticktype = "detailed",
+      xlab = "X1",
+      ylab = "X2",
+      zlab = "Densidad",
+      main = "Distribución normal bivariada")
+```
+
+La gráfica tiene forma de campana tridimensional y alcanza su mayor altura alrededor del vector de medias (2.5, 4)
+
+La distribución se observa más extendida en la dirección de X_2, debido a que su varianza es mayor.
+
+### 3. Contornos de la distribución normal bivariada
+
+Yo creo que el contorno con el diametro más pequeño sera el de 0.09 y el más grande el de 0.01
+
+```{r}
+niveles <- c(0.01, 0.03, 0.05, 0.07, 0.09)
+
+contour(x1, x2, z,
+        levels = niveles,
+        xlab = "X1",
+        ylab = "X2",
+        main = "Contornos de la normal bivariada")
+```
+
+#### A. Relación entre el problema 1 y el problema 2
+
+En el problema 1 se calcula una probabilidad acumulada dentro de una región determinada.
+
+En el problema 2 se representa la función de densidad de esa misma distribución.
+
+La probabilidad del problema 1 puede interpretarse como el volumen bajo la superficie de densidad para la región
+
+La altura de la superficie representa densidad, no probabilidad directamente.
+
+#### B. Relación entre los gráficos de los incisos 2 y 3
+
+Los dos gráficos representan la misma distribución.
+
+El inciso 2 muestra la distribución como una superficie tridimensional, mientras que el inciso 3 muestra la misma superficie vista desde arriba mediante curvas de nivel.
+
+Los contornos pueden interpretarse como cortes horizontales de la superficie tridimensional.
+
+#### C. Relación entre altura del contorno y porcentaje de datos
+
+A mayor altura del contorno, la curva se encuentra más cerca del centro y encierra una región más pequeña.
+
+A menor altura, el contorno se encuentra más lejos del centro y encierra una región mayor.
+
+La altura del contorno no representa directamente un porcentaje de probabilidad.
+
+### 4. Transformaciones lineales de variables normales
+
+Se tiene:
+
+$$X_1 \sim N(0,1), \qquad X_2 \sim N(0,1)$$
+
+con $X_1$ y $X_2$ independientes.
+
+Además:
+
+$$Y_1=3+2X_1-X_2$$
+
+$$Y_2=5+X_1+X_2$$
+
+Estas expresiones pueden escribirse como:
+
+$$Y=AX+d$$
+
+donde:
+
+$$A=
+\begin{pmatrix}
+2&-1\\
+1&1
+\end{pmatrix}$$
+
+y
+
+$$d=
+\begin{pmatrix}
+3\\
+5
+\end{pmatrix}$$
+
+Para una transformación lineal de una normal multivariada:
+
+$$Y\sim N(A\mu+d,\;A\Sigma A')$$
+
+#### 4A. Distribución de $Y_1$ y $Y_2$
+
+Como:
+
+$$\mu_X=
+\begin{pmatrix}
+0\\
+0
+\end{pmatrix}$$
+
+entonces:
+
+$$\mu_Y=A\mu_X+d$$
+
+$$\mu_Y=
+\begin{pmatrix}
+3\\
+5
+\end{pmatrix}$$
+
+La matriz de covarianzas de $X$ es:
+
+$$\Sigma_X=
+\begin{pmatrix}
+1&0\\
+0&1
+\end{pmatrix}$$
+
+Por lo tanto:
+
+$$\Sigma_Y=A\Sigma_XA'$$
+
+$$\Sigma_Y=
+\begin{pmatrix}
+2&-1\\
+1&1
+\end{pmatrix}
+\begin{pmatrix}
+1&0\\
+0&1
+\end{pmatrix}
+\begin{pmatrix}
+2&1\\
+-1&1
+\end{pmatrix}$$
+
+$$\Sigma_Y=
+\begin{pmatrix}
+5&1\\
+1&2
+\end{pmatrix}$$
+
+Así:
+
+$$\boxed{
+Y\sim
+N_2
+\left(
+\begin{pmatrix}
+3\\
+5
+\end{pmatrix},
+\begin{pmatrix}
+5&1\\
+1&2
+\end{pmatrix}
+\right)
+}$$
+
+```{r}
+A <- matrix(c(2, -1,
+              1,  1),
+            nrow = 2,
+            byrow = TRUE)
+
+d <- c(3, 5)
+
+mu_x <- c(0, 0)
+
+sigma_x <- matrix(c(1, 0,
+                    0, 1),
+                  nrow = 2,
+                  byrow = TRUE)
+
+mu_y <- A %*% mu_x + d
+
+sigma_y <- A %*% sigma_x %*% t(A)
+
+mu_y
+sigma_y
+```
+
+#### 4B. Distribución de $Z=3Y_1+4Y_2-1$
+
+Ahora se define una nueva combinación lineal:
+
+$$Z=3Y_1+4Y_2-1$$
+
+Esta expresión también puede escribirse en forma matricial como:
+
+$$Z=A_ZY+d_Z$$
+
+donde:
+
+$$A_Z=
+\begin{pmatrix}
+3&4
+\end{pmatrix}$$
+
+y
+
+$$d_Z=-1$$
+
+Como $Y$ sigue una distribución normal multivariada, entonces $Z$ también sigue una distribución normal. Para obtener sus parámetros usamos nuevamente:
+
+$$Z\sim N(A_Z\mu_Y+d_Z,\;A_Z\Sigma_YA_Z')$$
+
+Primero calculamos la media:
+
+$$\mu_Z=A_Z\mu_Y+d_Z$$
+
+$$\mu_Z=
+\begin{pmatrix}
+3&4
+\end{pmatrix}
+\begin{pmatrix}
+3\\
+5
+\end{pmatrix}
+-1$$
+
+$$\mu_Z=3(3)+4(5)-1=28$$
+
+Por lo tanto:
+
+$$\boxed{\mu_Z=28}$$
+
+Ahora calculamos la varianza:
+
+$$Var(Z)=A_Z\Sigma_YA_Z'$$
+
+Sustituyendo:
+
+$$Var(Z)=
+\begin{pmatrix}
+3&4
+\end{pmatrix}
+\begin{pmatrix}
+5&1\\
+1&2
+\end{pmatrix}
+\begin{pmatrix}
+3\\
+4
+\end{pmatrix}$$
+
+Primero se realiza la multiplicación:
+
+$$\begin{pmatrix}
+3&4
+\end{pmatrix}
+\begin{pmatrix}
+5&1\\
+1&2
+\end{pmatrix}
+=
+\begin{pmatrix}
+19&11
+\end{pmatrix}$$
+
+Después:
+
+$$Var(Z)=
+\begin{pmatrix}
+19&11
+\end{pmatrix}
+\begin{pmatrix}
+3\\
+4
+\end{pmatrix}$$
+
+$$Var(Z)=19(3)+11(4)=101$$
+
+Por lo tanto:
+
+$$\boxed{Var(Z)=101}$$
+
+Finalmente:
+
+$$\boxed{Z\sim N(28,101)}$$
+
+donde $28$ es la media y $101$ es la varianza.
+
+```{r}
+A_z <- matrix(c(3, 4), nrow = 1)
+
+d_z <- -1
+
+mu_z <- A_z %*% mu_y + d_z
+
+var_z <- A_z %*% sigma_y %*% t(A_z)
+
+mu_z
+var_z
+```
+
+### 5. Prueba de normalidad bivariada
+
+Para esta parte se utilizará el archivo `datos.csv`.
+
+```{r}
+library(MVN)
+
+M <- read.csv("C:\\Users\\reyiv\\Downloads\\datos-A2.csv")
+
+head(M)
+```
+
+Primero se calcula el vector de medias y la matriz de covarianzas.
+
+```{r}
+p <- 2
+
+X <- colMeans(M)
+
+S <- cov(M)
+
+X
+S
+```
+
+### 5A. QQ-Plot de normalidad multivariada
+
+Para evaluar gráficamente la normalidad multivariada se utilizan las distancias de Mahalanobis.
+
+```{r}
+d2M <- mahalanobis(M, X, S)
+
+teoricos <- qchisq(
+  ((1:nrow(M)) - 0.5) / nrow(M),
+  df = p
+)
+
+plot(teoricos,
+     sort(d2M),
+     xlab = "Cuantiles teóricos Chi-cuadrada",
+     ylab = "Distancias de Mahalanobis",
+     main = "QQ-Plot de normalidad multivariada")
+
+abline(a = 0, b = 1, col = "red")
+```
+
+Los datos se encuentran muy cerca de la linea para los primeros cuantiles pero a partir del 5 estos se empiezan a alejar de la recta lo que sugiere que los datos no presentan una normalidad multivariada.
+
+### 5B. Prueba de Mardia
+
+Las hipótesis son:
+
+$$H_0:\text{ Los datos siguen una distribución normal multivariada}$$
+
+$$H_1:\text{ Los datos no siguen una distribución normal multivariada}$$
+
+con un nivel de significancia:
+
+$$\alpha=0.05.$$
+
+```{r}
+resultado_mardia <- mvn(
+  data = M,
+  mvn_test = "mardia"
+)
+
+resultado_mardia
+```
+
+- Si $p > 0.05$, no se rechaza $H_0$.
+- Si $p < 0.05$, se rechaza $H_0$.
+
+De acuerdo con los resultados obtenido en mardia skewness y madia kurtosis no hay evidencia estadística suficiente para decir que los datos no siguen una distribución normal.
+
+### 5C. Normalidad univariada
+
+También se puede evaluar individualmente la normalidad de cada una de las variables utilizando la prueba de Shapiro-Wilk.
+
+```{r}
+shapiro.test(M[,1])
+
+shapiro.test(M[,2])
+```
+
+El test de la normalidad univariada determino que se tiene evidencia estadística suficiente para confirmar que la variable x no se distribuye normalmente. Para la variable 'y' aun no se tiene evidencia estadística suficiente para rechazar la normalidad
+
+### Declaración de uso de inteligencia artificial
+
+1.  Herramienta utilizada ChatGPT.
+
+2.  Uso realizado Se utilizó como apoyo para explicar conceptos relacionados con la tarea, revisar procedimientos matemáticos, y redactar las ecuaciónes en el md de R.
+
+3.  Secciones donde se utilizó Se utilizó como apoyo principalmente en el ejercicio 4, pero también un poco en los demas.
+
+4.  Validación realizada por los estudiantes Los procedimientos, fórmulas y resultados obtenidos con apoyo de la herramienta fueron revisados y contrastados con los resultados generados en R y con los conceptos vistos en clase.
+
+5.  Responsabilidad sobre el contenido Se revisó y verificó el contenido generado con apoyo de inteligencia artificial. Los estudiantes asumen la responsabilidad por la exactitud, interpretación y contenido final presentado en esta actividad.
