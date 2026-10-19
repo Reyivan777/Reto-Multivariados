@@ -1,0 +1,468 @@
+---
+title: "Actividad 1.6 Combinaciones lineales y Validación de la Normal Multivariada"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-23"
+output: html_document
+---
+
+## 1. Definición de los datos
+
+La matriz contiene 3 observaciones y 3 variables.
+
+```{r}
+X <- matrix(c(
+  1, 4, 3,
+  6, 2, 6,
+  8, 3, 3
+), nrow = 3, byrow = TRUE)
+
+colnames(X) <- c("X1", "X2", "X3")
+
+X
+```
+
+### a) Media, varianza y covarianza de X
+
+Primero calculamos la media de cada variable y después la matriz de varianzas-covarianzas.
+
+```{r}
+# Vector de medias
+medias <- colMeans(X)
+medias
+
+# Varianza de cada variable
+var_X1 <- var(X[, 1])
+var_X2 <- var(X[, 2])
+var_X3 <- var(X[, 3])
+
+var_X1
+var_X2
+var_X3
+
+# Matriz de varianzas-covarianzas
+S <- cov(X)
+S
+```
+
+Las medias son:
+
+$$\bar X_1 = 5,\qquad
+\bar X_2 = 3,\qquad
+\bar X_3 = 4$$
+
+Las varianzas están en la diagonal de $S$, mientras que los demás elementos representan las covarianzas entre las variables.
+
+------------------------------------------------------------------------
+
+### Comprobación matricial de la matriz de covarianzas
+
+La matriz de covarianzas también puede obtenerse con
+
+$$S=\frac{1}{n-1}X_c'X_c$$
+
+donde $X_c$ es la matriz de datos centrados.
+
+```{r}
+# Centrar las variables
+Xc <- sweep(X, 2, medias, "-")
+Xc
+
+# Número de observaciones
+n <- nrow(X)
+
+# Matriz de covarianzas usando operaciones matriciales
+S_manual <- t(Xc) %*% Xc / (n - 1)
+S_manual
+```
+
+Es importante usar $X_c'X_c$ y no $X_cX_c'$, porque queremos obtener covarianzas entre las variables, es decir, entre las columnas de la matriz.
+
+------------------------------------------------------------------------
+
+### b) Media, varianza y covarianza de b'X y c'X
+
+Definimos:
+
+$$b'=[1,1,1]$$
+
+y
+
+$$c'=[1,2,-3]$$
+
+```{r}
+b <- c(1, 1, 1)
+c <- c(1, 2, -3)
+
+# Combinaciones lineales para cada observación
+bX <- X %*% b
+cX <- X %*% c
+
+bX
+cX
+```
+
+Calculamos sus medias
+
+```{r}
+# Medias
+mean_bX <- mean(bX)
+mean_cX <- mean(cX)
+
+mean_bX
+mean_cX
+
+```
+
+Los resultados son:
+
+$$E(b'X)=12$$
+
+$$E(c'X)=-1$$
+
+------------------------------------------------------------------------
+
+### Varianza y covarianza usando fórmulas matriciales
+
+$$Var(b'X)=b'Sb$$
+
+$$Var(c'X)=c'Sc$$
+
+$$Cov(b'X,c'X)=b'Sc$$
+
+```{r}
+# Varianza de b'X
+t(b) %*% S %*% b
+
+# Varianza de c'X
+t(c) %*% S %*% c
+
+# Covarianza entre b'X y c'X
+t(b) %*% S %*% c
+```
+
+La covarianza negativa indica que ambas combinaciones lineales tienden a moverse en sentidos opuestos.
+
+Los resultados coinciden con los obtenidos directamente a partir de los datos.
+
+------------------------------------------------------------------------
+
+### c) Determinante de S
+
+Calculamos el determinante de la matriz de varianzas-covarianzas.
+
+```{r}
+det_S <- det(S)
+det_S
+```
+
+El determinante es aproximadamente:
+
+$$\det(S)=0$$
+
+Esto indica que la matriz de covarianzas es singular y que existe una relación lineal entre las variables.
+
+------------------------------------------------------------------------
+
+### d) Valores y vectores propios de S
+
+Calculamos los valores y vectores propios de la matriz $S$.
+
+```{r}
+eigen_S <- eigen(S)
+
+# Valores propios
+eigen_S$values
+
+# Vectores propios
+eigen_S$vectors
+```
+
+Los valores propios son aproximadamente:
+
+$$\lambda_1=13.79,\qquad
+\lambda_2=3.21,\qquad
+\lambda_3=0$$
+
+El primer valor propio representa la dirección de mayor variabilidad de los datos.
+
+El segundo representa una dirección con menor variabilidad.
+
+El tercer valor propio es cero, por lo que existe una dirección en la que los datos no presentan variabilidad.
+
+------------------------------------------------------------------------
+
+### Relación lineal entre las variables
+
+El valor propio cero se debe a que existe una combinación lineal constante entre las variables.
+
+```{r}
+-0.1301889*X[,1] + -0.9113224*X[,2] + -0.3905667*X[,3]
+```
+
+Se obtiene:
+
+$$-4.947179,\quad -4.947178,\quad -4.947178$$
+
+Por lo tanto,
+
+$$X_1+7X_2+3X_3=-4.947178$$
+
+para todas las observaciones.
+
+Esto confirma que las tres variables no aportan tres dimensiones completamente independientes.
+
+------------------------------------------------------------------------
+
+### e) Independencia entre b'X y c'X
+
+
+Como
+
+$$Cov(b'X,c'X)=-3\neq0$$
+
+podemos concluir que $b'X$ y $c'X$ no son independientes.
+
+------------------------------------------------------------------------
+
+### Independencia entre X1, X2 y X3
+
+Observamos nuevamente la matriz de covarianzas.
+
+```{r}
+S
+```
+
+Las covarianzas entre las variables son distintas de cero:
+
+$$Cov(X_1,X_2)=-2.5$$
+
+$$Cov(X_1,X_3)=1.5$$
+
+$$Cov(X_2,X_3)=-1.5$$
+
+Por lo tanto, las variables no son independientes.
+
+------------------------------------------------------------------------
+
+### f) Varianza generalizada
+
+La varianza generalizada se define como el determinante de la matriz de covarianzas:
+
+$$GV=|S|$$
+
+```{r}
+varianza_generalizada <- det(S)
+varianza_generalizada
+```
+
+La varianza generalizada es:
+
+$$GV=0$$
+
+Esto significa que los datos no presentan dispersión en las tres dimensiones de forma independiente.
+
+------------------------------------------------------------------------
+
+### Comprobación con los valores propios
+
+El determinante también es igual al producto de los valores propios.
+
+```{r}
+prod(eigen_S$values)
+```
+
+Como uno de los valores propios es cero,
+
+$$\lambda_1\lambda_2\lambda_3=0$$
+
+y por ello la varianza generalizada también es cero.
+
+En conclusión, los datos presentan variabilidad principalmente en dos direcciones, mientras que en la tercera no existe variabilidad debido a la relación lineal entre $X_1$, $X_2$ y $X_3$.
+
+## 2 Explore los resultados del siguiente código y dé una interpretación:
+
+```{r}
+library(MVN)
+x = rnorm(100, 10, 2)
+y = rnorm(100, 10, 2)
+datos = data.frame(x,y)
+# Prueba de Henze-Zirkler con mvn()
+resultado <- mvn(datos, mvn_test = "hz")
+plot(resultado, type = "persp")
+plot(resultado, type = "contour")
+```
+
+```{r}
+resultado
+```
+
+Este bloque de codigo genera dos variables representadas por vectores de longitud 100 de datos con una distribución normal con media de 10 y desviación estandar de 2. El test de normalidad multivariada Henze-Zirkler arroja un p valor bastante alto lo que nos dice que no hay evidencia estadística suficiente para decir que los datos no son normales, posteriormente se hace una prueba Anderson-Darling para la normalidad univariada que igualmente viene con un p valor bastante algo lo que nos da la misma conclusión que Henze-Zirkler. Esto tiene sentido ya que los datos aunque fueron generados aleatoriamente se generaro con una distribución normal. En el grafico de densidad se puede observar como efectivamente el pico esta centrado y en el grafico de contorno se puede ver como los circulos estan relativamente redondos lo que nos dice que no hay un sesgo hacia alguna de las dos variables.
+
+## 3. Precios de autos usados
+
+Se tienen 10 observaciones de la edad de autos usados $x_1$ y su precio de venta $x_2$, medido en miles de dólares.
+
+```{r}
+# Datos
+x1 <- c(1, 2, 3, 3, 4, 5, 6, 8, 9, 11)
+x2 <- c(18.95, 19.00, 17.95, 15.54, 14.00, 12.95, 8.94, 7.49, 6.00, 3.99)
+
+# Matriz de datos
+X <- cbind(x1, x2)
+
+X
+```
+
+### a) Diagrama de dispersión
+
+```{r}
+plot(x1, x2,
+     main = "Edad vs Precio de autos usados",
+     xlab = "Edad del auto (años)",
+     ylab = "Precio (miles de dólares)",
+     pch = 19)
+```
+
+El gráfico muestra una relación negativa: conforme aumenta la edad del automóvil, su precio tiende a disminuir.
+
+------------------------------------------------------------------------
+
+### b) Signo de la covarianza muestral
+
+Calculamos la covarianza entre la edad y el precio.
+
+```{r}
+cov(x1, x2)
+```
+
+La covarianza es negativa, lo cual coincide con el gráfico: cuando $x_1$ aumenta, $x_2$ tiende a disminuir.
+
+------------------------------------------------------------------------
+
+### c) Distancias de Mahalanobis
+
+Primero calculamos el vector de medias y la matriz de covarianzas.
+
+```{r}
+# Vector de medias
+media <- colMeans(X)
+media
+
+# Matriz de covarianzas
+S <- cov(X)
+S
+```
+
+La distancia de Mahalanobis al cuadrado para cada observación se calcula como:
+
+$$d_j^2=(x_j-\bar{x})'S^{-1}(x_j-\bar{x})$$
+
+En R podemos calcularla directamente con la función `mahalanobis()`.
+
+```{r}
+# Distancias de Mahalanobis al cuadrado
+d2 <- mahalanobis(X, center = media, cov = S)
+
+d2
+```
+
+Las distancias indican qué tan alejada se encuentra cada observación del centro de los datos, considerando también la relación entre las variables.
+
+------------------------------------------------------------------------
+
+### d) Contorno de probabilidad del 50%
+
+Para una distribución normal bivariada se utiliza una distribución chi-cuadrado con:
+
+$$p=2$$
+
+grados de libertad.
+
+Calculamos el valor crítico correspondiente al 50%.
+
+```{r}
+# Valor crítico chi-cuadrado para 50%
+limite <- qchisq(0.50, df = 2)
+limite
+```
+
+Una observación se encuentra dentro del contorno si:
+
+$$d_j^2 \leq \chi^2_{2,0.50}$$
+
+```{r}
+# Observaciones dentro del contorno
+dentro <- d2 <= limite
+
+dentro
+
+# Número de observaciones dentro
+sum(dentro)
+
+# Proporción
+mean(dentro)
+```
+
+Se obtienen 5 de las 10 observaciones dentro del contorno.
+
+Por lo tanto:
+
+$$\boxed{\text{Proporción}=0.50}$$
+
+Es decir, el 50% de las observaciones cae dentro del contorno estimado del 50%.
+
+------------------------------------------------------------------------
+
+### e) Diagrama chi-cuadrado
+
+Primero ordenamos las distancias de Mahalanobis.
+
+```{r}
+# Ordenar las distancias
+d2_ordenadas <- sort(d2)
+
+d2_ordenadas
+```
+
+Ahora calculamos los cuantiles teóricos de una distribución chi-cuadrado con 2 grados de libertad.
+
+```{r}
+n <- nrow(X)
+
+# Probabilidades
+p <- ((1:n) - 0.5) / n
+
+# Cuantiles chi-cuadrado
+chi2 <- qchisq(p, df = 2)
+
+chi2
+```
+
+Construimos el diagrama chi-cuadrado.
+
+```{r}
+plot(chi2, d2_ordenadas,
+     main = "Diagrama Chi-cuadrado",
+     xlab = "Cuantiles teóricos Chi-cuadrado",
+     ylab = "Distancias de Mahalanobis ordenadas",
+     pch = 19)
+
+# Línea de referencia
+abline(0, 1)
+```
+
+Si los puntos siguen aproximadamente una línea recta, los datos son compatibles con una distribución normal bivariada.
+
+------------------------------------------------------------------------
+
+### f) Normalidad bivariada
+
+El diagrama chi-cuadrado presenta una tendencia aproximadamente lineal, aunque existen algunas desviaciones en los extremos.
+
+Además, el 50% de las observaciones se encuentra dentro del contorno de probabilidad del 50%.
+
+Por lo tanto, estos resultados proporcionan evidencia razonable para considerar que los datos son aproximadamente normales bivariados, aunque la muestra es pequeña.
+
+### Declaratoria sobre uso de IA
+
+Se utilizó ChatGPT como herramienta de apoyo para explicar procedimientos, proponer código en R. Se empleó principalmente en los ejercicios 1 y 3. Los resultados, cálculos y códigos fueron revisados y comparados con los procedimientos realizados y con las salidas obtenidas en R. Se verificó el contenido antes de integrarlo al trabajo y asumo la responsabilidad del contenido final entregado.
