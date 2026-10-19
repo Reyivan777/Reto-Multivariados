@@ -1,0 +1,357 @@
+---
+title: "Actividad 1.2 Normalidad univariada. Transformaciones para normalidad"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Actividad 1.2 Normalidad univariada. Transformaciones para normalidad
+
+## Parte 1
+
+###  Probando normalidad en una base de datos
+
+```{r}
+data(cars)
+library(moments)
+```
+
+```{r}
+# Velocidad
+shapiro.test(cars$speed)
+jarque.test(cars$speed)
+
+# Distancia
+shapiro.test(cars$dist)
+jarque.test(cars$dist)
+```
+
+En el QQ plot de la velocidad se puede ver como casi todos los valores
+estan sobre la linea de referencia que indica distribución normal. Hay
+una pequeña variación en los extremos pero se podría concluir que se
+distribuye normalmente
+
+```{r}
+qqnorm(cars$speed,
+       main = "QQ-Plot de velocidad")
+
+qqline(cars$speed,
+       col = "red")
+```
+
+
+En el QQ plot de la distancia se puede observar como solo los datos de
+en medio estan sobre la linea mientas que los extremos hacen como una
+forma de gancho, esto confirma lo que decía el saphiro wilk-test. Esa
+variable no se distribuye normalmente.
+
+```{r}
+qqnorm(cars$dist,
+       main = "QQ-Plot de distancia")
+
+qqline(cars$dist,
+       col = "blue")
+```
+
+```{r}
+# Sesgo y curtosis
+
+# Speed
+skew_speed = skewness(cars$speed)
+kurt_speed = kurtosis(cars$speed)
+
+skew_speed
+kurt_speed
+
+
+# Dist
+skew_dist = skewness(cars$dist)
+kurt_dist = kurtosis(cars$dist)
+
+skew_dist
+kurt_dist
+```
+
+```{r}
+# Media mediana y rango medio
+
+# SPEED
+mean_speed = mean(cars$speed)
+median_speed = median(cars$speed)
+midrange_speed = (min(cars$speed) + max(cars$speed)) / 2
+
+mean_speed
+median_speed
+midrange_speed
+
+# Distance
+mean_dist = mean(cars$dist)
+median_dist = median(cars$dist)
+midrange_dist = (min(cars$dist) + max(cars$dist)) / 2
+
+mean_dist
+median_dist
+midrange_dist
+```
+
+La simetria del boxplot de velocidad es relativamente siemtrica, no
+muestra que los datos se concentren hacia alguno de los extremos los que
+sugiere que se comportan normalmente La simetria del boxplot de
+distancia esta algo sesgado a la derecha y se puede ver que los datos
+estan algo concentrados en el extremo izquiero, lo que tiene sentido ya
+que
+
+```{r}
+# Boxplots
+
+# Speed
+boxplot(cars$speed,
+        main = "Boxplot de velocidad",
+        ylab = "Velocidad")
+
+# Distance
+boxplot(cars$dist,
+        main = "Boxplot de distancia",
+        ylab = "Distancia")
+```
+
+
+En el histograma de la velocidad se puede observar la similitud de ambas
+funciones. La función de la velocidad esta un poco más plana que la
+normal teorica lo que concuerda con la curtosis un poco más bajo de 3
+aunque igual esta muy cerca. Igualmente se puede observar como los datos
+estan muy ligeramente cargados a la derecha lo que también corresponde
+con el sesgo negativo calculado anteriormente. Por otro lado la función
+de la distancia se puede ver como esta sesgada a la derecha ya que los
+datos se concentran más en el extremo izquierdo, ademas también se puede
+ver como la función alcanza un pico más alto a comparación de la
+distribución normal lo que igual corresponde con la curtosis calculada
+de 3.24.
+
+```{r}
+# Histograma, densidad empírica y normal teórica
+
+# Speed
+hist(cars$speed,
+     freq = FALSE,
+     main = "Distribución de velocidad",
+     xlab = "Velocidad")
+
+lines(density(cars$speed),
+      col = "red",
+      lwd = 2)
+
+curve(dnorm(x,
+            mean = mean(cars$speed),
+            sd = sd(cars$speed)),
+      from = min(cars$speed),
+      to = max(cars$speed),
+      add = TRUE,
+      col = "blue",
+      lwd = 2)
+
+
+# Distance
+hist(cars$dist,
+     freq = FALSE,
+     main = "Distribución de distancia",
+     xlab = "Distancia")
+
+lines(density(cars$dist),
+      col = "red",
+      lwd = 2)
+
+curve(dnorm(x,
+            mean = mean(cars$dist),
+            sd = sd(cars$dist)),
+      from = min(cars$dist),
+      to = max(cars$dist),
+      add = TRUE,
+      col = "blue",
+      lwd = 2)
+
+legend("topright",
+       legend = c("Densidad empírica", "Normal teórica"),
+       col = c("red", "blue"),
+       lwd = 2)
+```
+# Parte 2
+
+
+```{r}
+# 2.1
+library(MASS)
+
+modelo_original <- lm(dist ~ speed, data = cars)
+
+bc <- boxcox(modelo_original,
+             lambda = seq(-2, 2, by = 0.01),
+             plotit = TRUE)
+
+lambda_exacto <- bc$x[which.max(bc$y)]
+lambda_exacto
+
+cars$dist_bc_exacta <- (cars$dist^lambda_exacto - 1) / lambda_exacto
+
+lambda_aprox <- 0.5
+cars$dist_bc_aprox <- (cars$dist^lambda_aprox - 1) / lambda_aprox
+
+```
+
+```{r}
+# 2.2
+resumen <- function(x){
+  c(
+    Minimo = min(x),
+    Q1 = quantile(x, 0.25),
+    Media = mean(x),
+    Mediana = median(x),
+    Q3 = quantile(x, 0.75),
+    Maximo = max(x),
+    Sesgo = skewness(x),
+    Curtosis = kurtosis(x)
+  )
+}
+
+resumen(cars$dist)
+resumen(cars$dist_bc_exacta)
+resumen(cars$dist_bc_aprox)
+```
+
+```{r}
+# Analizar la normalidad
+hist(cars$dist_yj,
+     probability = TRUE,
+     main = "Yeo-Johnson",
+     xlab = "Distancia transformada")
+
+lines(density(cars$dist_yj),
+      col = "red",
+      lwd = 2)
+
+qqnorm(cars$dist_yj)
+qqline(cars$dist_yj, col = "red")
+```
+
+
+```{r}
+# 2.3
+par(mfrow = c(1, 3))
+
+hist(cars$dist,
+     probability = TRUE,
+     main = "Distancia original",
+     xlab = "Distancia")
+lines(density(cars$dist), col = "red", lwd = 2)
+
+hist(cars$dist_bc_exacta,
+     probability = TRUE,
+     main = "Box-Cox exacta",
+     xlab = "Distancia transformada")
+lines(density(cars$dist_bc_exacta), col = "red", lwd = 2)
+
+hist(cars$dist_bc_aprox,
+     probability = TRUE,
+     main = "Box-Cox aproximada",
+     xlab = "Distancia transformada")
+lines(density(cars$dist_bc_aprox), col = "red", lwd = 2)
+
+par(mfrow = c(1, 1))
+```
+
+```{r}
+# 2.4
+# Exacta
+shapiro.test(cars$dist_bc_exacta)
+jarque.test(cars$dist_bc_exacta)
+
+# Aproximada
+shapiro.test(cars$dist_bc_aprox)
+jarque.test(cars$dist_bc_aprox)
+```
+
+```{r}
+# 2.5
+library(bestNormalize)
+
+lambdas <- seq(-2, 2, by = 0.001)
+
+p_values <- sapply(lambdas, function(lambda){
+
+  yj <- yeojohnson(cars$dist,
+                   lambda = lambda,
+                   standardize = FALSE)
+
+  shapiro.test(yj)$p.value
+})
+
+lambda_yj <- lambdas[which.max(p_values)]
+p_maximo <- max(p_values)
+
+lambda_yj
+p_maximo
+```
+
+```{r}
+yeo_johnson_positivo <- function(y, lambda){
+
+  if(abs(lambda) < 1e-8){
+    log(y + 1)
+  } else {
+    ((y + 1)^lambda - 1) / lambda
+  }
+
+}
+
+lambdas <- seq(-2, 2, by = 0.001)
+
+p_values <- sapply(lambdas, function(lambda){
+
+  datos_trans <- yeo_johnson_positivo(cars$dist, lambda)
+
+  shapiro.test(datos_trans)$p.value
+})
+
+lambda_yj <- lambdas[which.max(p_values)]
+lambda_yj
+
+cars$dist_yj <- yeo_johnson_positivo(cars$dist, lambda_yj)
+
+shapiro.test(cars$dist_yj)
+jarque.test(cars$dist_yj)
+```
+
+
+
+```{r}
+# Grafico de datos y modelo
+cars$sqrt_dist <- sqrt(cars$dist)
+
+modelo_final <- lm(sqrt_dist ~ speed,
+                   data = cars)
+
+summary(modelo_final)
+
+
+# Significancia del modelo
+summary(modelo_final)
+```
+
+
+```{r}
+# Validación del modelo
+residuos <- residuals(modelo_final)
+ajustados <- fitted(modelo_final)
+```
+
+
+Se utilizó IA de la siguiente forma:
+Herramienta: ChatGPT
+Uso realizado: Hacer más vizuales los diagramas
+Secciones donde se utilizó: Sesgo y curtosis en la Normalidad y fuera de ella, parte 2
+Validación realizada por los estudiantes: Verifique que la información fuera consistente
+Todo el contenido fue revisado
