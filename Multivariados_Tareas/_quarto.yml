@@ -1,0 +1,8 @@
+project:
+  type: default
+  output-dir: html_files
+  render:
+    - "Codigos/*.qmd"
+    - "Reflexion_final_reto_A01709445.qmd"
+
+format: html
