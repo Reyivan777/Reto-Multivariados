@@ -1,0 +1,268 @@
+---
+title: "Actividad 2.8 Regresión Logística"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## 1. División de los datos
+
+Se utiliza el conjunto `Weekly` del paquete `ISLR`. Las observaciones de 1990 a 2008 se utilizan para entrenar el modelo y las de 2009 y 2010 para evaluarlo.
+
+```{r}
+library(ISLR)
+data(Weekly)
+
+entrenamiento <- subset(Weekly, Year <= 2008)
+prueba <- subset(Weekly, Year >= 2009)
+
+dim(entrenamiento)
+dim(prueba)
+```
+
+El conjunto de entrenamiento contiene 985 observaciones, mientras que el conjunto de prueba contiene 104 observaciones.
+
+## 2. Modelo de regresión logística
+
+Se ajusta un modelo para predecir si el rendimiento semanal será positivo (`Up`) o negativo (`Down`) utilizando únicamente `Lag2`.
+
+```{r}
+modelo <- glm(Direction ~ Lag2,
+              data = entrenamiento,
+              family = binomial)
+
+summary(modelo)
+```
+
+El coeficiente de `Lag2` es positivo, por lo que un mayor rendimiento dos semanas atrás se relaciona con una mayor probabilidad de que el mercado actual tenga dirección `Up`.
+
+## 3. Ecuación del modelo
+
+El modelo obtenido es:
+
+$$\log\left(\frac{p}{1-p}\right)
+=0.2033+0.0581Lag2$$
+
+y la probabilidad de que `Direction = Up` es:
+
+$$p=
+\frac{e^{0.2033+0.0581Lag2}}
+{1+e^{0.2033+0.0581Lag2}}$$
+
+```{r}
+beta0 <- coef(modelo)[1]
+beta1 <- coef(modelo)[2]
+
+cat("Beta 0 =", round(beta0, 4), "\n")
+cat("Beta 1 =", round(beta1, 4), "\n")
+```
+
+## 4. Interpretación de Lag2
+
+El p-value de Lag2 es 0.043, menor que 0.05. Por lo tanto, Lag2 es estadísticamente significativo para explicar la dirección del mercado.
+
+Por cada unidad que aumenta Lag2, el logaritmo de los odds de que el mercado sea Up aumenta en 0.0581 unidades.
+
+```{r}
+odds_ratio <- exp(beta1)
+odds_ratio
+```
+
+Los odds se multiplican por 1.0598, es decir, aumentan aproximadamente 5.98% por cada unidad adicional de Lag2.
+
+Como ejemplo, para `Lag2 = 1`:
+
+```{r}
+predict(modelo,
+        newdata = data.frame(Lag2 = 1),
+        type = "response")
+```
+
+La probabilidad estimada de que el mercado sea `Up` cuando `Lag2 = 1` es aproximadamente **56.5%**.
+
+## 5. Representación gráfica
+
+```{r}
+plot(entrenamiento$Lag2,
+     as.numeric(entrenamiento$Direction == "Up"),
+     xlab = "Lag2",
+     ylab = "Probabilidad de Direction = Up",
+     main = "Regresión logística")
+
+curve(predict(modelo,
+              newdata = data.frame(Lag2 = x),
+              type = "response"),
+      add = TRUE,
+      lwd = 2)
+```
+
+La curva presenta una pendiente ligeramente positiva. Esto concuerda con el coeficiente de `Lag2`: conforme aumenta `Lag2`, aumenta la probabilidad estimada de que el mercado sea `Up`, aunque el efecto es pequeño.
+
+## 6. Evaluación del modelo
+
+### Análisis de Deviance
+
+```{r}
+modelo_nulo <- glm(Direction ~ 1,
+                   data = entrenamiento,
+                   family = binomial)
+
+anova(modelo_nulo, modelo, test = "Chisq")
+```
+
+El p-value de la prueba es 0.0412, menor que 0.05. Por lo tanto, incluir Lag2 mejora significativamente al modelo que no utiliza ningún predictor.
+
+### Predicciones
+
+```{r}
+probabilidades <- predict(modelo,
+                          newdata = prueba,
+                          type = "response")
+
+prediccion <- ifelse(probabilidades > 0.5, "Up", "Down")
+
+prediccion <- factor(prediccion,
+                     levels = levels(prueba$Direction))
+```
+
+### Tabla de contingencia
+
+```{r}
+tabla <- table(Real = prueba$Direction,
+               Predicho = prediccion)
+
+tabla
+```
+
+El modelo clasificó correctamente **9 semanas Down** y **56 semanas Up**. Sin embargo, clasificó incorrectamente como `Up` a 34 semanas que realmente fueron `Down`, mostrando mayor dificultad para detectar mercados a la baja.
+
+### Diagrama de mosaico
+
+```{r}
+mosaicplot(tabla,
+           main = "Valores reales vs predicciones",
+           xlab = "Direction real",
+           ylab = "Direction predicha")
+```
+
+El diagrama confirma que el modelo tiende a clasificar con mayor frecuencia las observaciones como `Up`.
+
+### Métricas
+
+```{r}
+exactitud <- sum(diag(tabla)) / sum(tabla)
+error <- 1 - exactitud
+
+sensibilidad <- tabla["Up", "Up"] /
+  sum(tabla["Up", ])
+
+especificidad <- tabla["Down", "Down"] /
+  sum(tabla["Down", ])
+
+metricas <- c(
+  Exactitud = exactitud,
+  Error = error,
+  Sensibilidad = sensibilidad,
+  Especificidad = especificidad
+) * 100
+
+round(metricas, 2)
+```
+
+La exactitud es 62.5%, por lo que el modelo clasifica correctamente aproximadamente 6 de cada 10 semanas.
+
+La tasa de error es 37.5%.
+
+La sensibilidad es 91.8%, por lo que el modelo identifica muy bien las semanas en las que el mercado realmente sube.
+
+La especificidad es 20.93%, indicando que el modelo tiene dificultades para identificar correctamente las semanas en las que el mercado baja.
+
+En general, el modelo funciona mucho mejor para detectar mercados `Up` que mercados `Down`.
+
+## 7. Validación de supuestos
+
+### Independencia
+
+```{r}
+residuos <- residuals(modelo, type = "deviance")
+tiempo <- seq_along(residuos)
+
+plot(tiempo, residuos,
+     xlab = "Orden temporal",
+     ylab = "Residuos de deviance",
+     main = "Residuos contra el tiempo")
+
+abline(h = 0, lty = 2)
+```
+
+No se aprecia un patrón temporal fuerte en los residuos, lo cual favorece el supuesto de independencia.
+
+```{r}
+lmtest::dwtest(residuos ~ tiempo)
+```
+
+El estadístico Durbin-Watson es 2.1595 y el p-value es 0.9933. Al estar el estadístico cerca de 2 y no ser significativa la prueba, no se encuentra evidencia de autocorrelación positiva en los residuos.
+
+### Multicolinealidad
+
+No es necesario calcular VIF porque el modelo contiene solamente un predictor (`Lag2`), por lo que no puede existir multicolinealidad entre variables predictoras.
+
+### Linealidad con el logit
+
+```{r}
+entrenamiento$Up <- ifelse(entrenamiento$Direction == "Up", 1, 0)
+
+grupos <- cut(
+  entrenamiento$Lag2,
+  breaks = unique(quantile(entrenamiento$Lag2,
+                           probs = seq(0, 1, 0.1))),
+  include.lowest = TRUE
+)
+
+linealidad <- aggregate(
+  cbind(Lag2, Up) ~ grupos,
+  data = entrenamiento,
+  FUN = mean
+)
+
+linealidad$logit <- qlogis(linealidad$Up)
+
+plot(linealidad$Lag2,
+     linealidad$logit,
+     xlab = "Lag2",
+     ylab = "Logit",
+     main = "Linealidad de Lag2 con el logit")
+
+abline(lm(logit ~ Lag2, data = linealidad))
+```
+
+La gráfica permite observar una relación aproximadamente lineal entre `Lag2` y el logit, por lo que visualmente no se observa una violación importante de este supuesto.
+
+### Prueba de Box-Tidwell
+
+```{r}
+entrenamiento$Lag2_pos <- entrenamiento$Lag2 -
+  min(entrenamiento$Lag2) + 0.001
+
+car::boxTidwell(Up ~ Lag2_pos,
+                data = entrenamiento)
+```
+
+La prueba obtiene un p-value de 0.5991, mayor que 0.05. Por lo tanto, no existe evidencia para rechazar el supuesto de linealidad entre el predictor y el logit.
+
+### Tamaño de muestra
+
+```{r}
+table(entrenamiento$Direction)
+```
+
+Existen 441 observaciones Down y 544 Up. La categoría menos frecuente tiene mucho más de 10 observaciones, por lo que se cumple ampliamente el requisito de tamaño de muestra.
+
+## Conclusión
+
+`Lag2` es un predictor estadísticamente significativo de la dirección semanal del mercado. Sin embargo, el modelo tiene una capacidad predictiva moderada, con una exactitud de 62.5%. Su principal limitación es que identifica muy bien las semanas Up, pero tiene dificultades para reconocer las semanas Down. Los supuestos evaluados no muestran problemas importantes.
