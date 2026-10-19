@@ -1,0 +1,188 @@
+---
+title: "Actividad 1.3 Matrices y Estadística"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-08-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Actividad 1.3 Matrices y Estadística
+
+### Problema 1 
+```{r}
+# Definir matriz A
+A <- matrix(c(
+  2,  4, -3,
+  0, -2,  5,
+  9,  0,  6
+), nrow = 3, byrow = TRUE)
+
+# Definir matriz B
+B <- matrix(c(
+   8, 6, -2,
+  -7, 9, -5,
+  -3, 5,  1
+), nrow = 3, byrow = TRUE)
+
+# Mostrar matrices
+A
+B
+
+
+# a) A + B
+resultado_a <- A + B
+resultado_a
+
+
+# b) 4A + 3B
+resultado_b <- 4*A + 3*B
+resultado_b
+
+
+# c) Transpuesta de A
+resultado_c <- t(A)
+resultado_c
+
+
+# d) Inversa de A
+resultado_d <- solve(A)
+resultado_d
+
+
+# e) Determinante de A y de A'
+det_A <- det(A)
+det_A_transpuesta <- det(t(A))
+
+det_A
+det_A_transpuesta
+```
+
+### Problema 2 - Producto AB
+
+```{r}
+# Definir matriz A
+A <- matrix(c(
+  2, 1,  3, -3,
+  3, 0, -2, -1,
+  4, 5,  0, -5
+), nrow = 3, byrow = TRUE)
+
+# Definir matriz B
+B <- matrix(c(
+   4,  2,
+  -3,  1,
+   5, -2,
+   8,  0
+), nrow = 4, byrow = TRUE)
+
+# Mostrar matrices
+A
+B
+
+# Calcular AB
+AB <- A %*% B
+
+# Mostrar resultado
+AB
+```
+
+### Problema 3 - Estadística con matrices
+
+```{r}
+# Importar archivo CSV
+datos <- read.csv('C:\\Users\\reyiv\\Downloads\\mc-donalds-menu.csv', check.names = FALSE)
+
+
+# Seleccionar las 4 variables
+
+variables <- c(
+  "Calories",
+  "Protein",
+  "Carbohydrates",
+  "Sugars"
+)
+
+X <- as.matrix(datos[, variables])
+
+
+# Número de observaciones
+n <- nrow(X)
+
+
+# a) VECTOR DE MEDIAS
+
+# Vector columna de unos
+unos <- matrix(1, nrow = n, ncol = 1)
+
+# Media poblacional:
+# mu = (1/n) * 1' * X
+
+mu <- (t(unos) %*% X) / n
+
+mu
+```
+
+```{r}
+# b) MATRIZ DE VARIANZAS Y COVARIANZAS
+
+# Como es población dividimos entre n
+# Sigma = (1/n) * Xc' * Xc
+
+Sigma <- t(X - unos%*%mu) %*% (X - unos%*%mu) / n
+
+Sigma
+```
+
+```{r}
+# c) MATRIZ DE CORRELACIÓN
+
+
+# Obtener varianzas de la diagonal
+varianzas <- diag(Sigma)
+
+# Desviaciones estándar poblacionales
+desviaciones <- sqrt(varianzas)
+
+# Matriz diagonal con 1 / desviación estándar
+D_inv <- diag(1 / desviaciones)
+
+# Matriz de correlación
+# R = D^(-1) * Sigma * D^(-1)
+
+R <- D_inv %*% Sigma %*% D_inv
+
+R
+```
+
+```{r}
+# d) VALORES Y VECTORES PROPIOS
+
+
+eigen_cov <- eigen(Sigma)
+
+# Valores propios
+valores_cov <- eigen_cov$values
+
+# Vectores propios
+vectores_cov <- eigen_cov$vectors
+
+valores_cov
+vectores_cov
+
+
+
+eigen_cor <- eigen(R)
+
+# Valores propios
+valores_cor <- eigen_cor$values
+
+# Vectores propios
+vectores_cor <- eigen_cor$vectors
+
+valores_cor
+vectores_cor
+```
+
