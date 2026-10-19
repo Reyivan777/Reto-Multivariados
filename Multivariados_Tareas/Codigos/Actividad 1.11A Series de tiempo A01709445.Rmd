@@ -1,0 +1,284 @@
+---
+title: "Actividad 1.11A Series de tiempo"
+author: "Rey Iván De La Fuente Chávez"
+date: "2026-09-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Datos de ventas
+
+Se tienen ventas trimestrales de televisores durante cuatro años, expresadas en miles.
+
+```{r}
+ventas <- c(4.8, 4.1, 6.0, 6.5,
+            5.8, 5.2, 6.8, 7.4,
+            6.0, 5.6, 7.5, 7.8,
+            6.3, 5.9, 8.0, 8.4)
+
+tiempo <- 1:16
+ventas_ts <- ts(ventas, start = c(1, 1), frequency = 4)
+
+ventas_ts
+```
+
+## 2. Tendencia y estacionalidad
+
+### Serie de tiempo
+
+```{r}
+plot(ventas_ts,
+     type = "o",
+     xlab = "Año",
+     ylab = "Ventas (miles)",
+     main = "Ventas trimestrales de televisores")
+```
+
+La serie no es estacionaria, ya que presenta una tendencia general creciente y un patrón estacional trimestral repetitivo. En particular, el segundo trimestre suele presentar las ventas más bajas y el cuarto las más altas.
+
+### Autocorrelación (ACF)
+
+```{r}
+acf(as.numeric(ventas_ts),
+    lag.max = 12,
+    xlab = "Rezago (trimestres)",
+    main = "Autocorrelación de las ventas")
+```
+
+La ACF muestra un valor importante en el rezago 4, consistente con una estacionalidad trimestral: observaciones del mismo trimestre en años consecutivos tienden a comportarse de manera semejante.
+
+### Modelos aditivo y multiplicativo
+
+Se prueban las dos formas de descomposición para comparar cuál representa mejor la serie.
+
+```{r}
+descomp_add <- decompose(ventas_ts, type = "additive")
+descomp_mult <- decompose(ventas_ts, type = "multiplicative")
+
+plot(descomp_add)
+plot(descomp_mult)
+```
+
+Ambas descomposiciones representan el patrón estacional. La elección final entre una estructura aditiva o multiplicativa se realiza comparando los errores de pronóstico de los modelos ajustados.
+
+## 3. Índices estacionales y serie desestacionalizada
+
+```{r}
+indice_add <- tapply(descomp_add$seasonal,
+                     cycle(ventas_ts),
+                     mean,
+                     na.rm = TRUE)
+
+indice_mult <- tapply(descomp_mult$seasonal,
+                      cycle(ventas_ts),
+                      mean,
+                      na.rm = TRUE)
+
+indices <- data.frame(
+  Trimestre = 1:4,
+  Aditivo = as.numeric(indice_add),
+  Multiplicativo = as.numeric(indice_mult)
+)
+
+round(indices, 4)
+```
+
+Los índices estacionales confirman el patrón observado. En el modelo multiplicativo, el trimestre 1 se encuentra aproximadamente 6.9% por debajo de la tendencia y el trimestre 2 cerca de 16.4% por debajo. En cambio, los trimestres 3 y 4 se encuentran aproximadamente 9.2% y 14.1% por encima, respectivamente.
+
+```{r}
+estacional_add <- indice_add[cycle(ventas_ts)]
+estacional_mult <- indice_mult[cycle(ventas_ts)]
+
+ventas_des_add <- ventas_ts - estacional_add
+ventas_des_mult <- ventas_ts / estacional_mult
+
+plot(ventas_des_add,
+     type = "o",
+     xlab = "Año",
+     ylab = "Ventas desestacionalizadas",
+     main = "Serie desestacionalizada - modelo aditivo")
+
+plot(ventas_des_mult,
+     type = "o",
+     xlab = "Año",
+     ylab = "Ventas desestacionalizadas",
+     main = "Serie desestacionalizada - modelo multiplicativo")
+```
+
+Al eliminar el efecto estacional, en ambas series desestacionalizadas se observa con mayor claridad la tendencia creciente de las ventas.
+
+## 4. Modelo lineal de tendencia
+
+Se ajustan modelos lineales sobre las ventas desestacionalizadas. El modelo multiplicativo se analiza con mayor detalle y después se compara con los demás mediante sus errores de pronóstico.
+
+```{r}
+modelo_lineal_add <- lm(as.numeric(ventas_des_add) ~ tiempo)
+modelo_lineal_mult <- lm(as.numeric(ventas_des_mult) ~ tiempo)
+
+summary(modelo_lineal_mult)
+```
+
+Para el modelo multiplicativo, la tendencia estimada es aproximadamente:
+
+$$\hat{y}=5.1080+0.1474t$$
+
+El coeficiente de tiempo es significativo ($p=4.25\times10^{-9}$), por lo que existe evidencia de una tendencia creciente. El modelo también es globalmente significativo ($p=4.25\times10^{-9}$) y explica aproximadamente 92.1% de la variabilidad de las ventas desestacionalizadas ($R^2=0.9208$).
+
+### Análisis de residuos
+
+```{r}
+par(mfrow = c(2, 2))
+plot(modelo_lineal_mult)
+par(mfrow = c(1, 1))
+
+shapiro.test(residuals(modelo_lineal_mult))
+acf(residuals(modelo_lineal_mult),
+    main = "Autocorrelación de los residuos")
+```
+
+Los residuos no muestran un patrón fuerte de curvatura o un cambio claro de variabilidad. La observación 2 destaca respecto a las demás y conviene tenerla presente como una observación potencialmente influyente. La prueba de Shapiro-Wilk obtiene $p=0.7307$, por lo que no se rechaza la normalidad. Además, la ACF de los residuos no presenta rezagos claramente significativos, por lo que no se observa evidencia fuerte de dependencia temporal restante.
+
+## 5. Modelo cuadrático
+
+Se agrega el término cuadrático del tiempo para explorar una tendencia no lineal.
+
+```{r}
+tiempo2 <- tiempo^2
+
+modelo_cuad_mult <- lm(as.numeric(ventas_des_mult) ~ tiempo + tiempo2)
+summary(modelo_cuad_mult)
+```
+
+El modelo cuadrático estimado es aproximadamente:
+
+$$\hat{y}=4.7903+0.2533t-0.00623t^2$$
+
+Tanto el término lineal ($p=3.56\times10^{-5}$) como el término cuadrático ($p=0.0204$) son significativos. El modelo es globalmente significativo y alcanza un $R^2=0.9484$. El coeficiente negativo de $t^2$ indica que las ventas siguen aumentando, pero el ritmo de crecimiento se va reduciendo con el tiempo.
+
+## 6. MSE y MAPE
+
+Se comparan tres modelos: aditivo lineal, multiplicativo lineal y multiplicativo cuadrático.
+
+```{r}
+pred_add_lin <- fitted(modelo_lineal_add) + estacional_add
+pred_mult_lin <- fitted(modelo_lineal_mult) * estacional_mult
+pred_mult_cuad <- fitted(modelo_cuad_mult) * estacional_mult
+
+metricas <- function(real, pred) {
+  c(
+    MSE = mean((real - pred)^2, na.rm = TRUE),
+    MAPE = mean(abs((real - pred) / real), na.rm = TRUE) * 100
+  )
+}
+
+comparacion <- rbind(
+  "Aditivo lineal" = metricas(ventas, pred_add_lin),
+  "Multiplicativo lineal" = metricas(ventas, pred_mult_lin),
+  "Multiplicativo cuadrático" = metricas(ventas, pred_mult_cuad)
+)
+
+round(comparacion, 4)
+```
+
+El modelo multiplicativo cuadrático presenta los menores errores, con un Mean Squared Error (MSE) de 0.0219 y un Mean Absolute Percentage Error (MAPE) de 1.9493%. Por lo tanto, es el mejor de los tres modelos evaluados. Los dos modelos lineales presentan resultados muy similares entre sí, pero ambos tienen errores mayores.
+
+```{r}
+mejor_MSE <- rownames(comparacion)[which.min(comparacion[, "MSE"])]
+mejor_MAPE <- rownames(comparacion)[which.min(comparacion[, "MAPE"])]
+
+cat("Menor MSE:", mejor_MSE, "\n")
+cat("Menor MAPE:", mejor_MAPE, "\n")
+```
+
+## 7. Pronóstico del siguiente año
+
+Se calculan los pronósticos de los cuatro trimestres del año 5 para los tres modelos analizados.
+
+```{r}
+futuro <- data.frame(
+  tiempo = 17:20,
+  tiempo2 = (17:20)^2
+)
+
+est_add_fut <- as.numeric(indice_add[1:4])
+est_mult_fut <- as.numeric(indice_mult[1:4])
+
+pron_add_lin <- predict(modelo_lineal_add, newdata = futuro) + est_add_fut
+pron_mult_lin <- predict(modelo_lineal_mult, newdata = futuro) * est_mult_fut
+pron_mult_cuad <- predict(modelo_cuad_mult, newdata = futuro) * est_mult_fut
+
+pronosticos <- data.frame(
+  Año = rep(5, 4),
+  Trimestre = 1:4,
+  Aditivo_lineal = pron_add_lin,
+  Multiplicativo_lineal = pron_mult_lin,
+  Multiplicativo_cuadratico = pron_mult_cuad
+)
+
+round(pronosticos, 3)
+```
+
+Con el modelo seleccionado, los pronósticos para el año 5 son 6.790, 6.131, 8.027 y 8.406 miles de televisores para los trimestres 1 a 4, respectivamente. Se conserva el patrón estacional, con menores ventas en el trimestre 2 y mayores ventas en el trimestre 4.
+
+### Gráfica final
+
+```{r}
+tiempo_total <- 1:20
+ventas_total <- c(ventas, rep(NA, 4))
+
+serie_add_lin <- c(pred_add_lin, pron_add_lin)
+serie_mult_lin <- c(pred_mult_lin, pron_mult_lin)
+serie_mult_cuad <- c(pred_mult_cuad, pron_mult_cuad)
+
+plot(tiempo_total, ventas_total,
+     type = "o",
+     pch = 16,
+     col = "black",
+     xlab = "Trimestre",
+     ylab = "Ventas (miles)",
+     main = "Datos originales y pronósticos",
+     ylim = range(c(ventas, serie_add_lin,
+                    serie_mult_lin, serie_mult_cuad)))
+
+lines(tiempo_total, serie_add_lin,
+      lty = 2, col = "steelblue", lwd = 2)
+lines(tiempo_total, serie_mult_lin,
+      lty = 3, col = "darkorange", lwd = 2)
+lines(tiempo_total, serie_mult_cuad,
+      lty = 1, col = "firebrick", lwd = 2)
+abline(v = 16.5, lty = 2, col = "gray40")
+
+legend("topleft",
+       legend = c("Datos originales",
+                  "Aditivo lineal",
+                  "Multiplicativo lineal",
+                  "Multiplicativo cuadrático"),
+       col = c("black", "steelblue", "darkorange", "firebrick"),
+       lty = c(1, 2, 3, 1),
+       lwd = c(1, 2, 2, 2),
+       pch = c(16, NA, NA, NA),
+       bty = "n")
+```
+
+La gráfica permite comparar los ajustes históricos y los pronósticos. Los tres modelos reproducen el patrón estacional trimestral, pero el modelo multiplicativo cuadrático se ajusta mejor de acuerdo con MSE y MAPE y proyecta una desaceleración del crecimiento para el año 5.
+
+## Conclusión
+
+La serie de ventas no es estacionaria porque presenta una tendencia creciente y estacionalidad trimestral. Después de obtener las series desestacionalizadas se ajustaron tres modelos. El modelo multiplicativo cuadrático fue el mejor, con MSE = 0.0219 y MAPE = 1.9493%, y sus términos resultaron estadísticamente significativos. Por ello se utiliza para pronosticar el año 5, manteniendo el patrón estacional de menores ventas en el trimestre 2 y mayores ventas en el trimestre 4.
+
+## Declaratoria de uso de IA
+
+**Opción B. Se utilizó IA.**
+
+Herramienta: ChatGPT.
+
+Uso realizado: apoyo para estructurar el procedimiento y escribir el código en R
+
+Secciones donde se utilizó: desarrollo del código, comparación de modelos
+
+Validación realizada por el estudiante: el código fue ejecutado y renderizado en RStudio
+
+Asumo la responsabilidad del contenido final entregado.
